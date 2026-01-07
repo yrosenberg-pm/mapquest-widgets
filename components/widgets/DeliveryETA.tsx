@@ -140,7 +140,7 @@ export default function DeliveryETA({
   const currentIndex = steps.indexOf(status.status);
   const progressPercent = (currentIndex / (steps.length - 1)) * 100;
 
-  const markers = [];
+  const markers: Array<{ lat: number; lng: number; label: string; color: string; icon?: string }> = [];
   if (status.currentLocation && status.status !== 'delivered') {
     markers.push({ lat: status.currentLocation.lat, lng: status.currentLocation.lng, label: `${status.driverName} - Driver`, color: accentColor, icon: 'pulse' as const });
   }

@@ -77,7 +77,7 @@ export default function StoreLocator({
         `${toLat},${toLng}`
       );
       
-      if (!route || route.routeError) {
+      if (!route || (route as any).routeError) {
         return null;
       }
       
@@ -117,7 +117,7 @@ export default function StoreLocator({
       const withDuration = await Promise.all(
         sorted.map(async (store) => {
           const duration = await getDriveTime(location.lat, location.lng, store.lat, store.lng);
-          return { ...store, duration };
+          return { ...store, duration: duration ?? undefined };
         })
       );
       

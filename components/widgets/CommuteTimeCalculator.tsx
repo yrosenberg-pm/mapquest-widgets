@@ -22,16 +22,16 @@ export default function CommuteTimeCalculator({
   const [baseLocation, setBaseLocation] = useState(defaultBaseLocation);
   const [baseLabel, setBaseLabel] = useState(defaultBaseLabel);
   const [destination, setDestination] = useState('');
-  const [baseCoords, setBaseCoords] = useState(null);
-  const [destCoords, setDestCoords] = useState(null);
+  const [baseCoords, setBaseCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [destCoords, setDestCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [travelMode, setTravelMode] = useState('fastest');
   const [selectedTime, setSelectedTime] = useState('morning');
   const [customTime, setCustomTime] = useState('08:00');
   const [useCustomTime, setUseCustomTime] = useState(false);
-  const [result, setResult] = useState(null);
-  const [baseResult, setBaseResult] = useState(null); // Store base directions result
+  const [result, setResult] = useState<{ distance: number; baseTime: number; withTrafficTime: number; mode: string } | null>(null);
+  const [baseResult, setBaseResult] = useState<{ time: number; distance: number } | null>(null); // Store base directions result
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [baseLocationSet, setBaseLocationSet] = useState(false);
 
   const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
@@ -138,9 +138,11 @@ export default function CommuteTimeCalculator({
       const destLoc = { lat: destResult.lat, lng: destResult.lng };
       setDestCoords(destLoc);
 
-      const directions = await getDirections(destLoc, baseCoords, { 
-        routeType: travelMode === 'transit' ? 'fastest' : travelMode 
-      });
+      const directions = await getDirections(
+        `${destLoc.lat},${destLoc.lng}`, 
+        `${baseCoords.lat},${baseCoords.lng}`, 
+        (travelMode === 'transit' ? 'fastest' : travelMode) as 'fastest' | 'shortest' | 'pedestrian' | 'bicycle'
+      );
 
       console.log('getDirections returned:', directions);
 
@@ -238,7 +240,7 @@ export default function CommuteTimeCalculator({
 
   const mapCenter = destCoords || baseCoords || { lat: 39.8283, lng: -98.5795 };
   
-  const markers = [];
+  const markers: Array<{ lat: number; lng: number; label: string; color: string }> = [];
   if (baseCoords) markers.push({ ...baseCoords, label: baseLabel, color: markerColor });
   if (destCoords) markers.push({ ...destCoords, label: 'Destination', color: markerColor });
 

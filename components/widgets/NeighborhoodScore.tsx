@@ -232,8 +232,8 @@ export default function NeighborhoodScore({
     );
   };
 
-  const CategoryIcon = ({ icon: Icon, className }: { icon: LucideIcon; className?: string }) => (
-    <Icon className={className || 'w-4 h-4'} />
+  const CategoryIcon = ({ icon: Icon, className, style }: { icon: LucideIcon; className?: string; style?: React.CSSProperties }) => (
+    <Icon className={className || 'w-4 h-4'} style={style} />
   );
 
   const groupedCategories = categories.reduce((groups, cat) => {

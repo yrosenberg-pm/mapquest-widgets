@@ -88,7 +88,7 @@ export default function ServiceAreaChecker({
         }
         checkLat = geocoded.lat;
         checkLng = geocoded.lng;
-        resolvedAddress = geocoded.displayString || addressToCheck;
+        resolvedAddress = (geocoded as any).displayString || addressToCheck;
       }
 
       // Check if in service area

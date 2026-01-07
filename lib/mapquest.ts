@@ -212,8 +212,8 @@ export async function getDirections(
     const data = await res.json();
     const route = data.route;
     
-    if (!route || route.routeError) {
-      console.error('Route error:', route?.routeError?.message || 'Could not calculate route');
+    if (!route || (route as any).routeError) {
+      console.error('Route error:', (route as any)?.routeError?.message || 'Could not calculate route');
       return null;
     }
     

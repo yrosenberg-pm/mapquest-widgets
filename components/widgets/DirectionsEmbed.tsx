@@ -105,7 +105,7 @@ export default function DirectionsEmbed({
       setToCoords(toLoc);
 
       // Get directions
-      const directions = await getDirections(fromLoc, toLoc, { routeType });
+      const directions = await getDirections(`${fromLoc.lat},${fromLoc.lng}`, `${toLoc.lat},${toLoc.lng}`, routeType);
 
       if (!directions) {
         throw new Error('Could not calculate route');
@@ -117,7 +117,7 @@ export default function DirectionsEmbed({
         fuelUsed: directions.fuelUsed,
         hasTolls: directions.hasTolls,
         hasHighway: directions.hasHighway,
-        steps: directions.maneuvers || [],
+        steps: directions.steps || [],
       };
 
       setRoute(routeInfo);
@@ -141,7 +141,7 @@ export default function DirectionsEmbed({
   const mapCenter = fromCoords || toCoords || { lat: 39.8283, lng: -98.5795 };
   
   // Subtle gray markers instead of bright green/red
-  const markers = [];
+  const markers: Array<{ lat: number; lng: number; label: string; color: string }> = [];
   if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: markerColor });
   if (toCoords) markers.push({ ...toCoords, label: 'B', color: markerColor });
 
