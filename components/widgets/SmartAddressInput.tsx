@@ -205,85 +205,81 @@ export default function SmartAddressInput({
         </label>
       )}
 
-      <div className={`relative rounded-lg border ${borderColor} ${bgColor}`} style={{ borderRadius }}>
-        <div className="relative">
-          <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText} z-10`} />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSelectedAddress(null);
-            }}
-            onKeyDown={handleKeyDown}
-            onFocus={() => {
-              console.log('Input focused, query:', query, 'suggestions:', suggestions.length);
-              if (query.length >= 3 && suggestions.length > 0) {
-                console.log('Opening dropdown on focus');
-                setIsOpen(true);
-              }
-            }}
-            placeholder={placeholder}
-            className={`w-full pl-10 pr-10 py-3 text-sm ${inputBg} ${textColor} focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
-            style={{ borderRadius }}
-          />
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
-            {loading ? (
-              <Loader2 className={`w-4 h-4 animate-spin ${mutedText}`} />
-            ) : selectedAddress ? (
-              <button onClick={clearSelection} className={mutedText} type="button">
-                <X className="w-4 h-4" />
-              </button>
-            ) : null}
-          </div>
+      <div className="relative">
+        <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText} z-10`} />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSelectedAddress(null);
+          }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => {
+            console.log('Input focused, query:', query, 'suggestions:', suggestions.length);
+            if (query.length >= 3 && suggestions.length > 0) {
+              console.log('Opening dropdown on focus');
+              setIsOpen(true);
+            }
+          }}
+          placeholder={placeholder}
+          className={`w-full pl-10 pr-10 py-3 text-sm ${bgColor} ${textColor} rounded-lg border ${borderColor} shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
+          style={{ borderRadius }}
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+          {loading ? (
+            <Loader2 className={`w-4 h-4 animate-spin ${mutedText}`} />
+          ) : selectedAddress ? (
+            <button onClick={clearSelection} className={mutedText} type="button">
+              <X className="w-4 h-4" />
+            </button>
+          ) : null}
         </div>
-
-        {/* Suggestions Dropdown */}
-        {isOpen && suggestions.length > 0 && (
-          <div 
-            className={`absolute left-0 right-0 top-full mt-1 ${bgColor} border ${borderColor} rounded-lg shadow-xl z-[100] max-h-64 overflow-y-auto`} 
-            style={{ borderRadius, marginTop: '4px' }}
-          >
-            {suggestions.map((suggestion, index) => {
-              const name = suggestion.name || suggestion.displayString || suggestion.text || suggestion.address || 'Address';
-              const description = suggestion.displayString || suggestion.description || suggestion.fullText || '';
-              const isHighlighted = highlightedIndex === index;
-              return (
-                <button
-                  key={`${suggestion.id || index}-${name}`}
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleSelect(suggestion);
-                  }}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  className={`w-full px-4 py-3 text-left text-sm flex items-start gap-3 transition-colors ${
-                    isHighlighted 
-                      ? (darkMode ? 'bg-gray-700' : 'bg-gray-100') 
-                      : hoverBg
-                  } ${isHighlighted ? '' : 'hover:' + (darkMode ? 'bg-gray-700' : 'bg-gray-50')}`}
-                >
-                  <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${mutedText}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className={`font-medium truncate ${textColor}`}>
-                      {name}
-                    </div>
-                    {description && description !== name && (
-                      <div className={`text-xs truncate ${mutedText} mt-0.5`}>
-                        {description}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        
-        
       </div>
+
+      {/* Suggestions Dropdown */}
+      {isOpen && suggestions.length > 0 && (
+        <div 
+          className={`absolute left-0 right-0 top-full mt-1 ${bgColor} border ${borderColor} rounded-lg shadow-xl z-[100] max-h-64 overflow-y-auto`} 
+          style={{ borderRadius, marginTop: '4px' }}
+        >
+          {suggestions.map((suggestion, index) => {
+            const name = suggestion.name || suggestion.displayString || suggestion.text || suggestion.address || 'Address';
+            const description = suggestion.displayString || suggestion.description || suggestion.fullText || '';
+            const isHighlighted = highlightedIndex === index;
+            return (
+              <button
+                key={`${suggestion.id || index}-${name}`}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleSelect(suggestion);
+                }}
+                onMouseEnter={() => setHighlightedIndex(index)}
+                className={`w-full px-4 py-3 text-left text-sm flex items-start gap-3 transition-colors ${
+                  isHighlighted 
+                    ? (darkMode ? 'bg-gray-700' : 'bg-gray-100') 
+                    : hoverBg
+                } ${isHighlighted ? '' : 'hover:' + (darkMode ? 'bg-gray-700' : 'bg-gray-50')}`}
+              >
+                <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${mutedText}`} />
+                <div className="flex-1 min-w-0">
+                  <div className={`font-medium truncate ${textColor}`}>
+                    {name}
+                  </div>
+                  {description && description !== name && (
+                    <div className={`text-xs truncate ${mutedText} mt-0.5`}>
+                      {description}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Selected Address Confirmation */}
       {selectedAddress && (
@@ -297,26 +293,6 @@ export default function SmartAddressInput({
               {selectedAddress.displayString}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Branding */}
-      {showBranding && (
-        <div className={`mt-2 flex items-center justify-end gap-2 text-xs ${mutedText}`}>
-          {companyLogo && (
-            <img 
-              src={companyLogo} 
-              alt={companyName || 'Company logo'} 
-              className="h-4 object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          )}
-          <span>
-            {companyName && <span className="font-medium">{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
-          </span>
         </div>
       )}
     </div>

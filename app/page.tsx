@@ -191,7 +191,7 @@ export default function Home() {
 
 
         {/* Widget Display */}
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-2">
           <div className="shadow-2xl shadow-gray-500/40 rounded-xl">
             {isNHLWidget ? (
               <NHLArenaExplorer apiKey={API_KEY} showBranding={true} />
@@ -199,6 +199,11 @@ export default function Home() {
               renderWidget()
             )}
           </div>
+          {activeWidget === 'address' && (
+            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-2`}>
+              Powered by <strong>MapQuest</strong>
+            </div>
+          )}
         </div>
 
         {/* Console hint */}
