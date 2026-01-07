@@ -51,10 +51,30 @@ export async function GET(request: NextRequest) {
       case 'search': {
         const location = searchParams.get('location');
         const category = searchParams.get('category');
+        const q = searchParams.get('q'); // Text search parameter
         const radius = searchParams.get('radius') || '5';
         const pageSize = searchParams.get('pageSize') || '10';
         const sort = searchParams.get('sort') || 'distance';
-        url = `${ENDPOINTS.search}?key=${MAPQUEST_KEY}&location=${location}&category=${encodeURIComponent(category || '')}&radius=${radius}&pageSize=${pageSize}&sort=${sort}`;
+        
+        // Parse location - format is "lat,lng" from our API, but MapQuest expects "lng,lat"
+        const [lat, lng] = location?.split(',') || ['', ''];
+        
+        // Convert radius from miles to meters (1 mile = 1609.34 meters)
+        const radiusMeters = Math.round(parseFloat(radius) * 1609.34);
+        
+        // MapQuest Search API v4/place expects location in format "lng,lat" (longitude first!)
+        // Based on NHL Arena Explorer implementation
+        // Support both category (SIC codes) and q (text search) parameters
+        let searchParam = '';
+        if (q) {
+          searchParam = `&q=${encodeURIComponent(q)}`;
+        } else if (category) {
+          searchParam = `&category=${encodeURIComponent(category)}`;
+        }
+        
+        url = `${ENDPOINTS.search}?key=${MAPQUEST_KEY}&location=${lng},${lat}&radius=${radiusMeters}${searchParam}&pageSize=${pageSize}&sort=${sort}`;
+        
+        console.log('[API] Search request:', { lat, lng, location: `${lng},${lat}`, category, q, radius, radiusMeters, pageSize, sort });
         break;
       }
 
@@ -138,6 +158,7 @@ export async function GET(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`MapQuest API error: ${response.status}`, errorText);
+      console.error(`[API] Failed URL: ${url}`);
       return NextResponse.json(
         { error: 'MapQuest API request failed', details: errorText },
         { status: response.status }
@@ -145,6 +166,17 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+    
+    // Log search endpoint responses for debugging
+    if (endpoint === 'search') {
+      console.log('[API] Search response structure:', {
+        hasResults: !!data.results,
+        hasSearchResults: !!data.searchResults,
+        isArray: Array.isArray(data),
+        keys: Object.keys(data),
+        resultCount: data.results?.length || data.searchResults?.results?.length || (Array.isArray(data) ? data.length : 0)
+      });
+    }
     
     return NextResponse.json(data, {
       headers: {

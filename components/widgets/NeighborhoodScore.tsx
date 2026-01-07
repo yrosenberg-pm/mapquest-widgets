@@ -3,11 +3,11 @@
 
 import { useState } from 'react';
 import { 
-  MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, Home,
+  MapPin, Navigation, Loader2, ChevronRight, ChevronLeft,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
   LucideIcon
 } from 'lucide-react';
-import { geocode, searchPlaces, getRouteMatrix } from '@/lib/mapquest';
+import { geocode, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 
 interface Category {
@@ -19,12 +19,29 @@ interface Category {
   weight: number;
 }
 
+type ThresholdType = 'standard' | 'walkable';
+
+interface CategoryConfig {
+  idealCount: number;
+  searchRadius: number;
+  thresholdType: ThresholdType;
+}
+
+interface POI {
+  distance: number; // distance in miles from the input address
+  name: string;
+  lat?: number;
+  lng?: number;
+}
+
 interface CategoryScore {
   category: Category;
-  score: number;
-  avgScore: number;
+  score: number; // 0-5 scale, one decimal
   description: string;
-  places: { name: string; walkTime: number; distance: number }[];
+  places: POI[];
+  poiCount: number;
+  closestDistance: number;
+  error?: boolean;
 }
 
 interface NeighborhoodScoreProps {
@@ -44,8 +61,8 @@ interface NeighborhoodScoreProps {
 
 const DEFAULT_CATEGORIES: Category[] = [
   { id: 'grocery', name: 'Groceries', icon: ShoppingCart, group: 'Amenities', mqCategory: 'sic:541105', weight: 3 },
-  { id: 'restaurant', name: 'Restaurants', icon: Utensils, group: 'Amenities', mqCategory: 'sic:581208', weight: 2 },
-  { id: 'coffee', name: 'Coffee Shops', icon: Coffee, group: 'Amenities', mqCategory: 'sic:581221', weight: 1 },
+  { id: 'restaurant', name: 'Restaurants', icon: Utensils, group: 'Amenities', mqCategory: 'q:restaurant', weight: 2 },
+  { id: 'coffee', name: 'Coffee Shops', icon: Coffee, group: 'Amenities', mqCategory: 'sic:581228', weight: 1 },
   { id: 'parks', name: 'Parks', icon: Trees, group: 'Lifestyle', mqCategory: 'sic:799951', weight: 2 },
   { id: 'fitness', name: 'Fitness', icon: Dumbbell, group: 'Lifestyle', mqCategory: 'sic:799101', weight: 1 },
   { id: 'schools', name: 'Schools', icon: GraduationCap, group: 'Education', mqCategory: 'sic:821101', weight: 2 },
@@ -53,7 +70,89 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'banks', name: 'Banks', icon: Building2, group: 'Amenities', mqCategory: 'sic:602101', weight: 1 },
 ];
 
+// Threshold definitions for closest POI scoring
+const STANDARD_THRESHOLDS = [
+  { maxDistance: 0.2, score: 5 },
+  { maxDistance: 0.4, score: 4 },
+  { maxDistance: 0.75, score: 3 },
+  { maxDistance: 1.25, score: 2 },
+  { maxDistance: 1.75, score: 1 },
+];
+
+const WALKABLE_THRESHOLDS = [
+  { maxDistance: 0.15, score: 5 },
+  { maxDistance: 0.3, score: 4 },
+  { maxDistance: 0.5, score: 3 },
+  { maxDistance: 0.75, score: 2 },
+  { maxDistance: 1.0, score: 1 },
+];
+
+function getClosestScore(distance: number, thresholdType: ThresholdType): number {
+  const thresholds = thresholdType === 'walkable' ? WALKABLE_THRESHOLDS : STANDARD_THRESHOLDS;
+  for (const t of thresholds) {
+    if (distance <= t.maxDistance) return t.score;
+  }
+  return 0;
+}
+
+// Category-specific configurations
+const categoryConfigs: Record<string, CategoryConfig> = {
+  grocery: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+  restaurant: { idealCount: 10, searchRadius: 1, thresholdType: 'standard' },
+  coffee: { idealCount: 5, searchRadius: 1, thresholdType: 'walkable' },
+  pharmacy: { idealCount: 2, searchRadius: 1.5, thresholdType: 'standard' },
+  banks: { idealCount: 2, searchRadius: 1.5, thresholdType: 'standard' },
+  parks: { idealCount: 3, searchRadius: 1, thresholdType: 'walkable' },
+  fitness: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+  schools: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+};
+
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
+
+// Calculate category score using proximity-based algorithm
+function calculateCategoryScore(pois: POI[], config: CategoryConfig): number {
+  if (pois.length === 0) return 0;
+
+  // Weight factors
+  const CLOSEST_WEIGHT = 0.5;      // 50% weight to closest POI
+  const DENSITY_WEIGHT = 0.3;      // 30% weight to how many options exist
+  const AVERAGE_DIST_WEIGHT = 0.2; // 20% weight to average distance
+
+  // 1. Closest POI score (0-5) - uses category-specific thresholds
+  const closestDistance = Math.min(...pois.map(p => p.distance));
+  const closestScore = getClosestScore(closestDistance, config.thresholdType);
+
+  // 2. Density score (0-5) - based on count within search radius
+  // Cap at idealCount * 2 to prevent over-rewarding very high counts (50+)
+  const cappedCount = Math.min(pois.length, config.idealCount * 2);
+  const densityScore = Math.min(5, (cappedCount / config.idealCount) * 5);
+
+  // 3. Average distance score (0-5)
+  const avgDistance = pois.reduce((sum, p) => sum + p.distance, 0) / pois.length;
+  const avgScore = Math.max(0, 5 - (avgDistance * 2.5)); // 0 miles = 5, 2 miles = 0
+
+  // Weighted final score
+  const rawScore = (closestScore * CLOSEST_WEIGHT) + 
+                   (densityScore * DENSITY_WEIGHT) + 
+                   (avgScore * AVERAGE_DIST_WEIGHT);
+
+  // Round to one decimal
+  return Math.round(rawScore * 10) / 10;
+}
+
+// Calculate overall neighborhood score - simple average (equal weights)
+function calculateOverallScore(categoryScores: CategoryScore[]): number {
+  const scores = categoryScores
+    .filter(catScore => !catScore.error) // Skip categories with errors
+    .map(catScore => catScore.score);
+  
+  if (scores.length === 0) return 0;
+  
+  const sum = scores.reduce((total, score) => total + score, 0);
+  const average = sum / scores.length;
+  
+  return Math.round(average * 10) / 10; // one decimal place
+}
 
 export default function NeighborhoodScore({
   address: initialAddress = '',
@@ -113,101 +212,157 @@ export default function NeighborhoodScore({
     setError(null);
 
     try {
+      console.log('=== Neighborhood Score Analysis ===');
+      console.log('Location:', loc);
+
       const categoryScores: CategoryScore[] = await Promise.all(
         categories.map(async (category) => {
           try {
-            const places = await searchPlaces(loc!.lat, loc!.lng, category.mqCategory, 1.5, 8);
+            const config = categoryConfigs[category.id] || { idealCount: 3, searchRadius: 2, thresholdType: 'standard' as ThresholdType };
+            
+            console.log(`\n[${category.name}] Searching within ${config.searchRadius} miles...`);
+            const places = await searchPlaces(
+              loc!.lat, 
+              loc!.lng, 
+              category.mqCategory, 
+              config.searchRadius, 
+              50 // Get more results for better density calculation
+            );
+
+            console.log(`[${category.name}] API returned ${places?.length || 0} results`);
 
             if (!places || places.length === 0) {
+              console.log(`[${category.name}] No POIs found`);
               return {
                 category,
-                score: 2,
-                avgScore: 5,
-                description: 'Very limited options in this area',
+                score: 0,
+                description: 'None found nearby',
                 places: [],
+                poiCount: 0,
+                closestDistance: Infinity,
               };
             }
 
-            const destinations = places.slice(0, 5).map(p => ({
-              lat: p.place?.geometry?.coordinates?.[1] || 0,
-              lng: p.place?.geometry?.coordinates?.[0] || 0,
-            })).filter(d => d.lat !== 0);
+            // Helper function to calculate distance between two coordinates (Haversine formula)
+            const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+              const R = 3959; // Earth's radius in miles
+              const dLat = (lat2 - lat1) * Math.PI / 180;
+              const dLng = (lng2 - lng1) * Math.PI / 180;
+              const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              return R * c;
+            };
 
-            let walkTimes: number[] = [];
-            if (destinations.length > 0) {
-              try {
-                const matrix = await getRouteMatrix([loc!, ...destinations], { routeType: 'pedestrian' });
-                walkTimes = matrix.time.slice(1);
-              } catch {
-                walkTimes = places.slice(0, 5).map(p => (p.distance || 0.5) * 20 * 60);
-              }
-            }
+            // Convert to POI format with distances and coordinates
+            const pois: POI[] = places
+              .map(p => {
+                let distance = p.distance;
+                let lat: number | undefined;
+                let lng: number | undefined;
+                
+                // Extract coordinates from place geometry
+                if (p.place?.geometry?.coordinates) {
+                  const coords = p.place.geometry.coordinates;
+                  // Coordinates are [lng, lat]
+                  if (coords && coords.length >= 2) {
+                    lng = coords[0];
+                    lat = coords[1];
+                    // If distance is missing, calculate it from coordinates
+                    if ((distance === undefined || distance === null || distance === 0)) {
+                      distance = calculateDistance(loc!.lat, loc!.lng, lat, lng);
+                    }
+                  }
+                }
+                
+                // If still no distance, try to get from place properties
+                if ((distance === undefined || distance === null || distance === 0) && (p as any).distanceKm) {
+                  distance = (p as any).distanceKm * 0.621371; // Convert km to miles
+                }
+                
+                return {
+                  distance: distance || 0,
+                  name: p.name || 'Unknown',
+                  lat,
+                  lng,
+                };
+              })
+              .filter(p => p.distance > 0) // Filter out places with no valid distance
+              .sort((a, b) => a.distance - b.distance); // Sort by distance
 
-            const avgWalkTime = walkTimes.length > 0
-              ? walkTimes.reduce((a, b) => a + b, 0) / walkTimes.length
-              : 900;
-            const countScore = Math.min(places.length / 4, 1) * 4;
-            const timeScore = Math.max(0, 6 - (avgWalkTime / 180));
-            const score = Math.min(10, Math.max(1, countScore + timeScore));
+            const poiCount = pois.length;
+            const closestDistance = poiCount > 0 ? pois[0].distance : Infinity;
+
+            console.log(`[${category.name}] Processed ${poiCount} POIs`);
+            console.log(`[${category.name}] Closest: ${closestDistance.toFixed(2)} miles`);
+            console.log(`[${category.name}] Average distance: ${(pois.reduce((sum, p) => sum + p.distance, 0) / poiCount).toFixed(2)} miles`);
+
+            // Calculate score
+            const score = calculateCategoryScore(pois, config);
+            console.log(`[${category.name}] Calculated score: ${score.toFixed(1)} / 5`);
 
             let description: string;
-            if (score >= 8) description = `Excellent ${category.name.toLowerCase()} options nearby`;
-            else if (score >= 6) description = `Good variety within walking distance`;
-            else if (score >= 4) description = `Some options available`;
-            else description = `Limited options in this area`;
+            if (score >= 4) description = `Excellent ${category.name.toLowerCase()} options nearby`;
+            else if (score >= 3) description = `Good variety within walking distance`;
+            else if (score >= 2) description = `Some options available`;
+            else if (score >= 1) description = `Limited options in this area`;
+            else description = `None found nearby`;
 
             return {
               category,
-              score: Math.round(score * 10) / 10,
-              avgScore: 5 + Math.random() * 2,
+              score,
               description,
-              places: places.slice(0, 5).map((p, i) => ({
-                name: p.name,
-                walkTime: Math.round((walkTimes[i] || 600) / 60),
-                distance: p.distance || 0.5,
-              })),
+              places: pois.slice(0, 10), // Keep top 10 for display
+              poiCount,
+              closestDistance,
             };
-          } catch {
+          } catch (err) {
+            console.error(`[${category.name}] Error:`, err);
             return {
               category,
-              score: 5,
-              avgScore: 5,
-              description: 'Could not analyze this category',
+              score: 0,
+              description: 'Unable to load',
               places: [],
+              poiCount: 0,
+              closestDistance: Infinity,
+              error: true,
             };
           }
         })
       );
 
+      console.log('\n=== Category Scores Summary ===');
+      categoryScores.forEach(cs => {
+        console.log(`${cs.category.name}: ${cs.score.toFixed(1)}/5 (${cs.poiCount} POIs found)`);
+      });
+
       setScores(categoryScores);
 
-      const totalWeight = categories.reduce((sum, c) => sum + c.weight, 0);
-      const weightedSum = categoryScores.reduce((sum, cs) => {
-        const cat = categories.find(c => c.id === cs.category.id);
-        return sum + cs.score * (cat?.weight || 1);
-      }, 0);
-      const overall = Math.round((weightedSum / totalWeight) * 10) / 10;
+      const overall = calculateOverallScore(categoryScores);
+      console.log(`\n=== Overall Neighborhood Score: ${overall.toFixed(1)} / 5 ===\n`);
       setOverallScore(overall);
 
       onScoreCalculated?.({ overall, categories: categoryScores });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
+      console.error('Analysis error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 8) return '#22c55e';
-    if (score >= 6) return '#eab308';
-    if (score >= 4) return '#f97316';
-    return '#ef4444';
+    if (score >= 4) return '#22c55e'; // green
+    if (score >= 3) return '#eab308'; // yellow
+    if (score >= 2) return '#f97316'; // orange
+    return '#ef4444'; // red
   };
 
   const ScoreRing = ({ score, size = 48 }: { score: number; size?: number }) => {
     const color = getScoreColor(score);
     const circumference = 2 * Math.PI * 18;
-    const progress = (score / 10) * circumference;
+    const progress = (score / 5) * circumference; // Changed from /10 to /5
 
     return (
       <div className="relative" style={{ width: size, height: size }}>
@@ -246,7 +401,7 @@ export default function NeighborhoodScore({
 
   return (
     <div className={`rounded-xl border ${borderColor} overflow-hidden ${bgColor}`} style={{ minWidth: '900px', fontFamily, borderRadius }}>
-      <div className="flex" style={{ height: '500px' }}>
+      <div className="flex" style={{ height: '600px' }}>
         {/* Sidebar */}
         <div className={`w-80 border-r ${borderColor} flex flex-col overflow-hidden`}>
           {/* Header */}
@@ -262,7 +417,18 @@ export default function NeighborhoodScore({
               <input
                 type="text"
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
+                onChange={(e) => {
+                  const newAddress = e.target.value;
+                  setAddress(newAddress);
+                  // Clear previous results when address changes (only if we have existing results)
+                  if ((scores.length > 0 || overallScore !== null) && newAddress !== address) {
+                    setScores([]);
+                    setOverallScore(null);
+                    setSelectedCategory(null);
+                    setLocation(null);
+                    setError(null);
+                  }
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && calculateScores()}
                 placeholder="Enter an address..."
                 className={`w-full pl-10 pr-4 py-2.5 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm`}
@@ -288,10 +454,13 @@ export default function NeighborhoodScore({
             <div className={`p-4 border-b ${borderColor}`}>
               <div className="flex items-center gap-4">
                 <ScoreRing score={overallScore} size={64} />
-                <div>
-                  <div className={`text-sm font-medium ${textColor}`}>Overall Score</div>
+                <div className="flex-1">
+                  <div className={`text-sm font-medium ${textColor}`}>Neighborhood Score</div>
+                  <div className={`text-2xl font-bold`} style={{ color: getScoreColor(overallScore) }}>
+                    {overallScore.toFixed(1)} / 5
+                  </div>
                   <div className={`text-xs ${mutedText}`}>
-                    {overallScore >= 8 ? 'Excellent' : overallScore >= 6 ? 'Good' : overallScore >= 4 ? 'Fair' : 'Limited'}
+                    {overallScore >= 4 ? 'Excellent' : overallScore >= 3 ? 'Good' : overallScore >= 2 ? 'Fair' : 'Limited'}
                   </div>
                 </div>
               </div>
@@ -322,19 +491,21 @@ export default function NeighborhoodScore({
                   <ScoreRing score={selectedCategory.score} size={48} />
                 </div>
                 <div className={`text-xs font-medium uppercase tracking-wide mb-2 ${mutedText}`}>
-                  Nearby Places
+                  Nearby Places ({selectedCategory.poiCount} found)
                 </div>
                 {selectedCategory.places.length > 0 ? (
                   <div className="space-y-2">
-                    {selectedCategory.places.map((place, i) => (
+                    {selectedCategory.places.slice(0, 10).map((place, i) => (
                       <div key={i} className={`flex items-center justify-between p-2 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                        <span className={`text-sm ${textColor}`}>{place.name}</span>
-                        <span className={`text-xs ${mutedText}`}>{place.walkTime} min walk</span>
+                        <span className={`text-sm ${textColor} truncate flex-1`}>{place.name}</span>
+                        <span className={`text-xs ${mutedText} ml-2`}>{place.distance.toFixed(2)} mi</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className={`text-sm ${mutedText}`}>No places found nearby</p>
+                  <p className={`text-sm ${mutedText}`}>
+                    {selectedCategory.error ? 'Unable to load places' : 'No places found nearby'}
+                  </p>
                 )}
               </div>
             ) : (
@@ -355,9 +526,9 @@ export default function NeighborhoodScore({
                               darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
                             } disabled:opacity-50`}
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
                               <div 
-                                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
                                 style={{ backgroundColor: catScore ? getScoreColor(catScore.score) + '20' : (darkMode ? '#374151' : '#f3f4f6') }}
                               >
                                 <Icon 
@@ -365,20 +536,27 @@ export default function NeighborhoodScore({
                                   style={{ color: catScore ? getScoreColor(catScore.score) : (darkMode ? '#9ca3af' : '#6b7280') }} 
                                 />
                               </div>
-                              <span className={`text-sm ${textColor}`}>{cat.name}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className={`text-sm ${textColor} truncate`}>{cat.name}</div>
+                                {catScore && (
+                                  <div className={`text-xs ${mutedText}`}>
+                                    {catScore.poiCount} found {catScore.closestDistance !== Infinity && `· closest ${catScore.closestDistance.toFixed(2)} mi`}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             {catScore ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-shrink-0">
                                 <span
                                   className="text-sm font-medium"
                                   style={{ color: getScoreColor(catScore.score) }}
                                 >
-                                  {catScore.score.toFixed(1)}
+                                  {catScore.score.toFixed(1)} / 5
                                 </span>
                                 <ChevronRight className={`w-4 h-4 ${mutedText}`} />
                               </div>
                             ) : (
-                              <span className={`text-xs ${mutedText}`}>—</span>
+                              <span className={`text-xs ${mutedText} flex-shrink-0`}>—</span>
                             )}
                           </button>
                         );
@@ -399,8 +577,32 @@ export default function NeighborhoodScore({
             zoom={location ? 14 : 4}
             darkMode={darkMode}
             accentColor={accentColor}
-            height="500px"
-            markers={location ? [{ lat: location.lat, lng: location.lng, label: 'Home', color: accentColor }] : []}
+            height="600px"
+            markers={(() => {
+              const markers: Array<{ lat: number; lng: number; label?: string; color?: string }> = [];
+              
+              // Add home location marker - use accent color
+              if (location) {
+                markers.push({ lat: location.lat, lng: location.lng, label: 'Home', color: accentColor });
+              }
+              
+              // Add POI markers for selected category - use a different color (green/blue)
+              if (selectedCategory && selectedCategory.places.length > 0) {
+                const poiColor = '#10b981'; // Green color for POIs
+                selectedCategory.places.forEach((poi) => {
+                  if (poi.lat && poi.lng) {
+                    markers.push({
+                      lat: poi.lat,
+                      lng: poi.lng,
+                      label: poi.name,
+                      color: poiColor,
+                    });
+                  }
+                });
+              }
+              
+              return markers;
+            })()}
           />
         </div>
       </div>

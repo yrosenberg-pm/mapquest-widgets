@@ -192,25 +192,46 @@ export default function MapQuestMap({
     document.head.appendChild(style);
   }, []);
 
-  // Initialize map with MapQuest SDK
+  // Initialize map with MapQuest SDK - only run once on mount
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current) return;
+
+    let isMounted = true;
+    let timeoutId: NodeJS.Timeout;
 
     const initMap = () => {
+      if (!isMounted || !containerRef.current) return;
+      
       const L = window.L;
       if (!L?.mapquest) {
-        setTimeout(initMap, 100);
+        timeoutId = setTimeout(initMap, 100);
         return;
       }
 
+      // Check if map already exists and is valid
+      const existingMapDiv = document.getElementById(mapIdRef.current);
+      if (existingMapDiv && L.mapquest.maps && L.mapquest.maps[mapIdRef.current]) {
+        // Map already initialized, just update it
+        mapRef.current = L.mapquest.maps[mapIdRef.current];
+        setMapReady(true);
+        return;
+      }
+
+      // Remove any existing container that doesn't have a valid map
+      if (existingMapDiv && existingMapDiv.parentNode) {
+        existingMapDiv.remove();
+      }
+
+      if (!containerRef.current) return;
+
       L.mapquest.key = apiKey;
 
-      // Create container
+      // Create new container
       const mapDiv = document.createElement('div');
       mapDiv.id = mapIdRef.current;
       mapDiv.style.width = '100%';
       mapDiv.style.height = '100%';
-      containerRef.current?.appendChild(mapDiv);
+      containerRef.current.appendChild(mapDiv);
 
       // Use MapQuest tileLayer
       const map = L.mapquest.map(mapIdRef.current, {
@@ -242,20 +263,27 @@ export default function MapQuestMap({
       setMapReady(true);
     };
 
-    setTimeout(initMap, 50);
+    timeoutId = setTimeout(initMap, 50);
 
     return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+      // Only clean up on unmount
       if (mapRef.current) {
         try {
           mapRef.current.remove();
-        } catch (e) {}
+        } catch (e) {
+          // Ignore errors
+        }
         mapRef.current = null;
       }
       const mapDiv = document.getElementById(mapIdRef.current);
-      if (mapDiv) mapDiv.remove();
+      if (mapDiv && mapDiv.parentNode) {
+        mapDiv.remove();
+      }
       setMapReady(false);
     };
-  }, [apiKey]);
+  }, [apiKey]); // Only depend on apiKey - map should initialize once
 
   // Update dark mode / tiles
   useEffect(() => {
