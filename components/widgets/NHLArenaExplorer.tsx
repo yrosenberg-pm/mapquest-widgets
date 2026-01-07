@@ -293,7 +293,7 @@ export default function NHLArenaExplorer({
   );
 
   return (
-    <div className={`w-full max-w-5xl mx-auto ${theme.bg} rounded-2xl overflow-hidden shadow-2xl border ${theme.border}`} style={{ height: 850 }}>
+    <div className={`w-full max-w-5xl mx-auto ${theme.bg} rounded-2xl overflow-hidden shadow-2xl border ${theme.border}`} style={{ minWidth: '900px', height: 700 }}>
       <div className="flex h-full">
         {/* Sidebar */}
         <div className={`w-72 flex flex-col border-r ${theme.border} ${darkMode ? 'bg-slate-800/30' : 'bg-white'}`}>
@@ -340,14 +340,14 @@ export default function NHLArenaExplorer({
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Map */}
-          <div className="h-72">
+          <div className="h-[238px]">
               <MapQuestMap
               apiKey={apiKey}
               center={mapCenter}
               zoom={selectedStadium ? 14 : 4}
               darkMode={darkMode}
               markers={mapMarkers}
-              height="288px"
+              height="238px"
               showRoute={!!routeStart && !!selectedStadium}
               routeStart={routeStart || undefined}
               routeEnd={selectedStadium ? { lat: selectedStadium.lat, lng: selectedStadium.lng } : undefined}
