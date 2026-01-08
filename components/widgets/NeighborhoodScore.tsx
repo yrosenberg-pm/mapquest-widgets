@@ -61,7 +61,7 @@ interface NeighborhoodScoreProps {
 }
 
 const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'grocery', name: 'Groceries', icon: ShoppingCart, group: 'Amenities', mqCategory: 'sic:541105', weight: 3 },
+  { id: 'grocery', name: 'Groceries', icon: ShoppingCart, group: 'Amenities', mqCategory: 'multi:sic:541105,sic:541101,grocery store,supermarket', weight: 3 },
   { id: 'restaurant', name: 'Restaurants', icon: Utensils, group: 'Amenities', mqCategory: 'q:restaurant', weight: 2 },
   { id: 'coffee', name: 'Coffee Shops', icon: Coffee, group: 'Amenities', mqCategory: 'sic:581228', weight: 1 },
   { id: 'parks', name: 'Parks', icon: Trees, group: 'Lifestyle', mqCategory: 'sic:799951', weight: 2 },
@@ -255,6 +255,21 @@ export default function NeighborhoodScore({
               return R * c;
             };
 
+            // Blocklist of company names that are definitely NOT grocery stores
+            // These often get incorrectly categorized in place data
+            const groceryBlocklist = [
+              'apple', 'microsoft', 'google', 'best buy', 'target mobile', 
+              'verizon', 'at&t', 't-mobile', 'sprint', 'gamestop',
+              'foot locker', 'nike', 'adidas', 'lululemon', 'gap',
+              'banana republic', 'old navy', 'h&m', 'zara', 'forever 21',
+              'sephora', 'ulta', 'mac cosmetics', 'bath & body works',
+              'victoria\'s secret', 'pink', 'american eagle', 'hollister',
+              'abercrombie', 'express', 'buckle', 'zumiez', 'hot topic',
+              'spencer\'s', 'build-a-bear', 'claire\'s', 'piercing pagoda',
+              'kay jewelers', 'jared', 'zales', 'pandora', 'swarovski',
+              'tesla', 'bmw', 'mercedes', 'lexus', 'audi', 'porsche',
+            ];
+
             const pois: POI[] = places
               .map(p => {
                 let distance = p.distance;
@@ -285,6 +300,14 @@ export default function NeighborhoodScore({
               })
               .filter(p => p.distance > 0)
               .filter(p => p.distance <= config.searchRadius)
+              // Filter out blocklisted names for grocery category
+              .filter(p => {
+                if (category.id === 'grocery') {
+                  const nameLower = p.name.toLowerCase();
+                  return !groceryBlocklist.some(blocked => nameLower.includes(blocked));
+                }
+                return true;
+              })
               .sort((a, b) => a.distance - b.distance);
 
             const poiCount = pois.length;
