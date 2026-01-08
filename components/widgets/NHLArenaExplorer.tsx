@@ -181,45 +181,66 @@ export default function NHLArenaExplorer({
           origin: `${fromLocation.lat},${fromLocation.lng}`,
           destination: `${selectedStadium.lat},${selectedStadium.lng}`,
           transportMode: 'publicTransport',
-          departureTime: 'now',
+          departureTime: new Date().toISOString(),
         });
         
         const hereRes = await fetch(`/api/here?${hereParams}`);
         const hereData = await hereRes.json();
         
-        if (hereData.routes && hereData.routes.length > 0) {
+        console.log('HERE Transit Response:', hereData);
+        
+        if (hereData.error) {
+          console.error('HERE API Error:', hereData.error, hereData.details);
+          setRouteInfo({
+            distance: '—',
+            duration: '—',
+            mode: 'Transit error: ' + (hereData.error || 'Unknown error')
+          });
+        } else if (hereData.routes && hereData.routes.length > 0) {
           const route = hereData.routes[0];
-          const section = route.sections?.[0];
+          const sections = route.sections || [];
           
-          if (section?.summary) {
-            const distanceKm = section.summary.length / 1000;
-            const distanceMiles = distanceKm * 0.621371;
-            const durationSecs = section.summary.duration;
-            const hours = Math.floor(durationSecs / 3600);
-            const mins = Math.floor((durationSecs % 3600) / 60);
-            
-            // Extract transit details if available
-            let transitDetails = '';
-            if (section.actions) {
-              const transitActions = section.actions.filter((a: any) => 
-                a.action === 'board' || a.action === 'arrive'
-              );
-              if (transitActions.length > 0) {
-                const boardAction = transitActions.find((a: any) => a.action === 'board');
-                if (boardAction?.lineName) {
-                  transitDetails = ` via ${boardAction.lineName}`;
-                }
-              }
+          // Sum up all sections for total distance and duration
+          let totalLength = 0;
+          let totalDuration = 0;
+          const transitLines: string[] = [];
+          
+          sections.forEach((section: any) => {
+            if (section.summary) {
+              totalLength += section.summary.length || 0;
+              totalDuration += section.summary.duration || 0;
             }
+            // Extract transit line names from transport info
+            if (section.transport?.name) {
+              transitLines.push(section.transport.name);
+            } else if (section.transport?.shortName) {
+              transitLines.push(section.transport.shortName);
+            }
+          });
+          
+          if (totalDuration > 0) {
+            const distanceMiles = (totalLength / 1000) * 0.621371;
+            const hours = Math.floor(totalDuration / 3600);
+            const mins = Math.floor((totalDuration % 3600) / 60);
+            
+            // Build transit details string
+            const uniqueLines = [...new Set(transitLines)];
+            const transitDetails = uniqueLines.length > 0 ? ` via ${uniqueLines.slice(0, 2).join(', ')}` : '';
             
             setRouteInfo({
               distance: distanceMiles.toFixed(1) + ' miles',
               duration: hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min',
               mode: 'Transit' + transitDetails
             });
+          } else {
+            setRouteInfo({
+              distance: '—',
+              duration: '—',
+              mode: 'Transit unavailable for this route'
+            });
           }
         } else {
-          console.error('No transit route found');
+          console.error('No transit route found in response:', hereData);
           setRouteInfo({
             distance: '—',
             duration: '—',

@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
         const routeOrigin = searchParams.get('origin'); // lat,lng
         const destination = searchParams.get('destination'); // lat,lng
         const routeTransportMode = searchParams.get('transportMode') || 'car';
-        const departureTime = searchParams.get('departureTime') || 'now';
+        const departureTime = searchParams.get('departureTime') || new Date().toISOString();
 
         if (!routeOrigin || !destination) {
           return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
@@ -101,8 +101,15 @@ export async function GET(request: NextRequest) {
         }
 
         // Build the URL with return parameters
-        const returnParams = 'polyline,summary,actions,instructions';
-        url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${departureTime}`;
+        // For public transport, include transit-specific return values
+        const isTransit = routeTransportMode === 'publicTransport' || routeTransportMode === 'publicTransportTimeTable';
+        const returnParams = isTransit 
+          ? 'polyline,summary,actions,instructions,travelSummary' 
+          : 'polyline,summary,actions,instructions';
+        
+        url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}`;
+        
+        console.log('HERE Routes API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
       }
 
