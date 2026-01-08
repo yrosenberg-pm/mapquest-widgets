@@ -188,12 +188,22 @@ export default function NHLArenaExplorer({
         
         console.log('HERE Transit Response:', hereData);
         
+        console.log('HERE Transit Full Response:', JSON.stringify(hereData, null, 2));
+        
         if (hereData.error) {
           console.error('HERE API Error:', hereData.error, hereData.details);
           setRouteInfo({
             distance: '—',
             duration: '—',
             mode: 'Transit error: ' + (hereData.error || 'Unknown error')
+          });
+        } else if (!hereData.routes && Object.keys(hereData).length === 0) {
+          // Empty response - likely API key doesn't have transit enabled
+          console.error('Empty response from HERE Transit API - Transit service may not be enabled for this API key');
+          setRouteInfo({
+            distance: '—',
+            duration: '—',
+            mode: 'Transit not available (API access required)'
           });
         } else if (hereData.routes && hereData.routes.length > 0) {
           const route = hereData.routes[0];
@@ -240,10 +250,14 @@ export default function NHLArenaExplorer({
           }
         } else {
           console.error('No transit route found in response:', hereData);
+          // Check if there are notices or other info in response
+          if (hereData.notices) {
+            console.log('HERE API Notices:', hereData.notices);
+          }
           setRouteInfo({
             distance: '—',
             duration: '—',
-            mode: 'Transit unavailable for this route'
+            mode: 'No transit route found'
           });
         }
       } else {
