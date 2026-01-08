@@ -341,7 +341,7 @@ export default function DirectionsEmbed({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex" style={{ height: '500px' }}>
+      <div className="flex" style={{ height: '600px' }}>
         {/* Sidebar */}
         <div 
           className="w-80 flex flex-col overflow-hidden"
@@ -900,7 +900,7 @@ export default function DirectionsEmbed({
             zoom={fromCoords && toCoords ? 10 : 4}
             darkMode={darkMode}
             accentColor={accentColor}
-            height="500px"
+            height="600px"
             markers={markers}
             showRoute={!!(fromCoords && toCoords) && routeType !== 'transit'}
             routeStart={fromCoords || undefined}
