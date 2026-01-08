@@ -77,12 +77,63 @@ export default function NHLArenaExplorer({
   const [routeStart, setRouteStart] = useState<{ lat: number; lng: number } | null>(null);
   const [calculatingRoute, setCalculatingRoute] = useState(false);
   const [routeType, setRouteType] = useState<'fastest' | 'pedestrian' | 'bicycle' | 'transit'>('fastest');
+  const [transitPolyline, setTransitPolyline] = useState<{ lat: number; lng: number }[]>([]);
 
   const filteredStadiums = NHL_STADIUMS.filter(s => 
     s.team.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.arena.toLowerCase().includes(searchQuery.toLowerCase()) ||
     s.city.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // HERE Flexible Polyline decoder
+  const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
+    const DECODING_TABLE: Record<string, number> = {};
+    const ENCODING_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    for (let i = 0; i < ENCODING_CHARS.length; i++) {
+      DECODING_TABLE[ENCODING_CHARS[i]] = i;
+    }
+    
+    const decodeUnsignedVarint = (pos: { index: number }): number => {
+      let result = 0;
+      let shift = 0;
+      while (pos.index < encoded.length) {
+        const value = DECODING_TABLE[encoded[pos.index]];
+        if (value === undefined) break;
+        result |= (value & 0x1F) << shift;
+        pos.index++;
+        if ((value & 0x20) === 0) break;
+        shift += 5;
+      }
+      return result;
+    };
+    
+    const decodeSignedVarint = (pos: { index: number }): number => {
+      const value = decodeUnsignedVarint(pos);
+      return (value >> 1) ^ (-(value & 1));
+    };
+    
+    const coordinates: { lat: number; lng: number }[] = [];
+    const pos = { index: 0 };
+    
+    // Read header
+    decodeUnsignedVarint(pos); // version
+    const header = decodeUnsignedVarint(pos);
+    const precision = header & 0x0F;
+    const thirdDimType = (header >> 8) & 0x07;
+    const multiplier = Math.pow(10, precision);
+    
+    let lat = 0, lng = 0;
+    while (pos.index < encoded.length) {
+      lat += decodeSignedVarint(pos);
+      if (pos.index >= encoded.length) break;
+      lng += decodeSignedVarint(pos);
+      if (thirdDimType !== 0 && pos.index < encoded.length) {
+        decodeSignedVarint(pos); // skip third dimension
+      }
+      coordinates.push({ lat: lat / multiplier, lng: lng / multiplier });
+    }
+    return coordinates;
+  };
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -156,6 +207,7 @@ export default function NHLArenaExplorer({
     setCalculatingRoute(true);
     setRouteInfo(null);
     setRouteStart(null);
+    setTransitPolyline([]);
     
     try {
       const MQ_KEY = '78TTOXc0cKtnj1pSD71bHAaFrdU4EvHw';
@@ -216,6 +268,7 @@ export default function NHLArenaExplorer({
           let totalDuration = 0;
           const transitModes: string[] = [];
           const transitLines: string[] = [];
+          const allPolylineCoords: { lat: number; lng: number }[] = [];
           
           sections.forEach((section: any) => {
             // Use travelSummary for intermodal routes
@@ -227,8 +280,8 @@ export default function NHLArenaExplorer({
               totalDuration += section.summary.duration || 0;
             }
             
-            // Track the transport types used
-            if (section.type) {
+            // Track the transport types used (exclude 'pedestrian' from display)
+            if (section.type && section.type !== 'pedestrian') {
               transitModes.push(section.type);
             }
             
@@ -238,21 +291,45 @@ export default function NHLArenaExplorer({
             } else if (section.transport?.shortName) {
               transitLines.push(section.transport.shortName);
             }
+            
+            // Decode and collect polyline coordinates from each section
+            if (section.polyline) {
+              try {
+                const coords = decodeFlexiblePolyline(section.polyline);
+                allPolylineCoords.push(...coords);
+              } catch (e) {
+                console.error('Failed to decode polyline:', e);
+              }
+            }
           });
+          
+          // Store the combined polyline for map display
+          if (allPolylineCoords.length > 0) {
+            setTransitPolyline(allPolylineCoords);
+          }
           
           if (totalDuration > 0) {
             const distanceMiles = (totalLength / 1000) * 0.621371;
             const hours = Math.floor(totalDuration / 3600);
             const mins = Math.floor((totalDuration % 3600) / 60);
             
-            // Build mode description
+            // Build mode description - show transit types (not pedestrian)
             const uniqueModes = [...new Set(transitModes)];
             const uniqueLines = [...new Set(transitLines)];
             
             let modeLabel = 'Transit';
             if (uniqueModes.length > 0) {
-              // Capitalize first letter of each mode
-              const modeNames = uniqueModes.map(m => m.charAt(0).toUpperCase() + m.slice(1));
+              // Map mode names to friendly labels
+              const modeNameMap: Record<string, string> = {
+                'subway': 'Subway',
+                'bus': 'Bus',
+                'train': 'Train',
+                'ferry': 'Ferry',
+                'tram': 'Tram',
+                'taxi': 'Taxi',
+                'walk': 'Walk',
+              };
+              const modeNames = uniqueModes.map(m => modeNameMap[m] || m.charAt(0).toUpperCase() + m.slice(1));
               modeLabel = modeNames.join(' + ');
             }
             if (uniqueLines.length > 0) {
@@ -513,6 +590,8 @@ export default function NHLArenaExplorer({
               routeStart={routeStart || undefined}
               routeEnd={selectedStadium ? { lat: selectedStadium.lat, lng: selectedStadium.lng } : undefined}
               routeType={routeType === 'transit' ? undefined : routeType}
+              routePolyline={routeType === 'transit' ? transitPolyline : undefined}
+              routeColor={routeType === 'transit' ? '#0EA5E9' : undefined}
               accentColor={selectedStadium?.color || '#F47A38'}
             />
           </div>

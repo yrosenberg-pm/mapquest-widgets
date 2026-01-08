@@ -42,6 +42,7 @@ interface MapQuestMapProps {
   waypoints?: { lat: number; lng: number }[];
   routeType?: 'fastest' | 'pedestrian' | 'bicycle';
   routeColor?: string;
+  routePolyline?: { lat: number; lng: number }[]; // Pre-calculated route coordinates
   onClick?: (lat: number, lng: number) => void;
   showZoomControls?: boolean;
   interactive?: boolean;
@@ -72,6 +73,7 @@ export default function MapQuestMap({
   waypoints,
   routeType = 'fastest',
   routeColor,
+  routePolyline,
   onClick,
   showZoomControls = true,
   interactive = true,
@@ -551,6 +553,41 @@ export default function MapQuestMap({
 
     fetchRoute();
   }, [showRoute, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady]);
+
+  // Draw pre-calculated route polyline (e.g., from HERE transit API)
+  useEffect(() => {
+    if (!routeLayerRef.current || !mapReady || !routePolyline || routePolyline.length === 0) return;
+    
+    // Don't draw if we're already showing a calculated route
+    if (showRoute && routeStart && routeEnd) return;
+    
+    const L = window.L;
+    routeLayerRef.current.clearLayers();
+
+    const latLngs = routePolyline.map(p => [p.lat, p.lng] as [number, number]);
+
+    // Shadow
+    L.polyline(latLngs, {
+      color: '#000000',
+      weight: 8,
+      opacity: 0.1,
+      lineCap: 'round',
+      lineJoin: 'round',
+    }).addTo(routeLayerRef.current);
+
+    // Main route line
+    const routeLine = L.polyline(latLngs, {
+      color: routeColor || accentColor,
+      weight: 5,
+      opacity: 0.9,
+      lineCap: 'round',
+      lineJoin: 'round',
+    }).addTo(routeLayerRef.current);
+
+    if (mapRef.current && latLngs.length > 1) {
+      mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+    }
+  }, [routePolyline, routeColor, accentColor, showRoute, routeStart, routeEnd, mapReady]);
 
   return (
     <div
