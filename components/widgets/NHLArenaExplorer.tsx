@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Utensils, ParkingCircle, Cloud, Sun, CloudRain, Snowflake, Navigation, Search, Droplets, Wind, Star, Sparkles, ExternalLink, Moon, Hotel, Car, Bike, PersonStanding, Train } from 'lucide-react';
+import { Utensils, ParkingCircle, Cloud, Sun, CloudRain, Snowflake, Navigation, Search, Droplets, Wind, Star, Sparkles, ExternalLink, Hotel, Car, Bike, PersonStanding, Train } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 
@@ -52,18 +52,24 @@ const NHLShield = ({ className = "w-8 h-8" }: { className?: string }) => (
 
 interface NHLArenaExplorerProps {
   apiKey: string;
+  accentColor?: string;
   darkMode?: boolean;
   showBranding?: boolean;
   companyName?: string;
   companyLogo?: string;
+  fontFamily?: string;
+  borderRadius?: string;
 }
 
 export default function NHLArenaExplorer({ 
   apiKey, 
-  darkMode: initialDarkMode = false,
+  accentColor = '#F47A38',
+  darkMode = false,
   showBranding = true,
   companyName,
-  companyLogo
+  companyLogo,
+  fontFamily,
+  borderRadius,
 }: NHLArenaExplorerProps) {
   const [selectedStadium, setSelectedStadium] = useState<typeof NHL_STADIUMS[0] | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -71,7 +77,6 @@ export default function NHLArenaExplorer({
   const [places, setPlaces] = useState<{ parking: any[]; food: any[]; hotels: any[] }>({ parking: [], food: [], hotels: [] });
   const [loading, setLoading] = useState(false);
   const [weather, setWeather] = useState<{ temp: number; condition: string; humidity: number; wind: number } | null>(null);
-  const [darkMode, setDarkMode] = useState(initialDarkMode);
   const [fromAddress, setFromAddress] = useState('');
   const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string; mode: string } | null>(null);
   const [routeStart, setRouteStart] = useState<{ lat: number; lng: number } | null>(null);
@@ -545,7 +550,9 @@ export default function NHLArenaExplorer({
       style={{ 
         minWidth: '900px', 
         height: 675,
-        '--brand-primary': '#F47A38',
+        '--brand-primary': accentColor,
+        fontFamily: fontFamily || undefined,
+        borderRadius: borderRadius || undefined,
       } as React.CSSProperties}
     >
       <div className="flex h-full">
@@ -571,13 +578,6 @@ export default function NHLArenaExplorer({
                   Arena Explorer
                 </span>
               </div>
-              <button 
-                onClick={() => setDarkMode(!darkMode)} 
-                className="p-1.5 rounded-lg transition-colors"
-                style={{ background: 'var(--bg-hover)' }}
-              >
-                {darkMode ? <Sun className="w-4 h-4 text-yellow-400" /> : <span style={{ color: 'var(--text-muted)' }}><Moon className="w-4 h-4" /></span>}
-              </button>
             </div>
             <div className="relative">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>
@@ -600,8 +600,8 @@ export default function NHLArenaExplorer({
                 onClick={() => { setSelectedStadium(s); setActiveTab('overview'); }}
                 className="w-full p-2 rounded-xl text-left transition-all"
                 style={{
-                  background: selectedStadium?.id === s.id ? 'rgba(244, 122, 56, 0.2)' : 'transparent',
-                  border: selectedStadium?.id === s.id ? '1px solid rgba(244, 122, 56, 0.5)' : '1px solid transparent',
+                  background: selectedStadium?.id === s.id ? `${accentColor}33` : 'transparent',
+                  border: selectedStadium?.id === s.id ? `1px solid ${accentColor}80` : '1px solid transparent',
                 }}
               >
                 <div className="flex items-center gap-2.5">
@@ -643,7 +643,7 @@ export default function NHLArenaExplorer({
               routeType={routeType === 'transit' ? undefined : routeType}
               transitSegments={routeType === 'transit' && transitSegments.length > 0 ? transitSegments : undefined}
               routePolyline={routeType === 'transit' && transitSegments.length === 0 ? transitPolyline : undefined}
-              accentColor={selectedStadium?.color || '#F47A38'}
+              accentColor={selectedStadium?.color || accentColor}
             />
           </div>
           
@@ -677,7 +677,8 @@ export default function NHLArenaExplorer({
                   </div>
                   <button 
                     onClick={() => openInMapQuest(selectedStadium.lat, selectedStadium.lng, selectedStadium.arena)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white text-xs font-medium transition-colors hover:opacity-90"
+                    style={{ backgroundColor: accentColor }}
                   >
                     <ExternalLink className="w-3 h-3" /> MapQuest
                   </button>
@@ -698,7 +699,7 @@ export default function NHLArenaExplorer({
                     onClick={() => setActiveTab(t.id)}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all"
                     style={{
-                      background: activeTab === t.id ? '#F47A38' : 'transparent',
+                      background: activeTab === t.id ? accentColor : 'transparent',
                       color: activeTab === t.id ? 'white' : 'var(--text-muted)',
                     }}
                   >
@@ -862,12 +863,12 @@ export default function NHLArenaExplorer({
                               onClick={() => setRouteType(id)}
                               className="p-2.5 rounded-xl transition-all"
                               style={{
-                                background: isSelected ? 'rgba(244, 122, 56, 0.2)' : 'var(--bg-hover)',
-                                border: isSelected ? '1px solid rgba(244, 122, 56, 0.5)' : '1px solid var(--border-subtle)',
+                                background: isSelected ? `${accentColor}33` : 'var(--bg-hover)',
+                                border: isSelected ? `1px solid ${accentColor}80` : '1px solid var(--border-subtle)',
                               }}
                               title={id === 'transit' ? 'Public transit via HERE API' : ''}
                             >
-                              <span style={{ color: isSelected ? '#F47A38' : 'var(--text-muted)' }}>
+                              <span style={{ color: isSelected ? accentColor : 'var(--text-muted)' }}>
                                 <IconComponent className="w-4 h-4 mx-auto mb-1" />
                               </span>
                               <p 
@@ -902,7 +903,8 @@ export default function NHLArenaExplorer({
                         <button 
                           onClick={getDirections} 
                           disabled={calculatingRoute || !fromAddress}
-                          className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium transition-colors"
+                          className="px-4 py-2 rounded-lg disabled:opacity-50 text-white text-sm font-medium transition-colors hover:opacity-90"
+                          style={{ backgroundColor: accentColor }}
                         >
                           {calculatingRoute ? '...' : 'Go'}
                         </button>

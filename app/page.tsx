@@ -80,7 +80,6 @@ export default function Home() {
   const [companyLogo, setCompanyLogo] = useState('');
 
   const currentWidget = WIDGETS.find(w => w.id === activeWidget);
-  const isNHLWidget = activeWidget === 'nhl';
 
   const generateEmbedCode = () => {
     const props = [
@@ -115,6 +114,8 @@ export default function Home() {
     };
 
     switch (activeWidget) {
+      case 'nhl':
+        return <NHLArenaExplorer {...commonProps} />;
       case 'address':
         return <SmartAddressInput {...commonProps} onAddressSelect={(a) => console.log('Selected:', a)} />;
       case 'store':
@@ -151,24 +152,22 @@ export default function Home() {
             </p>
           </div>
 
-          {!isNHLWidget && (
-            <div className="flex items-center gap-3 relative z-[100]">
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="p-2 rounded-lg bg-white text-gray-700 shadow-lg shadow-gray-300/60 hover:bg-gray-50 hover:shadow-xl hover:shadow-gray-400/70 transition-all"
-                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-              <button
-                onClick={() => setShowSettings(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium relative z-[100] bg-white text-gray-700 shadow-lg shadow-gray-300/60 hover:bg-gray-50 hover:shadow-xl hover:shadow-gray-400/70 transition-all"
-              >
-                <Settings className="w-4 h-4" />
-                Customize
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-3 relative z-[100]">
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-2 rounded-lg bg-white text-gray-700 shadow-lg shadow-gray-300/60 hover:bg-gray-50 hover:shadow-xl hover:shadow-gray-400/70 transition-all"
+              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium relative z-[100] bg-white text-gray-700 shadow-lg shadow-gray-300/60 hover:bg-gray-50 hover:shadow-xl hover:shadow-gray-400/70 transition-all"
+            >
+              <Settings className="w-4 h-4" />
+              Customize
+            </button>
+          </div>
         </div>
 
         {/* Widget Tabs */}
@@ -193,11 +192,7 @@ export default function Home() {
         {/* Widget Display */}
         <div className="flex flex-col items-center gap-2">
           <div className="shadow-2xl shadow-gray-500/40 rounded-xl">
-            {isNHLWidget ? (
-              <NHLArenaExplorer apiKey={API_KEY} showBranding={true} />
-            ) : (
-              renderWidget()
-            )}
+            {renderWidget()}
           </div>
           {activeWidget === 'address' && (
             <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-2`}>
@@ -214,7 +209,7 @@ export default function Home() {
       </div>
 
       {/* Settings Modal */}
-      {showSettings && !isNHLWidget && (
+      {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
           <div className={`w-full max-w-2xl rounded-2xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
             {/* Modal Header */}
