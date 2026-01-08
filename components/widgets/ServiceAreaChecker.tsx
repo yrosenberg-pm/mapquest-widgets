@@ -202,7 +202,7 @@ export default function ServiceAreaChecker({
             className="w-8 h-8 rounded-lg flex items-center justify-center"
             style={{ background: `${accentColor}15` }}
           >
-            <MapPin className="w-4 h-4" style={{ color: accentColor }} />
+            <span style={{ color: accentColor }}><MapPin className="w-4 h-4" /></span>
           </div>
           <div>
             <h3 
@@ -281,7 +281,7 @@ export default function ServiceAreaChecker({
                 {result.inArea ? (
                   <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-success)' }} />
                 ) : (
-                  <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-error)' }} />
+                  <span className="flex-shrink-0 mt-0.5" style={{ color: 'var(--color-error)' }}><XCircle className="w-5 h-5" /></span>
                 )}
                 <div className="flex-1 min-w-0">
                   <div 

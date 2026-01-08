@@ -196,7 +196,7 @@ export default function DeliveryETA({
               className="w-10 h-10 rounded-full flex items-center justify-center"
               style={{ backgroundColor: statusInfo.color + '25' }}
             >
-              <StatusIcon className="w-5 h-5" style={{ color: statusInfo.color }} />
+              <span style={{ color: statusInfo.color }}><StatusIcon className="w-5 h-5" /></span>
             </div>
             <div className="flex-1">
               <div 

@@ -336,7 +336,7 @@ export default function HereIsolineWidget({
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ background: `${accentColor}15` }}
               >
-                <MapPin className="w-4 h-4" style={{ color: accentColor }} />
+                <span style={{ color: accentColor }}><MapPin className="w-4 h-4" /></span>
               </div>
               <div>
                 <h3 

@@ -379,7 +379,7 @@ export default function NeighborhoodScore({
   };
 
   const CategoryIcon = ({ icon: Icon, className, style }: { icon: LucideIcon; className?: string; style?: React.CSSProperties }) => (
-    <Icon className={className || 'w-4 h-4'} style={style} />
+    <span style={style}><Icon className={className || 'w-4 h-4'} /></span>
   );
 
   const groupedCategories = categories.reduce((groups, cat) => {
@@ -420,7 +420,7 @@ export default function NeighborhoodScore({
                   className="w-8 h-8 rounded-lg flex items-center justify-center"
                   style={{ background: `${accentColor}15` }}
                 >
-                  <MapPin className="w-4 h-4" style={{ color: accentColor }} />
+                  <span style={{ color: accentColor }}><MapPin className="w-4 h-4" /></span>
                 </div>
                 <div>
                   <h3 
@@ -716,7 +716,7 @@ export default function NeighborhoodScore({
                                 >
                                   {catScore.score.toFixed(1)} / 5
                                 </span>
-                                <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                                <span style={{ color: 'var(--text-muted)' }}><ChevronRight className="w-4 h-4" /></span>
                               </div>
                             ) : (
                               <span 

@@ -272,7 +272,7 @@ export default function CommuteTimeCalculator({
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ background: `${accentColor}15` }}
               >
-                <Clock className="w-4 h-4" style={{ color: accentColor }} />
+                <span style={{ color: accentColor }}><Clock className="w-4 h-4" /></span>
               </div>
               <div>
                 <h3 
@@ -446,7 +446,7 @@ export default function CommuteTimeCalculator({
                       className="w-6 h-6 rounded-full flex items-center justify-center"
                       style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-default)' }}
                     >
-                      {baseLabel === 'Home' ? <Home className="w-3 h-3" style={{ color: 'var(--text-muted)' }} /> : <Briefcase className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />}
+                      <span style={{ color: 'var(--text-muted)' }}>{baseLabel === 'Home' ? <Home className="w-3 h-3" /> : <Briefcase className="w-3 h-3" />}</span>
                     </div>
                     <div>
                       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Your {baseLabel}</p>
@@ -479,7 +479,7 @@ export default function CommuteTimeCalculator({
                     className="w-6 h-6 rounded-full flex items-center justify-center"
                     style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-default)' }}
                   >
-                    <MapPin className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                    <span style={{ color: 'var(--text-muted)' }}><MapPin className="w-3 h-3" /></span>
                   </div>
                   <AddressAutocomplete
                     value={destination}

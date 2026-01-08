@@ -268,7 +268,7 @@ export default function NHLArenaExplorer({
           className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
           style={{ backgroundColor: `${color}20` }}
         >
-          <Icon className="w-4 h-4" style={{ color }} />
+          <span style={{ color }}><Icon className="w-4 h-4" /></span>
         </div>
         <div className="flex-1 min-w-0">
           <h4 
@@ -290,10 +290,9 @@ export default function NHLArenaExplorer({
             {place.distance || '—'}
           </span>
         </div>
-        <ExternalLink 
-          className="w-4 h-4 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity"
-          style={{ color: 'var(--text-muted)' }}
-        />
+        <span style={{ color: 'var(--text-muted)' }}>
+          <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity" />
+        </span>
       </div>
     </div>
   );
@@ -336,14 +335,13 @@ export default function NHLArenaExplorer({
                 className="p-1.5 rounded-lg transition-colors"
                 style={{ background: 'var(--bg-hover)' }}
               >
-                {darkMode ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />}
+                {darkMode ? <Sun className="w-4 h-4 text-yellow-400" /> : <span style={{ color: 'var(--text-muted)' }}><Moon className="w-4 h-4" /></span>}
               </button>
             </div>
             <div className="relative">
-              <Search 
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4"
-                style={{ color: 'var(--text-muted)' }}
-              />
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>
+                <Search className="w-4 h-4" />
+              </span>
               <input 
                 type="text" 
                 placeholder="Search teams..." 
@@ -635,10 +633,9 @@ export default function NHLArenaExplorer({
                               }}
                               title={isTransit ? 'Transit routing not available via MapQuest API' : ''}
                             >
-                              <IconComponent 
-                                className="w-4 h-4 mx-auto mb-1"
-                                style={{ color: isSelected ? '#F47A38' : 'var(--text-muted)' }}
-                              />
+                              <span style={{ color: isSelected ? '#F47A38' : 'var(--text-muted)' }}>
+                                <IconComponent className="w-4 h-4 mx-auto mb-1" />
+                              </span>
                               <p 
                                 className="text-xs font-medium"
                                 style={{ color: isSelected ? 'var(--text-main)' : 'var(--text-muted)' }}

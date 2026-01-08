@@ -242,7 +242,7 @@ export default function StoreLocator({
                   className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
                   style={{ background: 'var(--bg-panel)' }}
                 >
-                  <Search className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ color: 'var(--text-muted)' }}><Search className="w-5 h-5" /></span>
                 </div>
                 Enter your location to find nearby stores
               </div>
@@ -357,13 +357,13 @@ export default function StoreLocator({
                 <div>{selectedStore.city}, {selectedStore.state} {selectedStore.zip}</div>
                 {selectedStore.phone && (
                   <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                    <Phone className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                    <span style={{ color: 'var(--text-muted)' }}><Phone className="w-4 h-4" /></span>
                     <span className="font-medium">{selectedStore.phone}</span>
                   </div>
                 )}
                 {selectedStore.hours && (
                   <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                    <span style={{ color: 'var(--text-muted)' }}><Clock className="w-4 h-4" /></span>
                     <span>{selectedStore.hours}</span>
                   </div>
                 )}

@@ -260,7 +260,7 @@ export default function MultiStopPlanner({
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ background: `${accentColor}15` }}
               >
-                <Route className="w-4 h-4" style={{ color: accentColor }} />
+                <span style={{ color: accentColor }}><Route className="w-4 h-4" /></span>
               </div>
               <div>
                 <h3 

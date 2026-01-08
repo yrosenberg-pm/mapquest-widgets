@@ -172,7 +172,7 @@ export default function DirectionsEmbed({
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ background: `${accentColor}15` }}
               >
-                <Navigation className="w-4 h-4" style={{ color: accentColor }} />
+                <span style={{ color: accentColor }}><Navigation className="w-4 h-4" /></span>
               </div>
               <h3 
                 className="font-bold text-lg"
@@ -411,11 +411,9 @@ export default function DirectionsEmbed({
                   >
                     {route.steps.length} steps
                   </span>
-                  {stepsExpanded ? (
-                    <ChevronUp className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-                  )}
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    {stepsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </span>
                 </div>
               </button>
 

@@ -339,7 +339,7 @@ export default function SmartAddressInput({
             borderRadius: '10px',
           }}
         >
-          <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: successColor }} />
+          <span className="mt-0.5 flex-shrink-0" style={{ color: successColor }}><Check className="w-4 h-4" /></span>
           <div className="text-sm">
             <div 
               className="font-medium"
