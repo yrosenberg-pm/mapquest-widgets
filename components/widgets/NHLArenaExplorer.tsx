@@ -175,7 +175,9 @@ export default function NHLArenaExplorer({
       setRouteStart({ lat: fromLocation.lat, lng: fromLocation.lng });
       
       if (routeType === 'transit') {
-        // Use HERE Public Transit API for transit routing
+        // Use HERE Intermodal API for transit routing
+        console.log('Transit routing from:', fromLocation, 'to:', selectedStadium.name, selectedStadium.lat, selectedStadium.lng);
+        
         const hereParams = new URLSearchParams({
           endpoint: 'transit',
           origin: `${fromLocation.lat},${fromLocation.lng}`,
@@ -212,13 +214,24 @@ export default function NHLArenaExplorer({
           // Sum up all sections for total distance and duration
           let totalLength = 0;
           let totalDuration = 0;
+          const transitModes: string[] = [];
           const transitLines: string[] = [];
           
           sections.forEach((section: any) => {
-            if (section.summary) {
+            // Use travelSummary for intermodal routes
+            if (section.travelSummary) {
+              totalLength += section.travelSummary.length || 0;
+              totalDuration += section.travelSummary.duration || 0;
+            } else if (section.summary) {
               totalLength += section.summary.length || 0;
               totalDuration += section.summary.duration || 0;
             }
+            
+            // Track the transport types used
+            if (section.type) {
+              transitModes.push(section.type);
+            }
+            
             // Extract transit line names from transport info
             if (section.transport?.name) {
               transitLines.push(section.transport.name);
@@ -232,14 +245,24 @@ export default function NHLArenaExplorer({
             const hours = Math.floor(totalDuration / 3600);
             const mins = Math.floor((totalDuration % 3600) / 60);
             
-            // Build transit details string
+            // Build mode description
+            const uniqueModes = [...new Set(transitModes)];
             const uniqueLines = [...new Set(transitLines)];
-            const transitDetails = uniqueLines.length > 0 ? ` via ${uniqueLines.slice(0, 2).join(', ')}` : '';
+            
+            let modeLabel = 'Transit';
+            if (uniqueModes.length > 0) {
+              // Capitalize first letter of each mode
+              const modeNames = uniqueModes.map(m => m.charAt(0).toUpperCase() + m.slice(1));
+              modeLabel = modeNames.join(' + ');
+            }
+            if (uniqueLines.length > 0) {
+              modeLabel += ` (${uniqueLines.slice(0, 2).join(', ')})`;
+            }
             
             setRouteInfo({
               distance: distanceMiles.toFixed(1) + ' miles',
               duration: hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min',
-              mode: 'Transit' + transitDetails
+              mode: modeLabel
             });
           } else {
             setRouteInfo({
