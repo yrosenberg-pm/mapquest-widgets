@@ -1,7 +1,7 @@
 // components/widgets/NeighborhoodScore.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { 
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
@@ -193,6 +193,7 @@ export default function NeighborhoodScore({
   const [error, setError] = useState<string | null>(null);
   const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
+  const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
@@ -520,9 +521,17 @@ export default function NeighborhoodScore({
                         : selectedCategory.places.slice(0, 10)
                       ).map((place, i) => {
                         const isSelected = selectedPlace?.name === place.name && selectedPlace?.distance === place.distance;
+                        const placeKey = `${place.name}-${place.distance}`;
                         return (
                           <button
                             key={i}
+                            ref={(el) => {
+                              if (el) {
+                                placeItemRefs.current.set(placeKey, el);
+                              } else {
+                                placeItemRefs.current.delete(placeKey);
+                              }
+                            }}
                             onClick={() => {
                               setSelectedPlace(place);
                               // Zoom to this specific place
@@ -533,11 +542,11 @@ export default function NeighborhoodScore({
                             }}
                             className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
                               isSelected 
-                                ? darkMode ? 'bg-orange-600' : 'bg-orange-100' 
+                                ? darkMode ? 'bg-blue-600' : 'bg-blue-500' 
                                 : darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'
                             }`}
                           >
-                            <span className={`text-sm ${isSelected ? 'text-white font-medium' : textColor} truncate flex-1 text-left`}>
+                            <span className={`text-sm ${isSelected ? 'text-white font-bold' : textColor} truncate flex-1 text-left`}>
                               {place.name} · {place.distance.toFixed(2)} mi
                             </span>
                           </button>
@@ -666,7 +675,7 @@ export default function NeighborhoodScore({
             accentColor={accentColor}
             height="600px"
             markers={(() => {
-              const markers: Array<{ lat: number; lng: number; label?: string; color?: string; type?: 'home' | 'poi' }> = [];
+              const markers: Array<{ lat: number; lng: number; label?: string; color?: string; type?: 'home' | 'poi'; onClick?: () => void }> = [];
               
               // Add home location marker - use different icon type
               if (location) {
@@ -676,7 +685,7 @@ export default function NeighborhoodScore({
               // Add POI markers for selected category - plot ALL POIs (not just displayed ones)
               if (selectedCategory && selectedCategory.places.length > 0) {
                 const categoryColor = categoryColors[selectedCategory.category.id] || '#10b981';
-                const highlightedPoiColor = '#f97316'; // Orange color for highlighted POI
+                const highlightedPoiColor = '#3b82f6'; // Bright blue color for highlighted POI
                 
                 // Plot ALL POIs within radius
                 selectedCategory.places.forEach((poi) => {
@@ -688,6 +697,37 @@ export default function NeighborhoodScore({
                       label: poi.name,
                       color: isHighlighted ? highlightedPoiColor : categoryColor,
                       type: 'poi',
+                      onClick: () => {
+                        // Find and select the matching POI
+                        const matchingPoi = selectedCategory.places.find(
+                          p => p.lat === poi.lat && p.lng === poi.lng
+                        );
+                        if (matchingPoi) {
+                          setSelectedPlace(matchingPoi);
+                          // Zoom to this specific place
+                          setMapZoomToLocation({ lat: matchingPoi.lat!, lng: matchingPoi.lng!, zoom: 16 });
+                          setMapFitBounds(undefined);
+                          
+                          // Scroll to the list item
+                          const placeKey = `${matchingPoi.name}-${matchingPoi.distance}`;
+                          const listItem = placeItemRefs.current.get(placeKey);
+                          if (listItem) {
+                            // Ensure the item is visible (expand if needed)
+                            if (!expandedCategories.has(selectedCategory.category.id) && 
+                                selectedCategory.places.indexOf(matchingPoi) >= 10) {
+                              const newExpanded = new Set(expandedCategories);
+                              newExpanded.add(selectedCategory.category.id);
+                              setExpandedCategories(newExpanded);
+                              // Wait for expansion, then scroll
+                              setTimeout(() => {
+                                listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }, 100);
+                            } else {
+                              listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          }
+                        }
+                      },
                     });
                   }
                 });

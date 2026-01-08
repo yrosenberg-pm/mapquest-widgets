@@ -8,6 +8,7 @@ interface MapMarker {
   label?: string;
   color?: string;
   type?: 'home' | 'poi' | 'default';
+  onClick?: () => void;
 }
 
 interface MapCircle {
@@ -192,6 +193,24 @@ export default function MapQuestMap({
       .modern-marker:hover {
         filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
       }
+      
+      /* Pulsing animation for home marker */
+      .pulse-marker {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+          transform: scale(1);
+          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+        50% {
+          opacity: 0.9;
+          transform: scale(1.2);
+          filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+        }
+      }
     `;
     document.head.appendChild(style);
   }, []);
@@ -372,7 +391,7 @@ export default function MapQuestMap({
       
       const icon = L.divIcon({
         html: markerHtml,
-        className: 'modern-marker',
+        className: type === 'home' ? 'modern-marker pulse-marker' : 'modern-marker',
         iconSize: iconSize as [number, number],
         iconAnchor: iconAnchor as [number, number],
         popupAnchor: type === 'home' ? [0, -16] : [0, -36],
@@ -382,6 +401,13 @@ export default function MapQuestMap({
       
       if (marker.label) {
         m.bindPopup(marker.label, { closeButton: false });
+      }
+      
+      // Add click handler if provided
+      if (marker.onClick) {
+        m.on('click', () => {
+          marker.onClick!();
+        });
       }
     });
   }, [markers, accentColor, mapReady]);
