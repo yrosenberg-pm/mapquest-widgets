@@ -404,7 +404,7 @@ export default function DirectionsEmbed({
                   mutedText={mutedText}
                   borderColor={borderColor}
                   className="flex-1"
-                  iconClassName="hidden"
+                  hideIcon
                 />
               </div>
 
@@ -445,7 +445,7 @@ export default function DirectionsEmbed({
                   mutedText={mutedText}
                   borderColor={borderColor}
                   className="flex-1"
-                  iconClassName="hidden"
+                  hideIcon
                 />
               </div>
             </div>

@@ -18,6 +18,7 @@ interface AddressAutocompleteProps {
   className?: string;
   style?: React.CSSProperties;
   iconClassName?: string;
+  hideIcon?: boolean;
 }
 
 export default function AddressAutocomplete({
@@ -33,6 +34,7 @@ export default function AddressAutocomplete({
   className = '',
   style,
   iconClassName = '',
+  hideIcon = false,
 }: AddressAutocompleteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const {
@@ -69,7 +71,9 @@ export default function AddressAutocomplete({
   return (
     <div ref={containerRef} className={`relative ${className}`} style={style}>
       <div className="relative">
-        <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${muted} z-10 ${iconClassName}`} />
+        {!hideIcon && (
+          <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${muted} z-10 ${iconClassName}`} />
+        )}
         <input
           type="text"
           value={value}
@@ -81,7 +85,7 @@ export default function AddressAutocomplete({
             }
           }}
           placeholder={placeholder}
-          className={`w-full pl-10 pr-10 py-2.5 text-sm ${bg} ${text} rounded-lg border ${border} focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
+          className={`w-full ${hideIcon ? 'pl-3' : 'pl-10'} pr-10 py-2.5 text-sm ${bg} ${text} rounded-lg border ${border} focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
           {loading && <Loader2 className={`w-4 h-4 animate-spin ${muted}`} />}
