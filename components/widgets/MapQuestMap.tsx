@@ -26,6 +26,11 @@ interface MapPolygon {
   strokeWidth?: number;
 }
 
+interface TransitSegment {
+  type: string; // pedestrian, subway, bus, train, etc.
+  coords: { lat: number; lng: number }[];
+}
+
 interface MapQuestMapProps {
   apiKey: string;
   center: { lat: number; lng: number };
@@ -43,6 +48,7 @@ interface MapQuestMapProps {
   routeType?: 'fastest' | 'pedestrian' | 'bicycle';
   routeColor?: string;
   routePolyline?: { lat: number; lng: number }[]; // Pre-calculated route coordinates
+  transitSegments?: TransitSegment[]; // For multi-segment transit routes with different line styles
   onClick?: (lat: number, lng: number) => void;
   showZoomControls?: boolean;
   interactive?: boolean;
@@ -74,6 +80,7 @@ export default function MapQuestMap({
   routeType = 'fastest',
   routeColor,
   routePolyline,
+  transitSegments,
   onClick,
   showZoomControls = true,
   interactive = true,
@@ -556,13 +563,81 @@ export default function MapQuestMap({
 
   // Draw pre-calculated route polyline (e.g., from HERE transit API)
   useEffect(() => {
-    if (!routeLayerRef.current || !mapReady || !routePolyline || routePolyline.length === 0) return;
+    if (!routeLayerRef.current || !mapReady) return;
     
     // Don't draw if we're already showing a calculated route
     if (showRoute && routeStart && routeEnd) return;
     
     const L = window.L;
     routeLayerRef.current.clearLayers();
+
+    // If we have transit segments, draw them with different styles
+    if (transitSegments && transitSegments.length > 0) {
+      const allLatLngs: [number, number][] = [];
+      
+      // Define colors for different transit types
+      const segmentColors: Record<string, string> = {
+        pedestrian: '#6B7280', // Gray for walking
+        subway: '#8B5CF6', // Purple for subway
+        bus: '#F59E0B', // Amber for bus
+        train: '#3B82F6', // Blue for train
+        regionalTrain: '#3B82F6',
+        intercityTrain: '#1D4ED8',
+        highSpeedTrain: '#1D4ED8',
+        lightRail: '#10B981', // Emerald for light rail
+        tram: '#10B981',
+        ferry: '#0EA5E9', // Sky blue for ferry
+        taxi: '#EF4444', // Red for taxi
+      };
+
+      transitSegments.forEach((segment) => {
+        if (segment.coords.length < 2) return;
+        
+        const latLngs = segment.coords.map(p => [p.lat, p.lng] as [number, number]);
+        allLatLngs.push(...latLngs);
+        
+        const segmentType = segment.type.toLowerCase();
+        const color = segmentColors[segmentType] || routeColor || accentColor;
+        
+        // Determine if this segment should be dotted (walking or subway)
+        const isDotted = segmentType === 'pedestrian' || segmentType === 'subway';
+        
+        // Shadow (subtle)
+        L.polyline(latLngs, {
+          color: '#000000',
+          weight: isDotted ? 6 : 8,
+          opacity: 0.08,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routeLayerRef.current);
+
+        // Main segment line
+        const lineOptions: any = {
+          color,
+          weight: isDotted ? 4 : 5,
+          opacity: 0.9,
+          lineCap: 'round',
+          lineJoin: 'round',
+        };
+
+        if (isDotted) {
+          lineOptions.dashArray = '8, 12';
+          lineOptions.dashOffset = '0';
+        }
+
+        L.polyline(latLngs, lineOptions).addTo(routeLayerRef.current);
+      });
+
+      // Fit bounds to all segments
+      if (mapRef.current && allLatLngs.length > 1) {
+        const bounds = L.latLngBounds(allLatLngs);
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+      return;
+    }
+
+    // Fallback to simple routePolyline if no segments
+    if (!routePolyline || routePolyline.length === 0) return;
 
     const latLngs = routePolyline.map(p => [p.lat, p.lng] as [number, number]);
 
@@ -587,7 +662,7 @@ export default function MapQuestMap({
     if (mapRef.current && latLngs.length > 1) {
       mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
     }
-  }, [routePolyline, routeColor, accentColor, showRoute, routeStart, routeEnd, mapReady]);
+  }, [routePolyline, transitSegments, routeColor, accentColor, showRoute, routeStart, routeEnd, mapReady]);
 
   return (
     <div

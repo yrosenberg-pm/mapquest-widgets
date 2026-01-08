@@ -78,6 +78,8 @@ export default function NHLArenaExplorer({
   const [calculatingRoute, setCalculatingRoute] = useState(false);
   const [routeType, setRouteType] = useState<'fastest' | 'pedestrian' | 'bicycle' | 'transit'>('fastest');
   const [transitPolyline, setTransitPolyline] = useState<{ lat: number; lng: number }[]>([]);
+  const [transitSteps, setTransitSteps] = useState<{ type: string; instruction: string; duration: string; lineName?: string }[]>([]);
+  const [transitSegments, setTransitSegments] = useState<{ type: string; coords: { lat: number; lng: number }[] }[]>([]);
 
   const filteredStadiums = NHL_STADIUMS.filter(s => 
     s.team.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -208,6 +210,8 @@ export default function NHLArenaExplorer({
     setRouteInfo(null);
     setRouteStart(null);
     setTransitPolyline([]);
+    setTransitSteps([]);
+    setTransitSegments([]);
     
     try {
       const MQ_KEY = '78TTOXc0cKtnj1pSD71bHAaFrdU4EvHw';
@@ -228,7 +232,7 @@ export default function NHLArenaExplorer({
       
       if (routeType === 'transit') {
         // Use HERE Intermodal API for transit routing
-        console.log('Transit routing from:', fromLocation, 'to:', selectedStadium.name, selectedStadium.lat, selectedStadium.lng);
+        console.log('Transit routing from:', fromLocation, 'to:', selectedStadium.arena, selectedStadium.lat, selectedStadium.lng);
         
         const hereParams = new URLSearchParams({
           endpoint: 'transit',
@@ -269,8 +273,31 @@ export default function NHLArenaExplorer({
           const transitModes: string[] = [];
           const transitLines: string[] = [];
           const allPolylineCoords: { lat: number; lng: number }[] = [];
+          const steps: { type: string; instruction: string; duration: string; lineName?: string }[] = [];
+          const segments: { type: string; coords: { lat: number; lng: number }[] }[] = [];
+          
+          // Mode name mapping
+          const modeNameMap: Record<string, string> = {
+            'pedestrian': 'Walk',
+            'subway': 'Subway',
+            'bus': 'Bus', 
+            'train': 'Train',
+            'regionalTrain': 'Regional Train',
+            'intercityTrain': 'Intercity Train',
+            'highSpeedTrain': 'High Speed Train',
+            'ferry': 'Ferry',
+            'tram': 'Tram',
+            'lightRail': 'Light Rail',
+            'monorail': 'Monorail',
+            'taxi': 'Taxi',
+            'car': 'Car',
+          };
           
           sections.forEach((section: any) => {
+            const sectionType = section.type || 'unknown';
+            const sectionDuration = section.travelSummary?.duration || section.summary?.duration || 0;
+            const durationMins = Math.ceil(sectionDuration / 60);
+            
             // Use travelSummary for intermodal routes
             if (section.travelSummary) {
               totalLength += section.travelSummary.length || 0;
@@ -280,33 +307,67 @@ export default function NHLArenaExplorer({
               totalDuration += section.summary.duration || 0;
             }
             
-            // Track the transport types used (exclude 'pedestrian' from display)
-            if (section.type && section.type !== 'pedestrian') {
-              transitModes.push(section.type);
+            // Track the transport types used (exclude 'pedestrian' from main display)
+            if (sectionType && sectionType !== 'pedestrian') {
+              transitModes.push(sectionType);
             }
             
             // Extract transit line names from transport info
-            if (section.transport?.name) {
-              transitLines.push(section.transport.name);
-            } else if (section.transport?.shortName) {
-              transitLines.push(section.transport.shortName);
+            const lineName = section.transport?.name || section.transport?.shortName || section.transport?.headsign;
+            if (lineName) {
+              transitLines.push(lineName);
             }
+            
+            // Build step instruction
+            const friendlyMode = modeNameMap[sectionType] || sectionType.charAt(0).toUpperCase() + sectionType.slice(1);
+            let instruction = '';
+            
+            if (sectionType === 'pedestrian') {
+              const distMeters = section.travelSummary?.length || section.summary?.length || 0;
+              const distFeet = Math.round(distMeters * 3.28084);
+              instruction = `Walk ${distFeet > 1000 ? (distMeters / 1609.34).toFixed(1) + ' mi' : distFeet + ' ft'}`;
+            } else if (lineName) {
+              instruction = `Take ${friendlyMode}: ${lineName}`;
+              if (section.transport?.headsign && section.transport.headsign !== lineName) {
+                instruction += ` toward ${section.transport.headsign}`;
+              }
+            } else {
+              instruction = `${friendlyMode}`;
+            }
+            
+            // Add departure/arrival info if available
+            if (section.departure?.place?.name) {
+              instruction += ` from ${section.departure.place.name}`;
+            }
+            if (section.arrival?.place?.name && sectionType !== 'pedestrian') {
+              instruction += ` to ${section.arrival.place.name}`;
+            }
+            
+            steps.push({
+              type: sectionType,
+              instruction,
+              duration: durationMins > 0 ? `${durationMins} min` : '',
+              lineName: lineName || undefined,
+            });
             
             // Decode and collect polyline coordinates from each section
             if (section.polyline) {
               try {
                 const coords = decodeFlexiblePolyline(section.polyline);
                 allPolylineCoords.push(...coords);
+                segments.push({ type: sectionType, coords });
               } catch (e) {
                 console.error('Failed to decode polyline:', e);
               }
             }
           });
           
-          // Store the combined polyline for map display
+          // Store the combined polyline and segments for map display
           if (allPolylineCoords.length > 0) {
             setTransitPolyline(allPolylineCoords);
           }
+          setTransitSegments(segments);
+          setTransitSteps(steps);
           
           if (totalDuration > 0) {
             const distanceMiles = (totalLength / 1000) * 0.621371;
@@ -319,16 +380,6 @@ export default function NHLArenaExplorer({
             
             let modeLabel = 'Transit';
             if (uniqueModes.length > 0) {
-              // Map mode names to friendly labels
-              const modeNameMap: Record<string, string> = {
-                'subway': 'Subway',
-                'bus': 'Bus',
-                'train': 'Train',
-                'ferry': 'Ferry',
-                'tram': 'Tram',
-                'taxi': 'Taxi',
-                'walk': 'Walk',
-              };
               const modeNames = uniqueModes.map(m => modeNameMap[m] || m.charAt(0).toUpperCase() + m.slice(1));
               modeLabel = modeNames.join(' + ');
             }
@@ -590,8 +641,8 @@ export default function NHLArenaExplorer({
               routeStart={routeStart || undefined}
               routeEnd={selectedStadium ? { lat: selectedStadium.lat, lng: selectedStadium.lng } : undefined}
               routeType={routeType === 'transit' ? undefined : routeType}
-              routePolyline={routeType === 'transit' ? transitPolyline : undefined}
-              routeColor={routeType === 'transit' ? '#0EA5E9' : undefined}
+              transitSegments={routeType === 'transit' && transitSegments.length > 0 ? transitSegments : undefined}
+              routePolyline={routeType === 'transit' && transitSegments.length === 0 ? transitPolyline : undefined}
               accentColor={selectedStadium?.color || '#F47A38'}
             />
           </div>
@@ -897,6 +948,74 @@ export default function NHLArenaExplorer({
                             <p className="text-base font-bold" style={{ color: 'var(--text-main)' }}>{routeInfo.duration}</p>
                           </div>
                         </div>
+                        
+                        {/* Step-by-step directions for transit */}
+                        {routeType === 'transit' && transitSteps.length > 0 && (
+                          <div className="mb-3">
+                            <p 
+                              className="text-xs font-medium mb-2"
+                              style={{ color: 'var(--text-main)' }}
+                            >
+                              Directions
+                            </p>
+                            <div 
+                              className="space-y-1.5 max-h-32 overflow-y-auto prism-scrollbar rounded-lg"
+                              style={{ background: 'var(--bg-input)', padding: '8px' }}
+                            >
+                              {transitSteps.map((step, i) => {
+                                const stepColors: Record<string, string> = {
+                                  pedestrian: '#6B7280',
+                                  subway: '#8B5CF6',
+                                  bus: '#F59E0B',
+                                  train: '#3B82F6',
+                                  regionalTrain: '#3B82F6',
+                                  intercityTrain: '#1D4ED8',
+                                  highSpeedTrain: '#1D4ED8',
+                                  lightRail: '#10B981',
+                                  tram: '#10B981',
+                                  ferry: '#0EA5E9',
+                                  taxi: '#EF4444',
+                                };
+                                const color = stepColors[step.type] || 'var(--text-muted)';
+                                const isDotted = step.type === 'pedestrian' || step.type === 'subway';
+                                
+                                return (
+                                  <div 
+                                    key={i} 
+                                    className="flex items-start gap-2 text-xs py-1"
+                                  >
+                                    <div className="flex flex-col items-center pt-0.5">
+                                      <div 
+                                        className="w-2 h-2 rounded-full flex-shrink-0"
+                                        style={{ backgroundColor: color }}
+                                      />
+                                      {i < transitSteps.length - 1 && (
+                                        <div 
+                                          className="w-0.5 h-4 mt-1"
+                                          style={{ 
+                                            backgroundColor: color,
+                                            opacity: 0.5,
+                                            ...(isDotted ? { 
+                                              backgroundImage: `repeating-linear-gradient(to bottom, ${color} 0px, ${color} 2px, transparent 2px, transparent 4px)`,
+                                              backgroundColor: 'transparent'
+                                            } : {})
+                                          }}
+                                        />
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p style={{ color: 'var(--text-main)' }}>{step.instruction}</p>
+                                      {step.duration && (
+                                        <p style={{ color: 'var(--text-muted)' }}>{step.duration}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        
                         <button 
                           onClick={openDirectionsInMapQuest}
                           className="w-full py-2 rounded-lg text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors"
