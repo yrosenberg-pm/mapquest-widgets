@@ -398,45 +398,62 @@ export default function MapQuestMap({
 
     markersLayerRef.current.clearLayers();
 
-    markers.forEach((marker) => {
+    // Sort markers so POIs render first (bottom) and home/important markers render last (top)
+    const sortedMarkers = [...markers].sort((a, b) => {
+      const typeOrder = { 'poi': 0, 'default': 1, 'home': 2 };
+      return (typeOrder[a.type || 'default'] || 1) - (typeOrder[b.type || 'default'] || 1);
+    });
+
+    sortedMarkers.forEach((marker) => {
       const color = marker.color || accentColor;
       const type = marker.type || 'default';
       
       let markerHtml: string;
       
       if (type === 'home') {
-        // Home icon - circle with house shape, with subtle pulsing blue ring
+        // Home icon - larger circle with house shape, with pulsing ring
+        // Made larger (40x40) to stand out from POI markers
         markerHtml = `
-          <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
-            <div class="pulse-ring"></div>
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: relative; z-index: 1;">
-              <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="2.5"/>
+          <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <div class="pulse-ring" style="width: 48px; height: 48px;"></div>
+            <svg width="40" height="40" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: relative; z-index: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+              <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="3"/>
               <path d="M16 10L12 14V22H20V14L16 10Z" fill="white"/>
               <rect x="14" y="18" width="4" height="4" fill="${color}"/>
             </svg>
           </div>
         `;
-      } else {
-        // POI icon - standard pin
+      } else if (type === 'poi') {
+        // POI icon - smaller pin for parking/food/hotels
         markerHtml = `
-          <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="22" height="28" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));">
+            <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2"/>
+          </svg>
+        `;
+      } else {
+        // Default icon - standard pin (for stadiums, etc)
+        markerHtml = `
+          <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));">
             <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2.5"/>
           </svg>
         `;
       }
 
-      const iconSize = type === 'home' ? [32, 32] : [28, 36];
-      const iconAnchor = type === 'home' ? [16, 16] : [14, 36];
+      const iconSize = type === 'home' ? [40, 40] : type === 'poi' ? [22, 28] : [28, 36];
+      const iconAnchor = type === 'home' ? [20, 20] : type === 'poi' ? [11, 28] : [14, 36];
+      
+      // Higher zIndexOffset for home markers to always be on top
+      const zIndexOffset = type === 'home' ? 1000 : type === 'poi' ? 0 : 500;
       
       const icon = L.divIcon({
         html: markerHtml,
         className: type === 'home' ? 'modern-marker pulse-marker' : 'modern-marker',
         iconSize: iconSize as [number, number],
         iconAnchor: iconAnchor as [number, number],
-        popupAnchor: type === 'home' ? [0, -16] : [0, -36],
+        popupAnchor: type === 'home' ? [0, -20] : type === 'poi' ? [0, -28] : [0, -36],
       });
 
-      const m = L.marker([marker.lat, marker.lng], { icon }).addTo(markersLayerRef.current);
+      const m = L.marker([marker.lat, marker.lng], { icon, zIndexOffset }).addTo(markersLayerRef.current);
       
       if (marker.label) {
         m.bindPopup(marker.label, { closeButton: false });
