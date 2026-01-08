@@ -153,13 +153,41 @@ export default function NHLArenaExplorer({
     fetchPlaces(selectedStadium);
     setRouteInfo(null);
     setRouteStart(null);
-    setWeather({ 
-      temp: Math.floor(Math.random() * 30) + 30, 
-      condition: ['Sunny', 'Cloudy', 'Rainy', 'Snowy'][Math.floor(Math.random() * 4)], 
-      humidity: Math.floor(Math.random() * 40) + 40, 
-      wind: Math.floor(Math.random() * 15) + 5 
-    });
+    fetchWeather(selectedStadium.lat, selectedStadium.lng);
   }, [selectedStadium]);
+
+  const fetchWeather = async (lat: number, lng: number) => {
+    try {
+      const res = await fetch(`/api/here?endpoint=weather&latitude=${lat}&longitude=${lng}&product=observation`);
+      const data = await res.json();
+      
+      if (data?.observations?.location?.[0]?.observation?.[0]) {
+        const obs = data.observations.location[0].observation[0];
+        
+        // Map HERE weather icon codes to our conditions
+        const iconCode = obs.iconName || '';
+        let condition = 'Cloudy';
+        if (iconCode.includes('sunny') || iconCode.includes('clear')) condition = 'Sunny';
+        else if (iconCode.includes('rain') || iconCode.includes('shower')) condition = 'Rainy';
+        else if (iconCode.includes('snow') || iconCode.includes('flurr')) condition = 'Snowy';
+        else if (iconCode.includes('cloud') || iconCode.includes('overcast')) condition = 'Cloudy';
+        
+        setWeather({
+          temp: Math.round(parseFloat(obs.temperature) || 50),
+          condition,
+          humidity: Math.round(parseFloat(obs.humidity) || 50),
+          wind: Math.round(parseFloat(obs.windSpeed) || 5),
+        });
+      } else {
+        // Fallback if API fails
+        setWeather({ temp: 55, condition: 'Cloudy', humidity: 50, wind: 8 });
+      }
+    } catch (error) {
+      console.error('Failed to fetch weather:', error);
+      // Fallback weather
+      setWeather({ temp: 55, condition: 'Cloudy', humidity: 50, wind: 8 });
+    }
+  };
 
   useEffect(() => {
     if (fromAddress && selectedStadium) {

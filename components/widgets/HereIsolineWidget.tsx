@@ -323,7 +323,7 @@ export default function HereIsolineWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex" style={{ height: '500px' }}>
+      <div className="flex" style={{ height: '560px' }}>
         {/* Controls Panel */}
         <div 
           className="w-80 flex-shrink-0 flex flex-col h-full overflow-hidden"

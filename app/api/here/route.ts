@@ -10,6 +10,8 @@ const ENDPOINTS: Record<string, string> = {
   routes: 'https://router.hereapi.com/v8/routes',
   // HERE Public Transit API - only returns subway, bus, tram, ferry (no taxi/car)
   transit: 'https://transit.router.hereapi.com/v8/routes',
+  // HERE Destination Weather API
+  weather: 'https://weather.ls.hereapi.com/weather/1.0/report.json',
 };
 
 export async function GET(request: NextRequest) {
@@ -20,7 +22,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const endpoint = searchParams.get('endpoint');
 
-  if (!endpoint || !ENDPOINTS[endpoint]) {
+  // Weather endpoint doesn't need to be in ENDPOINTS map since it's a special case
+  const validEndpoints = [...Object.keys(ENDPOINTS), 'weather'];
+  if (!endpoint || !validEndpoints.includes(endpoint)) {
     return NextResponse.json({ error: 'Invalid endpoint' }, { status: 400 });
   }
 
@@ -124,6 +128,23 @@ export async function GET(request: NextRequest) {
         url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary,intermediate&alternatives=3&pedestrian[maxDistance]=2000`;
         
         console.log('HERE Public Transit API URL:', url.replace(HERE_API_KEY!, '***'));
+        break;
+      }
+
+      case 'weather': {
+        const latitude = searchParams.get('latitude');
+        const longitude = searchParams.get('longitude');
+        const product = searchParams.get('product') || 'observation'; // observation, forecast_7days, etc.
+
+        if (!latitude || !longitude) {
+          return NextResponse.json({ error: 'Latitude and longitude are required' }, { status: 400 });
+        }
+
+        // HERE Destination Weather API
+        // Products: observation (current), forecast_7days, forecast_hourly, alerts
+        url = `${ENDPOINTS.weather}?apiKey=${HERE_API_KEY}&product=${product}&latitude=${latitude}&longitude=${longitude}&metric=false`;
+        
+        console.log('HERE Weather API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
       }
 
