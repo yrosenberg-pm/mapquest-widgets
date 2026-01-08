@@ -7,6 +7,7 @@ const ENDPOINTS: Record<string, string> = {
   isoline: 'https://isoline.router.hereapi.com/v8/isolines',
   geocode: 'https://geocode.search.hereapi.com/v1/geocode',
   revgeocode: 'https://revgeocode.search.hereapi.com/v1/revgeocode',
+  routes: 'https://router.hereapi.com/v8/routes',
 };
 
 export async function GET(request: NextRequest) {
@@ -80,6 +81,28 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Location is required' }, { status: 400 });
         }
         url = `${ENDPOINTS.revgeocode}?apiKey=${HERE_API_KEY}&at=${at}`;
+        break;
+      }
+
+      case 'routes': {
+        const routeOrigin = searchParams.get('origin'); // lat,lng
+        const destination = searchParams.get('destination'); // lat,lng
+        const routeTransportMode = searchParams.get('transportMode') || 'car';
+        const departureTime = searchParams.get('departureTime') || 'now';
+
+        if (!routeOrigin || !destination) {
+          return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
+        }
+
+        // Validate transport mode for routing
+        const validRouteModes = ['car', 'truck', 'pedestrian', 'bicycle', 'scooter', 'publicTransport', 'publicTransportTimeTable'];
+        if (!validRouteModes.includes(routeTransportMode)) {
+          return NextResponse.json({ error: 'Invalid transport mode' }, { status: 400 });
+        }
+
+        // Build the URL with return parameters
+        const returnParams = 'polyline,summary,actions,instructions';
+        url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${departureTime}`;
         break;
       }
 

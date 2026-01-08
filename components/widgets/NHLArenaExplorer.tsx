@@ -76,7 +76,7 @@ export default function NHLArenaExplorer({
   const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string; mode: string } | null>(null);
   const [routeStart, setRouteStart] = useState<{ lat: number; lng: number } | null>(null);
   const [calculatingRoute, setCalculatingRoute] = useState(false);
-  const [routeType, setRouteType] = useState<'fastest' | 'pedestrian' | 'bicycle'>('fastest');
+  const [routeType, setRouteType] = useState<'fastest' | 'pedestrian' | 'bicycle' | 'transit'>('fastest');
 
   const filteredStadiums = NHL_STADIUMS.filter(s => 
     s.team.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -160,6 +160,7 @@ export default function NHLArenaExplorer({
     try {
       const MQ_KEY = '78TTOXc0cKtnj1pSD71bHAaFrdU4EvHw';
       
+      // First geocode the from address using MapQuest
       const geocodeUrl = 'https://www.mapquestapi.com/geocoding/v1/address?key=' + MQ_KEY + '&location=' + encodeURIComponent(fromAddress);
       const geoRes = await fetch(geocodeUrl);
       const geoData = await geoRes.json();
@@ -173,23 +174,78 @@ export default function NHLArenaExplorer({
       
       setRouteStart({ lat: fromLocation.lat, lng: fromLocation.lng });
       
-      const dirUrl = 'https://www.mapquestapi.com/directions/v2/route?key=' + MQ_KEY + '&from=' + fromLocation.lat + ',' + fromLocation.lng + '&to=' + selectedStadium.lat + ',' + selectedStadium.lng + '&routeType=' + routeType;
-      const dirRes = await fetch(dirUrl);
-      const dirData = await dirRes.json();
-      
-      if (dirData.route && dirData.route.distance) {
-        const hours = Math.floor(dirData.route.time / 3600);
-        const mins = Math.floor((dirData.route.time % 3600) / 60);
-        const modeLabels: Record<string, string> = {
-          'fastest': 'Driving',
-          'pedestrian': 'Walking',
-          'bicycle': 'Biking'
-        };
-        setRouteInfo({
-          distance: dirData.route.distance.toFixed(1) + ' miles',
-          duration: hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min',
-          mode: modeLabels[routeType] || 'Driving'
+      if (routeType === 'transit') {
+        // Use HERE API for transit routing
+        const hereParams = new URLSearchParams({
+          endpoint: 'routes',
+          origin: `${fromLocation.lat},${fromLocation.lng}`,
+          destination: `${selectedStadium.lat},${selectedStadium.lng}`,
+          transportMode: 'publicTransport',
+          departureTime: 'now',
         });
+        
+        const hereRes = await fetch(`/api/here?${hereParams}`);
+        const hereData = await hereRes.json();
+        
+        if (hereData.routes && hereData.routes.length > 0) {
+          const route = hereData.routes[0];
+          const section = route.sections?.[0];
+          
+          if (section?.summary) {
+            const distanceKm = section.summary.length / 1000;
+            const distanceMiles = distanceKm * 0.621371;
+            const durationSecs = section.summary.duration;
+            const hours = Math.floor(durationSecs / 3600);
+            const mins = Math.floor((durationSecs % 3600) / 60);
+            
+            // Extract transit details if available
+            let transitDetails = '';
+            if (section.actions) {
+              const transitActions = section.actions.filter((a: any) => 
+                a.action === 'board' || a.action === 'arrive'
+              );
+              if (transitActions.length > 0) {
+                const boardAction = transitActions.find((a: any) => a.action === 'board');
+                if (boardAction?.lineName) {
+                  transitDetails = ` via ${boardAction.lineName}`;
+                }
+              }
+            }
+            
+            setRouteInfo({
+              distance: distanceMiles.toFixed(1) + ' miles',
+              duration: hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min',
+              mode: 'Transit' + transitDetails
+            });
+          }
+        } else {
+          console.error('No transit route found');
+          setRouteInfo({
+            distance: '—',
+            duration: '—',
+            mode: 'Transit unavailable for this route'
+          });
+        }
+      } else {
+        // Use MapQuest for other modes
+        const dirUrl = 'https://www.mapquestapi.com/directions/v2/route?key=' + MQ_KEY + '&from=' + fromLocation.lat + ',' + fromLocation.lng + '&to=' + selectedStadium.lat + ',' + selectedStadium.lng + '&routeType=' + routeType;
+        const dirRes = await fetch(dirUrl);
+        const dirData = await dirRes.json();
+        
+        if (dirData.route && dirData.route.distance) {
+          const hours = Math.floor(dirData.route.time / 3600);
+          const mins = Math.floor((dirData.route.time % 3600) / 60);
+          const modeLabels: Record<string, string> = {
+            'fastest': 'Driving',
+            'pedestrian': 'Walking',
+            'bicycle': 'Biking'
+          };
+          setRouteInfo({
+            distance: dirData.route.distance.toFixed(1) + ' miles',
+            duration: hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min',
+            mode: modeLabels[routeType] || 'Driving'
+          });
+        }
       }
     } catch (err) {
       console.error('Error getting directions:', err);
@@ -303,7 +359,7 @@ export default function NHLArenaExplorer({
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         minWidth: '900px', 
-        height: 650,
+        height: 675,
         '--brand-primary': '#F47A38',
       } as React.CSSProperties}
     >
@@ -609,29 +665,20 @@ export default function NHLArenaExplorer({
                           { id: 'fastest' as const, label: 'Drive', icon: Car },
                           { id: 'pedestrian' as const, label: 'Walk', icon: PersonStanding },
                           { id: 'bicycle' as const, label: 'Bike', icon: Bike },
-                          { id: 'transit' as const, label: 'Train', icon: Train, disabled: true }
-                        ].map(({ id, label, icon: Icon, disabled }) => {
+                          { id: 'transit' as const, label: 'Transit', icon: Train }
+                        ].map(({ id, label, icon: Icon }) => {
                           const IconComponent = Icon as React.ComponentType<{ className?: string }>;
-                          const isTransit = id === 'transit';
-                          const isSelected = !isTransit && routeType === id;
-                          const handleClick = () => {
-                            if (!disabled && !isTransit && (id === 'fastest' || id === 'pedestrian' || id === 'bicycle')) {
-                              setRouteType(id);
-                            }
-                          };
+                          const isSelected = routeType === id;
                           return (
                             <button
                               key={id}
-                              onClick={handleClick}
-                              disabled={disabled || isTransit}
+                              onClick={() => setRouteType(id)}
                               className="p-2.5 rounded-xl transition-all"
                               style={{
                                 background: isSelected ? 'rgba(244, 122, 56, 0.2)' : 'var(--bg-hover)',
                                 border: isSelected ? '1px solid rgba(244, 122, 56, 0.5)' : '1px solid var(--border-subtle)',
-                                opacity: isTransit ? 0.5 : 1,
-                                cursor: isTransit ? 'not-allowed' : 'pointer',
                               }}
-                              title={isTransit ? 'Transit routing not available via MapQuest API' : ''}
+                              title={id === 'transit' ? 'Public transit via HERE API' : ''}
                             >
                               <span style={{ color: isSelected ? '#F47A38' : 'var(--text-muted)' }}>
                                 <IconComponent className="w-4 h-4 mx-auto mb-1" />
@@ -752,7 +799,6 @@ export default function NHLArenaExplorer({
                     <Sparkles className="w-3.5 h-3.5 text-orange-400" />
                     <span>Powered by <strong>MapQuest</strong></span>
                   </div>
-                  <span>NHL Arena Data</span>
                 </div>
               )}
             </>
