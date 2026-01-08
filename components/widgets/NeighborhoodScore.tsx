@@ -240,8 +240,10 @@ export default function NeighborhoodScore({
   // Fetch isoline when location changes or mode switches to isoline
   const fetchIsoline = async (loc: { lat: number; lng: number }, walkMinutes: number) => {
     setIsolineLoading(true);
+    setIsolinePolygon(null);
     try {
       const rangeSeconds = walkMinutes * 60;
+      console.log('Fetching isoline:', { loc, walkMinutes, rangeSeconds });
       const res = await fetch('/api/here?' + new URLSearchParams({
         endpoint: 'isoline',
         origin: `${loc.lat},${loc.lng}`,
@@ -250,6 +252,7 @@ export default function NeighborhoodScore({
         transportMode: 'pedestrian',
       }));
       const data = await res.json();
+      console.log('Isoline response:', data);
       
       if (data.isolines && data.isolines.length > 0) {
         const isolineData = data.isolines[0];
@@ -257,9 +260,14 @@ export default function NeighborhoodScore({
           const polygonData = isolineData.polygons[0];
           if (polygonData.outer) {
             const coordinates = decodeFlexiblePolyline(polygonData.outer);
-            setIsolinePolygon(coordinates);
+            console.log('Decoded isoline coordinates:', coordinates.length, 'points');
+            if (coordinates.length > 0) {
+              setIsolinePolygon(coordinates);
+            }
           }
         }
+      } else if (data.error) {
+        console.error('HERE API Error:', data.error, data.details);
       }
     } catch (err) {
       console.error('Failed to fetch isoline:', err);

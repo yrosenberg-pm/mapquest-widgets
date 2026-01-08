@@ -473,9 +473,8 @@ export default function DirectionsEmbed({
               })}
             </div>
 
-            {/* Departure Time - Only show for transit */}
-            {routeType === 'transit' && (
-              <div className="mt-4 relative">
+            {/* Departure Time - Available for all modes */}
+            <div className="mt-4 relative">
                 <button
                   onClick={() => setShowDepartureOptions(!showDepartureOptions)}
                   className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
@@ -565,7 +564,6 @@ export default function DirectionsEmbed({
                   </div>
                 )}
               </div>
-            )}
 
             {/* Calculate Button */}
             <button
@@ -600,39 +598,39 @@ export default function DirectionsEmbed({
           {/* Route Summary */}
           {route && (
             <div 
-              className="p-5 flex-shrink-0"
+              className="p-4 flex-shrink-0"
               style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div 
-                  className="p-4 rounded-xl text-center"
+                  className="p-3 rounded-lg text-center"
                   style={{ background: 'var(--bg-panel)' }}
                 >
                   <p 
-                    className="text-xs font-medium uppercase tracking-wide mb-1"
+                    className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     Distance
                   </p>
                   <p 
-                    className="text-2xl font-bold"
+                    className="text-lg font-bold"
                     style={{ color: 'var(--text-main)' }}
                   >
                     {formatDistance(route.distance)}
                   </p>
                 </div>
                 <div 
-                  className="p-4 rounded-xl text-center"
+                  className="p-3 rounded-lg text-center"
                   style={{ background: `${accentColor}10` }}
                 >
                   <p 
-                    className="text-xs font-medium uppercase tracking-wide mb-1"
+                    className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     Time
                   </p>
                   <p 
-                    className="text-2xl font-bold"
+                    className="text-lg font-bold"
                     style={{ color: accentColor }}
                   >
                     {formatTime(route.time)}
@@ -673,39 +671,39 @@ export default function DirectionsEmbed({
           {/* Transit Route Summary */}
           {transitRouteInfo && (
             <div 
-              className="p-5 flex-shrink-0"
+              className="p-4 flex-shrink-0"
               style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div 
-                  className="p-4 rounded-xl text-center"
+                  className="p-3 rounded-lg text-center"
                   style={{ background: 'var(--bg-panel)' }}
                 >
                   <p 
-                    className="text-xs font-medium uppercase tracking-wide mb-1"
+                    className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     Distance
                   </p>
                   <p 
-                    className="text-2xl font-bold"
+                    className="text-lg font-bold"
                     style={{ color: 'var(--text-main)' }}
                   >
                     {transitRouteInfo.distance}
                   </p>
                 </div>
                 <div 
-                  className="p-4 rounded-xl text-center"
+                  className="p-3 rounded-lg text-center"
                   style={{ background: `${accentColor}10` }}
                 >
                   <p 
-                    className="text-xs font-medium uppercase tracking-wide mb-1"
+                    className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     Time
                   </p>
                   <p 
-                    className="text-2xl font-bold"
+                    className="text-lg font-bold"
                     style={{ color: accentColor }}
                   >
                     {transitRouteInfo.duration}

@@ -343,7 +343,7 @@ export async function getDirections(
     
     return {
       distance: route.distance,
-      time: route.time,
+      time: route.time / 60, // Convert seconds to minutes
       fuelUsed: route.fuelUsed,
       hasTolls: route.hasTollRoad,
       hasHighway: route.hasHighway,
