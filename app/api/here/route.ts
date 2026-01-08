@@ -120,8 +120,8 @@ export async function GET(request: NextRequest) {
         }
 
         // HERE Intermodal Routing API for public transit
-        // Let the API determine best transit modes automatically
-        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary`;
+        // Exclude taxi/car modes to force public transit only
+        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary&alternatives=3&pedestrian[maxDistance]=2000&avoid[features]=taxi,car,carShuttle,carHOV`;
         
         console.log('HERE Intermodal Transit API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
