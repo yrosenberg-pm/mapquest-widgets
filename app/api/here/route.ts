@@ -8,6 +8,7 @@ const ENDPOINTS: Record<string, string> = {
   geocode: 'https://geocode.search.hereapi.com/v1/geocode',
   revgeocode: 'https://revgeocode.search.hereapi.com/v1/revgeocode',
   routes: 'https://router.hereapi.com/v8/routes',
+  transit: 'https://transit.router.hereapi.com/v8/routes',
 };
 
 export async function GET(request: NextRequest) {
@@ -94,22 +95,33 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
         }
 
-        // Validate transport mode for routing
-        const validRouteModes = ['car', 'truck', 'pedestrian', 'bicycle', 'scooter', 'publicTransport', 'publicTransportTimeTable'];
+        // Validate transport mode for routing (standard modes only)
+        const validRouteModes = ['car', 'truck', 'pedestrian', 'bicycle', 'scooter', 'taxi', 'bus'];
         if (!validRouteModes.includes(routeTransportMode)) {
-          return NextResponse.json({ error: 'Invalid transport mode' }, { status: 400 });
+          return NextResponse.json({ error: 'Invalid transport mode. Use "transit" endpoint for public transport.' }, { status: 400 });
         }
 
         // Build the URL with return parameters
-        // For public transport, include transit-specific return values
-        const isTransit = routeTransportMode === 'publicTransport' || routeTransportMode === 'publicTransportTimeTable';
-        const returnParams = isTransit 
-          ? 'polyline,summary,actions,instructions,travelSummary' 
-          : 'polyline,summary,actions,instructions';
-        
+        const returnParams = 'polyline,summary,actions,instructions';
         url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}`;
         
         console.log('HERE Routes API URL:', url.replace(HERE_API_KEY!, '***'));
+        break;
+      }
+
+      case 'transit': {
+        const transitOrigin = searchParams.get('origin'); // lat,lng
+        const transitDestination = searchParams.get('destination'); // lat,lng
+        const departTime = searchParams.get('departureTime') || new Date().toISOString();
+
+        if (!transitOrigin || !transitDestination) {
+          return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
+        }
+
+        // HERE Public Transit API uses different parameter format
+        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary,intermediate`;
+        
+        console.log('HERE Transit API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
       }
 

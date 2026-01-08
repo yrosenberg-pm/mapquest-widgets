@@ -175,12 +175,11 @@ export default function NHLArenaExplorer({
       setRouteStart({ lat: fromLocation.lat, lng: fromLocation.lng });
       
       if (routeType === 'transit') {
-        // Use HERE API for transit routing
+        // Use HERE Public Transit API for transit routing
         const hereParams = new URLSearchParams({
-          endpoint: 'routes',
+          endpoint: 'transit',
           origin: `${fromLocation.lat},${fromLocation.lng}`,
           destination: `${selectedStadium.lat},${selectedStadium.lng}`,
-          transportMode: 'publicTransport',
           departureTime: new Date().toISOString(),
         });
         
