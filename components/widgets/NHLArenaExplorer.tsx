@@ -452,10 +452,10 @@ export default function NHLArenaExplorer({
               darkMode={darkMode}
               markers={mapMarkers}
               height="220px"
-              showRoute={!!routeStart && !!selectedStadium}
+              showRoute={!!routeStart && !!selectedStadium && routeType !== 'transit'}
               routeStart={routeStart || undefined}
               routeEnd={selectedStadium ? { lat: selectedStadium.lat, lng: selectedStadium.lng } : undefined}
-              routeType={routeType}
+              routeType={routeType === 'transit' ? undefined : routeType}
               accentColor={selectedStadium?.color || '#F47A38'}
             />
           </div>
