@@ -7,6 +7,7 @@ interface MapMarker {
   lng: number;
   label?: string;
   color?: string;
+  type?: 'home' | 'poi' | 'default';
 }
 
 interface MapCircle {
@@ -36,6 +37,8 @@ interface MapQuestMapProps {
   showZoomControls?: boolean;
   interactive?: boolean;
   className?: string;
+  fitBounds?: { north: number; south: number; east: number; west: number };
+  zoomToLocation?: { lat: number; lng: number; zoom?: number };
 }
 
 declare global {
@@ -63,6 +66,8 @@ export default function MapQuestMap({
   showZoomControls = true,
   interactive = true,
   className = '',
+  fitBounds,
+  zoomToLocation,
 }: MapQuestMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -182,10 +187,9 @@ export default function MapQuestMap({
       /* Marker styling */
       .modern-marker {
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-        transition: transform 0.15s ease, filter 0.15s ease !important;
+        transition: filter 0.15s ease !important;
       }
       .modern-marker:hover {
-        transform: scale(1.08) translateY(-1px) !important;
         filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
       }
     `;
@@ -314,7 +318,25 @@ export default function MapQuestMap({
     mapRef.current.setView([center.lat, center.lng], zoom);
   }, [center.lat, center.lng, zoom, mapReady]);
 
-  // Update markers - solid pins
+  // Fit bounds (for showing all markers)
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !fitBounds) return;
+    const L = window.L;
+    const bounds = L.latLngBounds(
+      [fitBounds.south, fitBounds.west],
+      [fitBounds.north, fitBounds.east]
+    );
+    mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+  }, [fitBounds, mapReady]);
+
+  // Zoom to specific location
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !zoomToLocation) return;
+    const targetZoom = zoomToLocation.zoom || 16;
+    mapRef.current.setView([zoomToLocation.lat, zoomToLocation.lng], targetZoom);
+  }, [zoomToLocation, mapReady]);
+
+  // Update markers - different icons for home vs POI
   useEffect(() => {
     if (!markersLayerRef.current || !mapReady) return;
     const L = window.L;
@@ -323,20 +345,37 @@ export default function MapQuestMap({
 
     markers.forEach((marker) => {
       const color = marker.color || accentColor;
+      const type = marker.type || 'default';
       
-      // Solid pin with white border, no text
-      const markerHtml = `
-        <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2.5"/>
-        </svg>
-      `;
+      let markerHtml: string;
+      
+      if (type === 'home') {
+        // Home icon - circle with house shape
+        markerHtml = `
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="2.5"/>
+            <path d="M16 10L12 14V22H20V14L16 10Z" fill="white"/>
+            <rect x="14" y="18" width="4" height="4" fill="${color}"/>
+          </svg>
+        `;
+      } else {
+        // POI icon - standard pin
+        markerHtml = `
+          <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2.5"/>
+          </svg>
+        `;
+      }
 
+      const iconSize = type === 'home' ? [32, 32] : [28, 36];
+      const iconAnchor = type === 'home' ? [16, 16] : [14, 36];
+      
       const icon = L.divIcon({
         html: markerHtml,
         className: 'modern-marker',
-        iconSize: [28, 36],
-        iconAnchor: [14, 36],
-        popupAnchor: [0, -36],
+        iconSize: iconSize as [number, number],
+        iconAnchor: iconAnchor as [number, number],
+        popupAnchor: type === 'home' ? [0, -16] : [0, -36],
       });
 
       const m = L.marker([marker.lat, marker.lng], { icon }).addTo(markersLayerRef.current);

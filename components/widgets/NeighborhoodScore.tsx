@@ -175,8 +175,11 @@ export default function NeighborhoodScore({
   const [scores, setScores] = useState<CategoryScore[]>([]);
   const [overallScore, setOverallScore] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryScore | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<POI | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
+  const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
 
   const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
@@ -404,14 +407,12 @@ export default function NeighborhoodScore({
       <div className="flex" style={{ height: '600px' }}>
         {/* Sidebar */}
         <div className={`w-80 border-r ${borderColor} flex flex-col overflow-hidden`}>
-          {/* Header */}
+          {/* Header with Input */}
           <div className={`p-4 border-b ${borderColor}`}>
-            <h3 className={`font-semibold ${textColor}`}>Neighborhood Score</h3>
-            <p className={`text-xs mt-1 ${mutedText}`}>Walk score-style analysis</p>
-          </div>
-
-          {/* Address Input */}
-          <div className={`p-4 border-b ${borderColor}`}>
+            <div className="mb-3">
+              <h3 className={`font-semibold ${textColor}`}>Neighborhood Score</h3>
+              <p className={`text-xs mt-0.5 ${mutedText}`}>Walk score-style analysis</p>
+            </div>
             <div className="relative">
               <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText}`} />
               <input
@@ -425,6 +426,7 @@ export default function NeighborhoodScore({
                     setScores([]);
                     setOverallScore(null);
                     setSelectedCategory(null);
+                    setSelectedPlace(null);
                     setLocation(null);
                     setError(null);
                   }
@@ -437,7 +439,7 @@ export default function NeighborhoodScore({
             <button
               onClick={calculateScores}
               disabled={loading || (!address && !location)}
-              className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-white font-medium text-sm disabled:opacity-50"
+              className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-white font-medium text-sm disabled:opacity-50"
               style={{ backgroundColor: accentColor }}
             >
               {loading ? (
@@ -472,7 +474,10 @@ export default function NeighborhoodScore({
             {selectedCategory ? (
               <div className="p-4">
                 <button
-                  onClick={() => setSelectedCategory(null)}
+                  onClick={() => {
+                    setSelectedCategory(null);
+                    setSelectedPlace(null);
+                  }}
                   className={`flex items-center gap-1 text-sm ${mutedText} hover:${textColor} mb-4`}
                 >
                   <ChevronLeft className="w-4 h-4" /> Back
@@ -495,12 +500,34 @@ export default function NeighborhoodScore({
                 </div>
                 {selectedCategory.places.length > 0 ? (
                   <div className="space-y-2">
-                    {selectedCategory.places.slice(0, 10).map((place, i) => (
-                      <div key={i} className={`flex items-center justify-between p-2 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                        <span className={`text-sm ${textColor} truncate flex-1`}>{place.name}</span>
-                        <span className={`text-xs ${mutedText} ml-2`}>{place.distance.toFixed(2)} mi</span>
-                      </div>
-                    ))}
+                    {selectedCategory.places.slice(0, 10).map((place, i) => {
+                      const isSelected = selectedPlace?.name === place.name && selectedPlace?.distance === place.distance;
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setSelectedPlace(place);
+                            // Zoom to this specific place
+                            if (place.lat && place.lng) {
+                              setMapZoomToLocation({ lat: place.lat, lng: place.lng, zoom: 16 });
+                              setMapFitBounds(undefined);
+                            }
+                          }}
+                          className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                            isSelected 
+                              ? darkMode ? 'bg-orange-600' : 'bg-orange-100' 
+                              : darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'
+                          }`}
+                        >
+                          <span className={`text-sm ${isSelected ? 'text-white font-medium' : textColor} truncate flex-1 text-left`}>
+                            {place.name}
+                          </span>
+                          <span className={`text-xs ${isSelected ? 'text-orange-100' : mutedText} ml-2`}>
+                            {place.distance.toFixed(2)} mi
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className={`text-sm ${mutedText}`}>
@@ -520,7 +547,27 @@ export default function NeighborhoodScore({
                         return (
                           <button
                             key={cat.id}
-                            onClick={() => catScore && setSelectedCategory(catScore)}
+                            onClick={() => {
+                              if (catScore) {
+                                setSelectedCategory(catScore);
+                                setSelectedPlace(null);
+                                // Calculate bounds to fit all POIs
+                                if (catScore.places.length > 0 && location) {
+                                  const placesWithCoords = catScore.places.filter(p => p.lat && p.lng);
+                                  if (placesWithCoords.length > 0) {
+                                    const lats = [location.lat, ...placesWithCoords.map(p => p.lat!)];
+                                    const lngs = [location.lng, ...placesWithCoords.map(p => p.lng!)];
+                                    setMapFitBounds({
+                                      north: Math.max(...lats),
+                                      south: Math.min(...lats),
+                                      east: Math.max(...lngs),
+                                      west: Math.min(...lngs),
+                                    });
+                                    setMapZoomToLocation(undefined);
+                                  }
+                                }
+                              }
+                            }}
                             disabled={!catScore}
                             className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
                               darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
@@ -579,23 +626,27 @@ export default function NeighborhoodScore({
             accentColor={accentColor}
             height="600px"
             markers={(() => {
-              const markers: Array<{ lat: number; lng: number; label?: string; color?: string }> = [];
+              const markers: Array<{ lat: number; lng: number; label?: string; color?: string; type?: 'home' | 'poi' }> = [];
               
-              // Add home location marker - use accent color
+              // Add home location marker - use different icon type
               if (location) {
-                markers.push({ lat: location.lat, lng: location.lng, label: 'Home', color: accentColor });
+                markers.push({ lat: location.lat, lng: location.lng, label: 'Home', color: accentColor, type: 'home' });
               }
               
-              // Add POI markers for selected category - use a different color (green/blue)
+              // Add POI markers for selected category
               if (selectedCategory && selectedCategory.places.length > 0) {
-                const poiColor = '#10b981'; // Green color for POIs
+                const normalPoiColor = '#10b981'; // Green color for normal POIs
+                const highlightedPoiColor = '#f97316'; // Orange color for highlighted POI (different from accent)
+                
                 selectedCategory.places.forEach((poi) => {
                   if (poi.lat && poi.lng) {
+                    const isHighlighted = selectedPlace?.name === poi.name && selectedPlace?.distance === poi.distance;
                     markers.push({
                       lat: poi.lat,
                       lng: poi.lng,
                       label: poi.name,
-                      color: poiColor,
+                      color: isHighlighted ? highlightedPoiColor : normalPoiColor,
+                      type: 'poi',
                     });
                   }
                 });
@@ -603,6 +654,8 @@ export default function NeighborhoodScore({
               
               return markers;
             })()}
+            fitBounds={mapFitBounds}
+            zoomToLocation={mapZoomToLocation}
           />
         </div>
       </div>
