@@ -159,16 +159,19 @@ export async function searchPlaces(
   maxResults: number = 10
 ): Promise<PlaceSearchResult[]> {
   try {
-    // Handle multi-search queries (e.g., "multi:bus stop,subway station,train station")
+    // Handle multi-search queries (e.g., "multi:bus stop,sic:411101,subway station")
     // This searches for multiple terms and combines results
+    // Terms starting with "sic:" are treated as SIC code searches, others as text searches
     if (category.startsWith('multi:')) {
       const searchTerms = category.substring(6).split(',').map(t => t.trim());
       console.log(`[searchPlaces] Multi-search for terms: ${searchTerms.join(', ')}`);
       
       // Search for each term in parallel
-      const searchPromises = searchTerms.map(term => 
-        searchPlacesSingle(lat, lng, `q:${term}`, radiusMiles, Math.ceil(maxResults / searchTerms.length) + 5)
-      );
+      // If term starts with "sic:", use it as-is, otherwise treat as text query
+      const searchPromises = searchTerms.map(term => {
+        const searchCategory = term.startsWith('sic:') ? term : `q:${term}`;
+        return searchPlacesSingle(lat, lng, searchCategory, radiusMiles, Math.ceil(maxResults / searchTerms.length) + 5);
+      });
       
       const allResults = await Promise.all(searchPromises);
       
