@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
-  LucideIcon
+  Bus, LucideIcon
 } from 'lucide-react';
 import { geocode, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -69,6 +69,7 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'schools', name: 'Schools', icon: GraduationCap, group: 'Education', mqCategory: 'sic:821101', weight: 2 },
   { id: 'pharmacy', name: 'Pharmacy', icon: Pill, group: 'Amenities', mqCategory: 'sic:591205', weight: 2 },
   { id: 'banks', name: 'Banks', icon: Building2, group: 'Amenities', mqCategory: 'sic:602101', weight: 1 },
+  { id: 'publicTransit', name: 'Public Transportation', icon: Bus, group: 'Transportation', mqCategory: 'q:transit station', weight: 2 },
 ];
 
 const STANDARD_THRESHOLDS = [
@@ -104,6 +105,7 @@ const categoryConfigs: Record<string, CategoryConfig> = {
   parks: { idealCount: 3, searchRadius: 1, thresholdType: 'walkable' },
   fitness: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
   schools: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+  publicTransit: { idealCount: 5, searchRadius: 1, thresholdType: 'walkable' },
 };
 
 const categoryColors: Record<string, string> = {
@@ -115,6 +117,7 @@ const categoryColors: Record<string, string> = {
   parks: '#10b981',
   fitness: '#ec4899',
   schools: '#6366f1',
+  publicTransit: '#0ea5e9',
 };
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
