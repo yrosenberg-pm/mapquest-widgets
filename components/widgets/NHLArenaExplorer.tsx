@@ -317,7 +317,7 @@ export default function NHLArenaExplorer({
           }}
         >
           <div 
-            className="p-3"
+            className="p-3 pb-3.5"
             style={{ borderBottom: '1px solid var(--border-subtle)' }}
           >
             <div className="flex items-center justify-between mb-2.5">
@@ -348,7 +348,7 @@ export default function NHLArenaExplorer({
                 value={searchQuery} 
                 onChange={e => setSearchQuery(e.target.value)}
                 className="prism-input w-full pl-8 text-sm"
-                style={{ height: '34px' }}
+                style={{ height: '36px' }}
               />
             </div>
           </div>
