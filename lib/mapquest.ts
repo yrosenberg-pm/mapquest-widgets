@@ -159,6 +159,55 @@ export async function searchPlaces(
   maxResults: number = 10
 ): Promise<PlaceSearchResult[]> {
   try {
+    // Handle multi-search queries (e.g., "multi:bus stop,subway station,train station")
+    // This searches for multiple terms and combines results
+    if (category.startsWith('multi:')) {
+      const searchTerms = category.substring(6).split(',').map(t => t.trim());
+      console.log(`[searchPlaces] Multi-search for terms: ${searchTerms.join(', ')}`);
+      
+      // Search for each term in parallel
+      const searchPromises = searchTerms.map(term => 
+        searchPlacesSingle(lat, lng, `q:${term}`, radiusMiles, Math.ceil(maxResults / searchTerms.length) + 5)
+      );
+      
+      const allResults = await Promise.all(searchPromises);
+      
+      // Combine and deduplicate results by name + coordinates
+      const seen = new Set<string>();
+      const combinedResults: PlaceSearchResult[] = [];
+      
+      for (const results of allResults) {
+        for (const result of results) {
+          const key = `${result.name}-${result.place?.geometry?.coordinates?.join(',')}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            combinedResults.push(result);
+          }
+        }
+      }
+      
+      // Sort by distance and limit results
+      combinedResults.sort((a, b) => (a.distance || 999) - (b.distance || 999));
+      console.log(`[searchPlaces] Multi-search found ${combinedResults.length} unique results`);
+      return combinedResults.slice(0, maxResults);
+    }
+    
+    // Single search
+    return searchPlacesSingle(lat, lng, category, radiusMiles, maxResults);
+  } catch (err) {
+    console.error('Place search failed:', err);
+    return [];
+  }
+}
+
+async function searchPlacesSingle(
+  lat: number,
+  lng: number,
+  category: string,
+  radiusMiles: number,
+  maxResults: number
+): Promise<PlaceSearchResult[]> {
+  try {
     const params = new URLSearchParams({
       endpoint: 'search',
       location: `${lat},${lng}`,
