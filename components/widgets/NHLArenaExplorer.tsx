@@ -44,7 +44,6 @@ const NHL_STADIUMS = [
 const getLogoUrl = (abbrev: string, darkMode: boolean) => 
   `https://assets.nhle.com/logos/nhl/svg/${abbrev}_${darkMode ? 'dark' : 'light'}.svg`;
 
-// NHL Shield placeholder - replace with your own image later
 const NHLShield = ({ className = "w-8 h-8" }: { className?: string }) => (
   <div className={`${className} bg-black rounded flex items-center justify-center`}>
     <span className="text-orange-500 font-black text-xs">NHL</span>
@@ -85,23 +84,17 @@ export default function NHLArenaExplorer({
     s.city.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const theme = darkMode ? {
-    bg: 'bg-slate-900', cardBg: 'bg-slate-800/50', text: 'text-white', muted: 'text-slate-200',
-    border: 'border-white/10', input: 'bg-white/5', hover: 'hover:bg-white/10',
-    btnBg: 'bg-white/10', btnHover: 'hover:bg-white/20'
-  } : {
-    bg: 'bg-gray-50', cardBg: 'bg-white', text: 'text-gray-900', muted: 'text-gray-500',
-    border: 'border-gray-200', input: 'bg-gray-100', hover: 'hover:bg-gray-100',
-    btnBg: 'bg-gray-100', btnHover: 'hover:bg-gray-200'
-  };
+  // Keep Tailwind classes for AddressAutocomplete compatibility
+  const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
+  const textColor = darkMode ? 'text-white' : 'text-gray-900';
+  const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
+  const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
 
   useEffect(() => {
     if (!selectedStadium) return;
     fetchPlaces(selectedStadium);
-    // Reset route when changing stadiums
     setRouteInfo(null);
     setRouteStart(null);
-    // Mock weather - replace with real API if needed
     setWeather({ 
       temp: Math.floor(Math.random() * 30) + 30, 
       condition: ['Sunny', 'Cloudy', 'Rainy', 'Snowy'][Math.floor(Math.random() * 4)], 
@@ -110,13 +103,10 @@ export default function NHLArenaExplorer({
     });
   }, [selectedStadium]);
 
-  // Recalculate route when route type changes (if we have the required data)
   useEffect(() => {
-    // Only recalculate if we have both address and stadium (prerequisites for route calculation)
     if (fromAddress && selectedStadium) {
       getDirections();
     } else {
-      // Otherwise just reset
       setRouteInfo(null);
       setRouteStart(null);
     }
@@ -125,16 +115,13 @@ export default function NHLArenaExplorer({
 
   const fetchPlaces = async (stadium: typeof NHL_STADIUMS[0]) => {
     setLoading(true);
-    console.log('Fetching places for:', stadium.arena, stadium.lat, stadium.lng);
     try {
       const MQ_KEY = '78TTOXc0cKtnj1pSD71bHAaFrdU4EvHw';
       
       const fetchCategory = async (query: string) => {
         const url = 'https://www.mapquestapi.com/search/v4/place?key=' + MQ_KEY + '&location=' + stadium.lng + ',' + stadium.lat + '&sort=distance&q=' + encodeURIComponent(query) + '&limit=5';
-        console.log('Fetching:', url);
         const res = await fetch(url);
         const data = await res.json();
-        console.log('Response for ' + query + ':', data);
         return data.results || [];
       };
 
@@ -173,7 +160,6 @@ export default function NHLArenaExplorer({
     try {
       const MQ_KEY = '78TTOXc0cKtnj1pSD71bHAaFrdU4EvHw';
       
-      // First geocode the from address
       const geocodeUrl = 'https://www.mapquestapi.com/geocoding/v1/address?key=' + MQ_KEY + '&location=' + encodeURIComponent(fromAddress);
       const geoRes = await fetch(geocodeUrl);
       const geoData = await geoRes.json();
@@ -187,7 +173,6 @@ export default function NHLArenaExplorer({
       
       setRouteStart({ lat: fromLocation.lat, lng: fromLocation.lng });
       
-      // Get directions with selected route type
       const dirUrl = 'https://www.mapquestapi.com/directions/v2/route?key=' + MQ_KEY + '&from=' + fromLocation.lat + ',' + fromLocation.lng + '&to=' + selectedStadium.lat + ',' + selectedStadium.lng + '&routeType=' + routeType;
       const dirRes = await fetch(dirUrl);
       const dirData = await dirRes.json();
@@ -228,17 +213,15 @@ export default function NHLArenaExplorer({
   const mapMarkers = (() => {
     const markers: Array<{ lat: number; lng: number; label: string; color?: string }> = [];
     
-    // Add starting point marker if route is calculated
     if (routeStart) {
       markers.push({ 
         lat: routeStart.lat, 
         lng: routeStart.lng, 
         label: fromAddress || 'Starting Point',
-        color: '#10b981' // green color for start point
+        color: '#10b981'
       });
     }
     
-    // Add stadium marker if selected
     if (selectedStadium) {
       markers.push({ 
         lat: selectedStadium.lat, 
@@ -247,7 +230,6 @@ export default function NHLArenaExplorer({
         color: selectedStadium.color
       });
     } else {
-      // Show all stadiums if none selected
       markers.push(...NHL_STADIUMS.map(s => ({ 
         lat: s.lat, 
         lng: s.lng, 
@@ -274,63 +256,130 @@ export default function NHLArenaExplorer({
 
   const PlaceCard = ({ place, icon: Icon, color }: { place: any; icon: any; color: string }) => (
     <div 
-      className={`p-3 rounded-xl ${theme.cardBg} border ${theme.border} ${theme.hover} cursor-pointer group`} 
+      className="p-2.5 rounded-xl cursor-pointer group transition-all"
+      style={{ 
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-subtle)',
+      }}
       onClick={() => openInMapQuest(place.lat, place.lng, place.name)}
     >
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}20` }}>
-          <Icon className="w-5 h-5" style={{ color }} />
+      <div className="flex items-start gap-2.5">
+        <div 
+          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: `${color}20` }}
+        >
+          <Icon className="w-4 h-4" style={{ color }} />
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className={`font-medium ${theme.text} truncate group-hover:text-orange-400`}>{place.name}</h4>
-          <p className={`text-xs ${theme.muted} truncate`}>{place.address || 'Nearby'}</p>
-          <div className="flex items-center gap-3 mt-1">
-            <span className={`text-xs ${theme.muted}`}>{place.distance || '—'}</span>
-          </div>
+          <h4 
+            className="font-medium text-sm truncate group-hover:text-orange-400 transition-colors"
+            style={{ color: 'var(--text-main)' }}
+          >
+            {place.name}
+          </h4>
+          <p 
+            className="text-xs truncate"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {place.address || 'Nearby'}
+          </p>
+          <span 
+            className="text-xs"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {place.distance || '—'}
+          </span>
         </div>
-        <ExternalLink className={`w-4 h-4 ${theme.muted} opacity-0 group-hover:opacity-100`} />
+        <ExternalLink 
+          className="w-4 h-4 opacity-0 group-hover:opacity-100 flex-shrink-0 transition-opacity"
+          style={{ color: 'var(--text-muted)' }}
+        />
       </div>
     </div>
   );
 
   return (
-    <div className={`w-full max-w-5xl mx-auto ${theme.bg} rounded-2xl overflow-hidden shadow-2xl border ${theme.border}`} style={{ minWidth: '900px', height: 700 }}>
+    <div 
+      className="prism-widget"
+      data-theme={darkMode ? 'dark' : 'light'}
+      style={{ 
+        minWidth: '900px', 
+        height: 650,
+        '--brand-primary': '#F47A38',
+      } as React.CSSProperties}
+    >
       <div className="flex h-full">
         {/* Sidebar */}
-        <div className={`w-72 flex flex-col border-r ${theme.border} ${darkMode ? 'bg-slate-800/30' : 'bg-white'}`}>
-          <div className={`p-4 border-b ${theme.border}`}>
-            <div className="flex items-center justify-between mb-3">
+        <div 
+          className="w-64 flex flex-col"
+          style={{ 
+            borderRight: '1px solid var(--border-subtle)',
+            background: 'var(--bg-panel)',
+          }}
+        >
+          <div 
+            className="p-3"
+            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          >
+            <div className="flex items-center justify-between mb-2.5">
               <div className="flex items-center gap-2">
-                <NHLShield className="w-8 h-8" />
-                <span className={`font-bold ${theme.text}`}>Arena Explorer</span>
+                <NHLShield className="w-7 h-7" />
+                <span 
+                  className="font-bold text-sm"
+                  style={{ color: 'var(--text-main)' }}
+                >
+                  Arena Explorer
+                </span>
               </div>
-              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-lg ${theme.btnBg} ${theme.btnHover}`}>
-                {darkMode ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+              <button 
+                onClick={() => setDarkMode(!darkMode)} 
+                className="p-1.5 rounded-lg transition-colors"
+                style={{ background: 'var(--bg-hover)' }}
+              >
+                {darkMode ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />}
               </button>
             </div>
             <div className="relative">
-              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${theme.muted}`} />
+              <Search 
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4"
+                style={{ color: 'var(--text-muted)' }}
+              />
               <input 
                 type="text" 
                 placeholder="Search teams..." 
                 value={searchQuery} 
                 onChange={e => setSearchQuery(e.target.value)}
-                className={`w-full pl-9 pr-3 py-2 rounded-lg ${theme.input} ${theme.text} text-sm border ${theme.border} focus:outline-none focus:ring-2 focus:ring-orange-500/50`} 
+                className="prism-input w-full pl-8 text-sm"
+                style={{ height: '34px' }}
               />
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto hide-scrollbar p-2 space-y-1">
+          <div className="flex-1 overflow-y-auto prism-scrollbar p-1.5 space-y-0.5">
             {filteredStadiums.map(s => (
               <button 
                 key={s.id} 
                 onClick={() => { setSelectedStadium(s); setActiveTab('overview'); }}
-                className={`w-full p-2.5 rounded-xl text-left ${selectedStadium?.id === s.id ? 'bg-orange-500/20 border-orange-500/50' : `${theme.hover} border-transparent`} border`}
+                className="w-full p-2 rounded-xl text-left transition-all"
+                style={{
+                  background: selectedStadium?.id === s.id ? 'rgba(244, 122, 56, 0.2)' : 'transparent',
+                  border: selectedStadium?.id === s.id ? '1px solid rgba(244, 122, 56, 0.5)' : '1px solid transparent',
+                }}
               >
-                <div className="flex items-center gap-3">
-                  <img src={getLogoUrl(s.abbrev, darkMode)} alt={s.team} className="w-8 h-8 object-contain" />
+                <div className="flex items-center gap-2.5">
+                  <img src={getLogoUrl(s.abbrev, darkMode)} alt={s.team} className="w-7 h-7 object-contain" />
                   <div className="min-w-0 flex-1">
-                    <p className={`font-medium ${theme.text} text-sm truncate`}>{s.team}</p>
-                    <p className={`text-xs ${theme.muted} truncate`}>{s.arena}</p>
+                    <p 
+                      className="font-medium text-xs truncate"
+                      style={{ color: 'var(--text-main)' }}
+                    >
+                      {s.team}
+                    </p>
+                    <p 
+                      className="text-xs truncate"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      {s.arena}
+                    </p>
                   </div>
                 </div>
               </button>
@@ -341,14 +390,14 @@ export default function NHLArenaExplorer({
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Map */}
-          <div className="h-[238px]">
-              <MapQuestMap
+          <div className="h-[220px]">
+            <MapQuestMap
               apiKey={apiKey}
               center={mapCenter}
               zoom={selectedStadium ? 14 : 4}
               darkMode={darkMode}
               markers={mapMarkers}
-              height="238px"
+              height="220px"
               showRoute={!!routeStart && !!selectedStadium}
               routeStart={routeStart || undefined}
               routeEnd={selectedStadium ? { lat: selectedStadium.lat, lng: selectedStadium.lng } : undefined}
@@ -360,73 +409,162 @@ export default function NHLArenaExplorer({
           {selectedStadium ? (
             <>
               {/* Header */}
-              <div className={`px-4 py-3 border-b ${theme.border} ${darkMode ? 'bg-slate-800/50' : 'bg-white'}`}>
+              <div 
+                className="px-3 py-2.5"
+                style={{ 
+                  borderBottom: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-widget)',
+                }}
+              >
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <img src={getLogoUrl(selectedStadium.abbrev, darkMode)} alt={selectedStadium.team} className="w-10 h-10 object-contain" />
+                  <div className="flex items-center gap-2.5">
+                    <img src={getLogoUrl(selectedStadium.abbrev, darkMode)} alt={selectedStadium.team} className="w-9 h-9 object-contain" />
                     <div>
-                      <h2 className={`text-lg font-bold ${theme.text}`}>{selectedStadium.arena}</h2>
-                      <p className={`text-sm ${theme.muted}`}>{selectedStadium.city}, {selectedStadium.state}</p>
+                      <h2 
+                        className="text-base font-bold"
+                        style={{ color: 'var(--text-main)' }}
+                      >
+                        {selectedStadium.arena}
+                      </h2>
+                      <p 
+                        className="text-xs"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        {selectedStadium.city}, {selectedStadium.state}
+                      </p>
                     </div>
                   </div>
                   <button 
                     onClick={() => openInMapQuest(selectedStadium.lat, selectedStadium.lng, selectedStadium.arena)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium transition-colors"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" /> MapQuest
+                    <ExternalLink className="w-3 h-3" /> MapQuest
                   </button>
                 </div>
               </div>
 
               {/* Tabs */}
-              <div className={`flex gap-1 px-4 py-2 border-b ${theme.border} ${darkMode ? 'bg-slate-800/30' : 'bg-gray-50'} overflow-x-auto hide-scrollbar`}>
+              <div 
+                className="flex gap-1 px-3 py-2 overflow-x-auto prism-scrollbar"
+                style={{ 
+                  borderBottom: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-panel)',
+                }}
+              >
                 {tabs.map(t => (
                   <button 
                     key={t.id} 
                     onClick={() => setActiveTab(t.id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${activeTab === t.id ? 'bg-orange-500 text-white' : `${theme.muted} ${theme.hover}`}`}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all"
+                    style={{
+                      background: activeTab === t.id ? '#F47A38' : 'transparent',
+                      color: activeTab === t.id ? 'white' : 'var(--text-muted)',
+                    }}
                   >
-                    <t.icon className="w-4 h-4" />{t.label}
+                    <t.icon className="w-3.5 h-3.5" />{t.label}
                   </button>
                 ))}
               </div>
 
               {/* Tab Content */}
-              <div className={`flex-1 overflow-y-auto hide-scrollbar p-4 ${darkMode ? '' : 'bg-gray-50'}`}>
+              <div 
+                className="flex-1 overflow-y-auto prism-scrollbar p-3"
+                style={{ background: 'var(--bg-widget)' }}
+              >
                 {activeTab === 'overview' && (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {weather && (
-                      <div className={`p-4 rounded-xl ${theme.cardBg} border ${theme.border}`}>
-                        <h3 className={`text-sm font-semibold ${theme.muted} mb-3`}>Current Weather</h3>
-                        <div className="flex items-center gap-4">
+                      <div 
+                        className="p-3 rounded-xl"
+                        style={{ 
+                          background: 'var(--bg-panel)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <h3 
+                          className="text-xs font-semibold mb-2"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          Current Weather
+                        </h3>
+                        <div className="flex items-center gap-3">
                           <WeatherIcon condition={weather.condition} />
                           <div>
-                            <p className={`text-2xl font-bold ${theme.text}`}>{weather.temp}°F</p>
-                            <p className={`text-sm ${theme.muted}`}>{weather.condition}</p>
+                            <p 
+                              className="text-xl font-bold"
+                              style={{ color: 'var(--text-main)' }}
+                            >
+                              {weather.temp}°F
+                            </p>
+                            <p 
+                              className="text-xs"
+                              style={{ color: 'var(--text-muted)' }}
+                            >
+                              {weather.condition}
+                            </p>
                           </div>
-                          <div className={`ml-auto text-sm ${theme.muted} space-y-1`}>
-                            <p className="flex items-center gap-1"><Droplets className="w-3.5 h-3.5" />{weather.humidity}%</p>
-                            <p className="flex items-center gap-1"><Wind className="w-3.5 h-3.5" />{weather.wind} mph</p>
+                          <div 
+                            className="ml-auto text-xs space-y-1"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            <p className="flex items-center gap-1"><Droplets className="w-3 h-3" />{weather.humidity}%</p>
+                            <p className="flex items-center gap-1"><Wind className="w-3 h-3" />{weather.wind} mph</p>
                           </div>
                         </div>
                       </div>
                     )}
-                    <div className={`p-4 rounded-xl ${theme.cardBg} border ${theme.border}`}>
-                      <h3 className={`text-sm font-semibold ${theme.muted} mb-3`}>Arena Info</h3>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div><p className={`text-xs ${theme.muted}`}>Capacity</p><p className={`font-semibold ${theme.text}`}>{selectedStadium.capacity?.toLocaleString()}</p></div>
-                        <div><p className={`text-xs ${theme.muted}`}>Opened</p><p className={`font-semibold ${theme.text}`}>{selectedStadium.year}</p></div>
-                        <div><p className={`text-xs ${theme.muted}`}>Conference</p><p className={`font-semibold ${theme.text}`}>{selectedStadium.conference}</p></div>
-                        <div><p className={`text-xs ${theme.muted}`}>Division</p><p className={`font-semibold ${theme.text}`}>{selectedStadium.division}</p></div>
+                    <div 
+                      className="p-3 rounded-xl"
+                      style={{ 
+                        background: 'var(--bg-panel)',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <h3 
+                        className="text-xs font-semibold mb-2"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        Arena Info
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Capacity</p>
+                          <p className="font-semibold text-sm" style={{ color: 'var(--text-main)' }}>{selectedStadium.capacity?.toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Opened</p>
+                          <p className="font-semibold text-sm" style={{ color: 'var(--text-main)' }}>{selectedStadium.year}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Conference</p>
+                          <p className="font-semibold text-sm" style={{ color: 'var(--text-main)' }}>{selectedStadium.conference}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Division</p>
+                          <p className="font-semibold text-sm" style={{ color: 'var(--text-main)' }}>{selectedStadium.division}</p>
+                        </div>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
                       {([['Parking', ParkingCircle, 'parking'], ['Food', Utensils, 'food'], ['Directions', Navigation, 'directions']] as const).map(([label, Icon, tab]) => {
                         const IconComponent = Icon as React.ComponentType<{ className?: string }>;
                         return (
-                          <button key={tab} onClick={() => setActiveTab(tab)} className={`p-3 rounded-xl ${theme.cardBg} border ${theme.border} ${theme.hover}`}>
-                            <IconComponent className="w-5 h-5 mx-auto mb-1 text-orange-400" />
-                            <p className={`text-xs font-medium ${theme.text}`}>{label}</p>
+                          <button 
+                            key={tab} 
+                            onClick={() => setActiveTab(tab)} 
+                            className="p-2.5 rounded-xl transition-colors"
+                            style={{ 
+                              background: 'var(--bg-panel)',
+                              border: '1px solid var(--border-subtle)',
+                            }}
+                          >
+                            <IconComponent className="w-4 h-4 mx-auto mb-1 text-orange-400" />
+                            <p 
+                              className="text-xs font-medium"
+                              style={{ color: 'var(--text-main)' }}
+                            >
+                              {label}
+                            </p>
                           </button>
                         );
                       })}
@@ -435,9 +573,9 @@ export default function NHLArenaExplorer({
                 )}
 
                 {['parking', 'food', 'hotels'].includes(activeTab) && (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {loading ? (
-                      <div className={`text-center py-8 ${theme.muted}`}>Loading...</div>
+                      <div className="text-center py-6" style={{ color: 'var(--text-muted)' }}>Loading...</div>
                     ) : places[activeTab as keyof typeof places]?.length ? (
                       places[activeTab as keyof typeof places].map((p, i) => (
                         <PlaceCard 
@@ -448,16 +586,27 @@ export default function NHLArenaExplorer({
                         />
                       ))
                     ) : (
-                      <div className={`text-center py-8 ${theme.muted}`}>No results found</div>
+                      <div className="text-center py-6" style={{ color: 'var(--text-muted)' }}>No results found</div>
                     )}
                   </div>
                 )}
 
                 {activeTab === 'directions' && (
-                  <div className="space-y-4">
-                    <div className={`p-4 rounded-xl ${theme.cardBg} border ${theme.border}`}>
-                      <label className={`text-sm font-medium ${theme.text} block mb-3`}>Transportation Mode</label>
-                      <div className="grid grid-cols-4 gap-2 mb-4">
+                  <div className="space-y-3">
+                    <div 
+                      className="p-3 rounded-xl"
+                      style={{ 
+                        background: 'var(--bg-panel)',
+                        border: '1px solid var(--border-subtle)',
+                      }}
+                    >
+                      <label 
+                        className="text-xs font-medium block mb-2"
+                        style={{ color: 'var(--text-main)' }}
+                      >
+                        Transportation Mode
+                      </label>
+                      <div className="grid grid-cols-4 gap-1.5 mb-3">
                         {[
                           { id: 'fastest' as const, label: 'Drive', icon: Car },
                           { id: 'pedestrian' as const, label: 'Walk', icon: PersonStanding },
@@ -477,37 +626,52 @@ export default function NHLArenaExplorer({
                               key={id}
                               onClick={handleClick}
                               disabled={disabled || isTransit}
-                              className={`p-3 rounded-xl border transition-all ${
-                                isSelected 
-                                  ? 'bg-orange-500/20 border-orange-500/50' 
-                                  : `${theme.hover} ${theme.border} ${isTransit ? 'opacity-50 cursor-not-allowed' : ''}`
-                              }`}
+                              className="p-2.5 rounded-xl transition-all"
+                              style={{
+                                background: isSelected ? 'rgba(244, 122, 56, 0.2)' : 'var(--bg-hover)',
+                                border: isSelected ? '1px solid rgba(244, 122, 56, 0.5)' : '1px solid var(--border-subtle)',
+                                opacity: isTransit ? 0.5 : 1,
+                                cursor: isTransit ? 'not-allowed' : 'pointer',
+                              }}
                               title={isTransit ? 'Transit routing not available via MapQuest API' : ''}
                             >
-                              <IconComponent className={`w-5 h-5 mx-auto mb-1 ${isSelected ? 'text-orange-400' : theme.muted}`} />
-                              <p className={`text-xs font-medium ${isSelected ? theme.text : theme.muted}`}>{label}</p>
+                              <IconComponent 
+                                className="w-4 h-4 mx-auto mb-1"
+                                style={{ color: isSelected ? '#F47A38' : 'var(--text-muted)' }}
+                              />
+                              <p 
+                                className="text-xs font-medium"
+                                style={{ color: isSelected ? 'var(--text-main)' : 'var(--text-muted)' }}
+                              >
+                                {label}
+                              </p>
                             </button>
                           );
                         })}
                       </div>
-                      <label className={`text-sm font-medium ${theme.text} block mb-2`}>Your Starting Location</label>
+                      <label 
+                        className="text-xs font-medium block mb-1.5"
+                        style={{ color: 'var(--text-main)' }}
+                      >
+                        Your Starting Location
+                      </label>
                       <div className="flex gap-2">
                         <AddressAutocomplete
                           value={fromAddress}
                           onChange={setFromAddress}
                           placeholder="Enter address..."
                           darkMode={darkMode}
-                          inputBg={theme.input.replace('bg-', '')}
-                          textColor={theme.text.replace('text-', '')}
-                          mutedText={theme.muted.replace('text-', '')}
-                          borderColor={theme.border.replace('border-', '')}
+                          inputBg={inputBg}
+                          textColor={textColor}
+                          mutedText={mutedText}
+                          borderColor={borderColor}
                           className="flex-1"
                           iconClassName="hidden"
                         />
                         <button 
                           onClick={getDirections} 
                           disabled={calculatingRoute || !fromAddress}
-                          className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium"
+                          className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-medium transition-colors"
                         >
                           {calculatingRoute ? '...' : 'Go'}
                         </button>
@@ -515,35 +679,69 @@ export default function NHLArenaExplorer({
                     </div>
                     
                     {routeInfo && (
-                      <div className={`p-4 rounded-xl ${theme.cardBg} border ${theme.border}`}> 
-                        <div className="flex items-center gap-2 mb-3">
-                          <div className="w-2 h-2 rounded-full bg-green-500" />
-                          <span className={`text-sm font-medium ${theme.text}`}>Route Found ({routeInfo.mode})</span>
-                          <span className={`text-xs ${theme.muted} ml-auto`}>Shown on map</span>
+                      <div 
+                        className="p-3 rounded-xl"
+                        style={{ 
+                          background: 'var(--bg-panel)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      > 
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-success)' }} />
+                          <span 
+                            className="text-sm font-medium"
+                            style={{ color: 'var(--text-main)' }}
+                          >
+                            Route Found ({routeInfo.mode})
+                          </span>
+                          <span 
+                            className="text-xs ml-auto"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            Shown on map
+                          </span>
                         </div>
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div className={`p-3 rounded-lg ${theme.input}`}>
-                            <p className={`text-xs ${theme.muted}`}>Distance</p>
-                            <p className={`text-lg font-bold ${theme.text}`}>{routeInfo.distance}</p>
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                          <div 
+                            className="p-2.5 rounded-lg"
+                            style={{ background: 'var(--bg-input)' }}
+                          >
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Distance</p>
+                            <p className="text-base font-bold" style={{ color: 'var(--text-main)' }}>{routeInfo.distance}</p>
                           </div>
-                          <div className={`p-3 rounded-lg ${theme.input}`}>
-                            <p className={`text-xs ${theme.muted}`}>Est. Time</p>
-                            <p className={`text-lg font-bold ${theme.text}`}>{routeInfo.duration}</p>
+                          <div 
+                            className="p-2.5 rounded-lg"
+                            style={{ background: 'var(--bg-input)' }}
+                          >
+                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Est. Time</p>
+                            <p className="text-base font-bold" style={{ color: 'var(--text-main)' }}>{routeInfo.duration}</p>
                           </div>
                         </div>
                         <button 
                           onClick={openDirectionsInMapQuest}
-                          className="w-full py-2.5 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center justify-center gap-2"
+                          className="w-full py-2 rounded-lg text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                          style={{ background: 'var(--color-success)' }}
                         >
-                          <ExternalLink className="w-4 h-4" /> Open Turn-by-Turn in MapQuest
+                          <ExternalLink className="w-4 h-4" /> Open in MapQuest
                         </button>
                       </div>
                     )}
                     
                     {!routeInfo && !calculatingRoute && (
-                      <div className={`p-4 rounded-xl ${theme.cardBg} border ${theme.border} text-center`}>
-                        <Navigation className="w-8 h-8 mx-auto mb-2 text-orange-400" />
-                        <p className={`text-sm ${theme.muted}`}>Enter your address above to get directions to {selectedStadium.arena}</p>
+                      <div 
+                        className="p-3 rounded-xl text-center"
+                        style={{ 
+                          background: 'var(--bg-panel)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
+                      >
+                        <Navigation className="w-7 h-7 mx-auto mb-2 text-orange-400" />
+                        <p 
+                          className="text-xs"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          Enter your address to get directions to {selectedStadium.arena}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -552,22 +750,36 @@ export default function NHLArenaExplorer({
 
               {/* Footer */}
               {showBranding && (
-                <div className={`px-4 py-2 border-t ${theme.border} ${darkMode ? 'bg-slate-800/50' : 'bg-gray-100'} flex items-center justify-between`}>
-                  <div className={`flex items-center gap-2 text-xs ${theme.muted}`}>
-                    <Sparkles className="w-3.5 h-3.5 text-orange-400" /> Powered by <span className="font-semibold">MapQuest</span>
+                <div className="prism-footer">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-orange-400" />
+                    <span>Powered by <strong>MapQuest</strong></span>
                   </div>
-                  <div className={`text-xs ${theme.muted}`}>NHL Arena Data</div>
+                  <span>NHL Arena Data</span>
                 </div>
               )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <div className={`w-24 h-24 rounded-2xl mx-auto mb-4 flex items-center justify-center ${darkMode ? 'bg-white' : 'bg-slate-900'} p-3`}>
-                  <NHLShield className="w-16 h-16" />
+                <div 
+                  className="w-20 h-20 rounded-2xl mx-auto mb-3 flex items-center justify-center p-3"
+                  style={{ background: darkMode ? 'white' : 'var(--text-main)' }}
+                >
+                  <NHLShield className="w-14 h-14" />
                 </div>
-                <p className={`font-semibold ${theme.text} text-lg mb-1`}>Select an Arena</p>
-                <p className={`text-sm ${theme.muted}`}>Choose a team to explore</p>
+                <p 
+                  className="font-semibold text-base mb-1"
+                  style={{ color: 'var(--text-main)' }}
+                >
+                  Select an Arena
+                </p>
+                <p 
+                  className="text-sm"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Choose a team to explore
+                </p>
               </div>
             </div>
           )}

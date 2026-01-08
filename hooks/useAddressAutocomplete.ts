@@ -32,9 +32,16 @@ export function useAddressAutocomplete(
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const justSelectedRef = useRef(false);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    
+    // Skip search if user just selected an item
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false;
+      return;
+    }
     
     if (value.length < minChars) {
       setSuggestions([]);
@@ -81,9 +88,11 @@ export function useAddressAutocomplete(
       lng: suggestion.lng,
     };
 
-    onChange(addressResult.displayString);
+    // Mark that we just selected to prevent dropdown from reopening
+    justSelectedRef.current = true;
     setIsOpen(false);
     setSuggestions([]);
+    onChange(addressResult.displayString);
     onSelect?.(addressResult);
   };
 

@@ -35,13 +35,12 @@ interface SmartAddressInputProps {
 export default function SmartAddressInput({
   apiKey,
   placeholder = 'Enter an address...',
-  accentColor = '#2563eb',
+  accentColor = '#3B82F6',
   darkMode = false,
   showBranding = true,
   companyName,
   companyLogo,
-  fontFamily = 'system-ui, -apple-system, sans-serif',
-  borderRadius = '0.5rem',
+  fontFamily,
   onAddressSelect,
   defaultValue = '',
   required = false,
@@ -57,12 +56,17 @@ export default function SmartAddressInput({
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
-  const textColor = darkMode ? 'text-white' : 'text-gray-900';
-  const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
-  const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const inputBg = darkMode ? 'bg-gray-700' : 'bg-white';
-  const hoverBg = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50';
+  // Theme colors - inline for standalone component
+  const bgWidget = darkMode ? '#0F172A' : '#FFFFFF';
+  const bgInput = darkMode ? '#334155' : '#F1F5F9';
+  const bgHover = darkMode ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.06)';
+  const textMain = darkMode ? '#F8FAFC' : '#0F172A';
+  const textMuted = darkMode ? '#94A3B8' : '#94A3B8';
+  const textSecondary = darkMode ? '#E2E8F0' : '#475569';
+  const borderSubtle = darkMode ? '#334155' : '#E2E8F0';
+  const successColor = '#10B981';
+  const successBg = darkMode ? 'rgba(16, 185, 129, 0.2)' : 'rgba(16, 185, 129, 0.12)';
+  const errorColor = '#EF4444';
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -117,18 +121,15 @@ export default function SmartAddressInput({
     setSuggestions([]);
 
     try {
-      // Get coordinates from suggestion - they're already mapped in searchAhead
       let lat: number | undefined = suggestion.lat;
       let lng: number | undefined = suggestion.lng;
       
-      // Fallback: extract from place.geometry.coordinates if not already mapped
       if ((!lat || !lng) && suggestion.place?.geometry?.coordinates) {
         const coords = suggestion.place.geometry.coordinates;
-        lng = coords[0]; // longitude is first
-        lat = coords[1]; // latitude is second
+        lng = coords[0];
+        lat = coords[1];
       }
       
-      // If still no coordinates, geocode the address
       let geocodedLocation: any = null;
       if (!lat || !lng) {
         geocodedLocation = await geocode(display);
@@ -195,18 +196,27 @@ export default function SmartAddressInput({
   return (
     <div 
       ref={containerRef} 
-      className={`relative ${textColor}`}
-      style={{ minWidth: '400px', fontFamily }}
+      style={{ 
+        minWidth: '400px', 
+        fontFamily: fontFamily || "'Inter', system-ui, -apple-system, sans-serif",
+      }}
     >
       {label && (
-        <label className={`block text-sm font-medium mb-2 ${textColor}`}>
+        <label 
+          className="block text-sm font-medium mb-1.5"
+          style={{ color: textMain }}
+        >
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span style={{ color: errorColor }} className="ml-1">*</span>}
         </label>
       )}
 
+      {/* Input wrapper with relative positioning for dropdown */}
       <div className="relative">
-        <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText} z-10`} />
+        <MapPin 
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 z-10" 
+          style={{ color: textMuted }}
+        />
         <input
           ref={inputRef}
           type="text"
@@ -217,79 +227,127 @@ export default function SmartAddressInput({
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => {
-            console.log('Input focused, query:', query, 'suggestions:', suggestions.length);
             if (query.length >= 3 && suggestions.length > 0) {
-              console.log('Opening dropdown on focus');
               setIsOpen(true);
             }
           }}
           placeholder={placeholder}
-          className={`w-full pl-10 pr-10 py-3 text-sm ${bgColor} ${textColor} rounded-lg border ${borderColor} shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
-          style={{ borderRadius }}
+          className="w-full pl-10 pr-10 transition-all outline-none"
+          style={{
+            height: '44px',
+            background: bgInput,
+            border: '2px solid transparent',
+            borderRadius: '10px',
+            fontSize: '0.875rem',
+            color: textMain,
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+          }}
+          onFocusCapture={(e) => {
+            e.currentTarget.style.background = bgWidget;
+            e.currentTarget.style.borderColor = accentColor;
+            e.currentTarget.style.boxShadow = `0 0 0 4px ${accentColor}20`;
+          }}
+          onBlurCapture={(e) => {
+            e.currentTarget.style.background = bgInput;
+            e.currentTarget.style.borderColor = 'transparent';
+            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.12)';
+          }}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
           {loading ? (
-            <Loader2 className={`w-4 h-4 animate-spin ${mutedText}`} />
+            <Loader2 
+              className="w-4 h-4 animate-spin" 
+              style={{ color: textMuted }} 
+            />
           ) : selectedAddress ? (
-            <button onClick={clearSelection} className={mutedText} type="button">
+            <button 
+              onClick={clearSelection} 
+              type="button"
+              className="p-1 rounded transition-colors"
+              style={{ color: textMuted }}
+            >
               <X className="w-4 h-4" />
             </button>
           ) : null}
         </div>
-      </div>
 
-      {/* Suggestions Dropdown */}
-      {isOpen && suggestions.length > 0 && (
-        <div 
-          className={`absolute left-0 right-0 top-full mt-1 ${bgColor} border ${borderColor} rounded-lg shadow-xl z-[100] max-h-64 overflow-y-auto`} 
-          style={{ borderRadius, marginTop: '4px' }}
-        >
-          {suggestions.map((suggestion, index) => {
-            const name = suggestion.name || suggestion.displayString || suggestion.text || suggestion.address || 'Address';
-            const description = suggestion.displayString || suggestion.description || suggestion.fullText || '';
-            const isHighlighted = highlightedIndex === index;
-            return (
-              <button
-                key={`${suggestion.id || index}-${name}`}
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleSelect(suggestion);
-                }}
-                onMouseEnter={() => setHighlightedIndex(index)}
-                className={`w-full px-4 py-3 text-left text-sm flex items-start gap-3 transition-colors ${
-                  isHighlighted 
-                    ? (darkMode ? 'bg-gray-700' : 'bg-gray-100') 
-                    : hoverBg
-                } ${isHighlighted ? '' : 'hover:' + (darkMode ? 'bg-gray-700' : 'bg-gray-50')}`}
-              >
-                <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${mutedText}`} />
-                <div className="flex-1 min-w-0">
-                  <div className={`font-medium truncate ${textColor}`}>
-                    {name}
-                  </div>
-                  {description && description !== name && (
-                    <div className={`text-xs truncate ${mutedText} mt-0.5`}>
-                      {description}
+        {/* Suggestions Dropdown - inside the relative wrapper */}
+        {isOpen && suggestions.length > 0 && (
+          <div 
+            className="absolute left-0 right-0 top-full mt-1 z-[100] max-h-64 overflow-y-auto"
+            style={{ 
+              background: bgWidget,
+              border: `1px solid ${borderSubtle}`,
+              borderRadius: '12px',
+              boxShadow: '0 16px 48px rgba(0, 0, 0, 0.16)',
+            }}
+          >
+            {suggestions.map((suggestion, index) => {
+              const name = suggestion.name || suggestion.displayString || suggestion.text || suggestion.address || 'Address';
+              const description = suggestion.displayString || suggestion.description || suggestion.fullText || '';
+              const isHighlighted = highlightedIndex === index;
+              return (
+                <button
+                  key={`${suggestion.id || index}-${name}`}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSelect(suggestion);
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  className="w-full px-3 py-2.5 text-left text-sm flex items-start gap-2.5 transition-colors"
+                  style={{
+                    background: isHighlighted ? bgHover : 'transparent',
+                    borderBottom: `1px solid ${borderSubtle}`,
+                    color: textMain,
+                  }}
+                >
+                  <MapPin 
+                    className="w-4 h-4 mt-0.5 flex-shrink-0" 
+                    style={{ color: textMuted }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div 
+                      className="font-medium truncate"
+                      style={{ color: textMain }}
+                    >
+                      {name}
                     </div>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+                    {description && description !== name && (
+                      <div 
+                        className="text-xs truncate mt-0.5"
+                        style={{ color: textMuted }}
+                      >
+                        {description}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Selected Address Confirmation */}
       {selectedAddress && (
-        <div className={`mt-2 p-3 rounded-lg ${darkMode ? 'bg-green-900/20' : 'bg-green-50'} flex items-start gap-2`} style={{ borderRadius }}>
-          <Check className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+        <div 
+          className="mt-1.5 p-2.5 flex items-start gap-2"
+          style={{ 
+            background: successBg,
+            borderRadius: '10px',
+          }}
+        >
+          <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: successColor }} />
           <div className="text-sm">
-            <div className={`font-medium ${darkMode ? 'text-green-400' : 'text-green-700'}`}>
+            <div 
+              className="font-medium"
+              style={{ color: successColor }}
+            >
               Address verified
             </div>
-            <div className={darkMode ? 'text-green-300/70' : 'text-green-600/70'}>
+            <div style={{ color: textSecondary }}>
               {selectedAddress.displayString}
             </div>
           </div>

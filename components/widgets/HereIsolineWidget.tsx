@@ -33,13 +33,13 @@ interface HereIsolineWidgetProps {
 const mapQuestApiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
 const ISOLINE_COLORS: Record<number, string> = {
-  5: '#22c55e',   // Green for 5 min
-  10: '#84cc16',  // Lime for 10 min
-  15: '#eab308',  // Yellow for 15 min
-  20: '#f97316',  // Orange for 20 min
-  30: '#ef4444',  // Red for 30 min
-  45: '#dc2626',  // Darker red for 45 min
-  60: '#b91c1c',  // Even darker red for 60 min
+  5: '#22c55e',
+  10: '#84cc16',
+  15: '#eab308',
+  20: '#f97316',
+  30: '#ef4444',
+  45: '#dc2626',
+  60: '#b91c1c',
 };
 
 const TIME_PRESETS = [5, 10, 15, 20, 30, 45, 60];
@@ -49,13 +49,12 @@ export default function HereIsolineWidget({
   lat: initialLat,
   lng: initialLng,
   defaultTimeMinutes = 15,
-  accentColor = '#2563eb',
+  accentColor = '#3B82F6',
   darkMode = false,
   showBranding = true,
   companyName,
   companyLogo,
-  fontFamily = 'system-ui, -apple-system, sans-serif',
-  borderRadius = '0.5rem',
+  fontFamily,
   onIsolineCalculated,
 }: HereIsolineWidgetProps) {
   const [address, setAddress] = useState(initialAddress);
@@ -70,12 +69,11 @@ export default function HereIsolineWidget({
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Theme colors following existing patterns
-  const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
+  // Keep Tailwind classes for AddressAutocomplete compatibility
+  const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const inputBg = darkMode ? 'bg-gray-900' : 'bg-gray-50';
 
   const transportModes: { id: TransportMode; icon: any; label: string }[] = [
     { id: 'car', icon: Car, label: 'Drive' },
@@ -83,7 +81,6 @@ export default function HereIsolineWidget({
     { id: 'pedestrian', icon: PersonStanding, label: 'Walk' },
   ];
 
-  // Cleanup abort controller on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -93,14 +90,13 @@ export default function HereIsolineWidget({
   }, []);
 
   const getIsolineColor = (minutes: number): string => {
-    // Find closest preset color
     const presets = Object.keys(ISOLINE_COLORS).map(Number).sort((a, b) => a - b);
     for (const preset of presets) {
       if (minutes <= preset) {
         return ISOLINE_COLORS[preset];
       }
     }
-    return ISOLINE_COLORS[60]; // Default to max
+    return ISOLINE_COLORS[60];
   };
 
   const calculateIsoline = async () => {
@@ -109,7 +105,6 @@ export default function HereIsolineWidget({
       return;
     }
 
-    // Cancel any pending request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -121,7 +116,6 @@ export default function HereIsolineWidget({
     try {
       let center = location;
 
-      // Geocode address if we don't have coordinates
       if (!center && address) {
         const geocoded = await geocode(address);
         if (!geocoded || !geocoded.lat || !geocoded.lng) {
@@ -135,15 +129,12 @@ export default function HereIsolineWidget({
         throw new Error('No location available');
       }
 
-      // Validate coordinates
       if (center.lat < -90 || center.lat > 90 || center.lng < -180 || center.lng > 180) {
         throw new Error('Invalid coordinates');
       }
 
-      // Convert minutes to seconds for HERE API
       const rangeSeconds = timeMinutes * 60;
 
-      // Cap time to reasonable values (max 2 hours)
       if (rangeSeconds > 7200) {
         throw new Error('Maximum travel time is 2 hours');
       }
@@ -176,7 +167,6 @@ export default function HereIsolineWidget({
 
       const data = await response.json();
 
-      // Parse HERE isoline response
       if (!data.isolines || data.isolines.length === 0) {
         throw new Error('No reachable area found. The location may be inaccessible.');
       }
@@ -186,13 +176,10 @@ export default function HereIsolineWidget({
         throw new Error('Could not calculate reachable area for this location.');
       }
 
-      // HERE API returns polygons in flexible polyline format
-      // Parse the outer ring of the first polygon
       const polygonData = isolineData.polygons[0];
       let coordinates: { lat: number; lng: number }[] = [];
 
       if (polygonData.outer) {
-        // Decode flexible polyline (HERE's format)
         coordinates = decodeFlexiblePolyline(polygonData.outer);
       }
 
@@ -210,7 +197,6 @@ export default function HereIsolineWidget({
       onIsolineCalculated?.(polygon);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        // Request was cancelled, don't show error
         return;
       }
       setError(err instanceof Error ? err.message : 'Failed to calculate reachable area');
@@ -220,17 +206,13 @@ export default function HereIsolineWidget({
     }
   };
 
-  // Decode HERE's flexible polyline format
-  // Based on HERE's flexible polyline encoding specification
   const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
     const coordinates: { lat: number; lng: number }[] = [];
     
-    // Flexible polyline header
     let index = 0;
     const version = decodeUnsignedVarint(encoded, { index: 0 });
     index = version.newIndex;
     
-    // Get precision values from header
     const header = decodeUnsignedVarint(encoded, { index });
     index = header.newIndex;
     
@@ -244,19 +226,16 @@ export default function HereIsolineWidget({
     let lng = 0;
     
     while (index < encoded.length) {
-      // Decode lat delta
       const latResult = decodeSignedVarint(encoded, { index });
       lat += latResult.value;
       index = latResult.newIndex;
       
       if (index >= encoded.length) break;
       
-      // Decode lng delta
       const lngResult = decodeSignedVarint(encoded, { index });
       lng += lngResult.value;
       index = lngResult.newIndex;
       
-      // Skip third dimension if present
       if (thirdDimType !== 0 && index < encoded.length) {
         const thirdResult = decodeSignedVarint(encoded, { index });
         index = thirdResult.newIndex;
@@ -305,10 +284,7 @@ export default function HereIsolineWidget({
   const decodeSignedVarint = (encoded: string, pos: { index: number }): { value: number; newIndex: number } => {
     const unsigned = decodeUnsignedVarint(encoded, pos);
     const value = unsigned.value;
-    
-    // ZigZag decoding
     const decoded = (value >> 1) ^ (-(value & 1));
-    
     return { value: decoded, newIndex: unsigned.newIndex };
   };
 
@@ -325,61 +301,64 @@ export default function HereIsolineWidget({
     setCustomTime('');
   };
 
-  // Map configuration
-  const mapCenter = location || { lat: 39.8283, lng: -98.5795 }; // Default to US center
+  const mapCenter = location || { lat: 39.8283, lng: -98.5795 };
   const mapMarkers = location
     ? [{ lat: location.lat, lng: location.lng, label: 'Start', color: accentColor }]
     : [];
 
-  // Convert isoline to map circles (approximation for visualization)
-  // Since MapQuestMap supports circles, we'll use them to show the isoline boundary
-  const mapCircles = location && isoline ? [{
-    lat: location.lat,
-    lng: location.lng,
-    radius: estimateIsolineRadius(isoline.coordinates, location),
+  // Pass isoline polygon coordinates to the map
+  const mapPolygons = location && isoline ? [{
+    coordinates: isoline.coordinates,
     color: isoline.color,
-    fillOpacity: 0.2,
+    fillOpacity: 0.25,
   }] : [];
-
-  // Estimate radius from polygon for circle approximation
-  function estimateIsolineRadius(
-    coords: { lat: number; lng: number }[],
-    center: { lat: number; lng: number }
-  ): number {
-    if (coords.length === 0) return 1000;
-    
-    // Calculate average distance from center to polygon points
-    let totalDistance = 0;
-    coords.forEach(coord => {
-      const dLat = (coord.lat - center.lat) * 111320; // meters per degree latitude
-      const dLng = (coord.lng - center.lng) * 111320 * Math.cos(center.lat * Math.PI / 180);
-      totalDistance += Math.sqrt(dLat * dLat + dLng * dLng);
-    });
-    
-    return totalDistance / coords.length;
-  }
 
   return (
     <div 
-      className={`rounded-xl border ${borderColor} overflow-hidden ${bgColor}`} 
-      style={{ minWidth: '900px', width: '100%', fontFamily, borderRadius }}
+      className="prism-widget"
+      data-theme={darkMode ? 'dark' : 'light'}
+      style={{ 
+        minWidth: '900px', 
+        fontFamily: fontFamily || 'var(--brand-font)',
+        '--brand-primary': accentColor,
+      } as React.CSSProperties}
     >
-      {/* Main content */}
       <div className="flex" style={{ height: '500px' }}>
         {/* Controls Panel */}
-        <div className={`w-80 flex-shrink-0 border-r ${borderColor} flex flex-col h-full overflow-hidden`}>
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="flex items-center gap-2 mb-4">
-              <MapPin className={`w-5 h-5`} style={{ color: accentColor }} />
-              <h3 className={`font-semibold ${textColor}`}>Reachable Area</h3>
+        <div 
+          className="w-80 flex-shrink-0 flex flex-col h-full overflow-hidden"
+          style={{ borderRight: '1px solid var(--border-subtle)' }}
+        >
+          <div className="flex-1 overflow-y-auto prism-scrollbar p-4">
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-3">
+              <div 
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: `${accentColor}15` }}
+              >
+                <MapPin className="w-4 h-4" style={{ color: accentColor }} />
+              </div>
+              <div>
+                <h3 
+                  className="font-bold"
+                  style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
+                >
+                  Reachable Area
+                </h3>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Travel within specified time
+                </p>
+              </div>
             </div>
-            <p className={`text-sm ${mutedText} mb-4`}>
-              See where you can travel within a specified time
-            </p>
 
             {/* Address Input */}
-            <div className="mb-4">
-              <label className={`block text-sm font-medium mb-2 ${mutedText}`}>Starting Location</label>
+            <div className="mb-3">
+              <label 
+                className="block text-xs font-medium mb-1.5"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Starting Location
+              </label>
               <AddressAutocomplete
                 value={address}
                 onChange={setAddress}
@@ -398,50 +377,64 @@ export default function HereIsolineWidget({
             </div>
 
             {/* Transport Mode */}
-            <div className="mb-4">
-              <label className={`block text-sm font-medium mb-2 ${mutedText}`}>Travel Mode</label>
-              <div className="flex gap-2">
-                {transportModes.map((mode) => (
-                  <button
-                    key={mode.id}
-                    onClick={() => setTransportMode(mode.id)}
-                    className={`flex-1 flex flex-col items-center gap-1 px-3 py-2 rounded-lg border transition-all ${
-                      transportMode === mode.id
-                        ? 'border-2 text-white'
-                        : `${borderColor} ${mutedText} hover:border-gray-400`
-                    }`}
-                    style={transportMode === mode.id ? { borderColor: accentColor, backgroundColor: accentColor } : undefined}
-                  >
-                    <mode.icon className="w-4 h-4" />
-                    <span className="text-xs font-medium">{mode.label}</span>
-                  </button>
-                ))}
+            <div className="mb-3">
+              <label 
+                className="block text-xs font-medium mb-1.5"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Travel Mode
+              </label>
+              <div className="flex gap-1.5">
+                {transportModes.map((mode) => {
+                  const isActive = transportMode === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      onClick={() => setTransportMode(mode.id)}
+                      className="flex-1 flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors"
+                      style={{
+                        background: isActive ? accentColor : 'var(--bg-panel)',
+                        color: isActive ? 'white' : 'var(--text-muted)',
+                        border: `2px solid ${isActive ? accentColor : 'var(--border-subtle)'}`,
+                      }}
+                    >
+                      <mode.icon className="w-4 h-4" />
+                      <span className="text-xs font-medium">{mode.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Time Duration */}
-            <div className="mb-4">
-              <label className={`block text-sm font-medium mb-2 ${mutedText}`}>Travel Time</label>
+            <div className="mb-3">
+              <label 
+                className="block text-xs font-medium mb-1.5"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Travel Time
+              </label>
               
-              {/* Preset buttons */}
-              <div className="flex flex-wrap gap-2 mb-3">
-                {TIME_PRESETS.map((preset) => (
-                  <button
-                    key={preset}
-                    onClick={() => handlePresetClick(preset)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                      timeMinutes === preset && !customTime
-                        ? 'text-white'
-                        : `${borderColor} ${mutedText} hover:border-gray-400`
-                    }`}
-                    style={timeMinutes === preset && !customTime ? { borderColor: accentColor, backgroundColor: accentColor } : undefined}
-                  >
-                    {preset} min
-                  </button>
-                ))}
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {TIME_PRESETS.map((preset) => {
+                  const isActive = timeMinutes === preset && !customTime;
+                  return (
+                    <button
+                      key={preset}
+                      onClick={() => handlePresetClick(preset)}
+                      className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+                      style={{
+                        background: isActive ? accentColor : 'var(--bg-panel)',
+                        color: isActive ? 'white' : 'var(--text-muted)',
+                        border: `2px solid ${isActive ? accentColor : 'var(--border-subtle)'}`,
+                      }}
+                    >
+                      {preset} min
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* Custom time input */}
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -450,19 +443,20 @@ export default function HereIsolineWidget({
                   placeholder="Custom"
                   value={customTime}
                   onChange={(e) => handleTimeChange(e.target.value)}
-                  className={`flex-1 px-3 py-2 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm focus:outline-none focus:ring-2 focus:ring-opacity-50`}
-                  style={{ '--tw-ring-color': accentColor } as React.CSSProperties}
+                  className="prism-input flex-1"
+                  style={{ height: '36px' }}
                 />
-                <span className={`text-sm ${mutedText}`}>minutes</span>
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>minutes</span>
               </div>
-              <p className={`text-xs ${mutedText} mt-1`}>Max: 120 minutes (2 hours)</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Max: 120 min</p>
             </div>
 
             {/* Error Display */}
             {error && (
-              <div className={`mb-4 p-3 rounded-lg text-sm flex items-start gap-2 ${
-                darkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-50 text-red-600'
-              }`}>
+              <div 
+                className="mb-3 p-2.5 rounded-lg text-xs flex items-start gap-2"
+                style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)' }}
+              >
                 <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
@@ -472,20 +466,31 @@ export default function HereIsolineWidget({
             <button
               onClick={calculateIsoline}
               disabled={loading || (!address && !location)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-white font-medium disabled:opacity-50 transition-colors"
-              style={{ backgroundColor: accentColor }}
+              className="prism-btn prism-btn-primary w-full"
+              style={{ 
+                background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                boxShadow: `0 4px 12px ${accentColor}40`,
+              }}
             >
               {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Calculating...</>
+                <><Loader2 className="w-4 h-4 prism-spinner" /> Calculating...</>
               ) : (
-                <><Clock className="w-4 h-4" /> Calculate Reachable Area</>
+                <><Clock className="w-4 h-4" /> Calculate Area</>
               )}
             </button>
 
             {/* Result Legend */}
             {isoline && (
-              <div className={`mt-4 p-3 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                <div className={`text-xs font-medium mb-2 ${mutedText}`}>Reachable Area</div>
+              <div 
+                className="mt-3 p-3 rounded-xl"
+                style={{ background: 'var(--bg-panel)' }}
+              >
+                <div 
+                  className="text-xs font-medium mb-2"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Reachable Area
+                </div>
                 <div className="flex items-center gap-2 text-sm">
                   <div
                     className="w-4 h-4 rounded"
@@ -494,13 +499,10 @@ export default function HereIsolineWidget({
                       border: `2px solid ${isoline.color}` 
                     }}
                   />
-                  <span className={textColor}>
-                    Within <strong>{isoline.timeMinutes} minutes</strong> by {transportMode}
+                  <span style={{ color: 'var(--text-main)' }}>
+                    Within <strong>{isoline.timeMinutes} min</strong> by {transportMode}
                   </span>
                 </div>
-                <p className={`text-xs ${mutedText} mt-2`}>
-                  The highlighted area shows where you can travel from your starting point within the specified time.
-                </p>
               </div>
             )}
           </div>
@@ -516,30 +518,28 @@ export default function HereIsolineWidget({
             accentColor={accentColor}
             height="100%"
             markers={mapMarkers}
-            circles={mapCircles}
+            polygons={mapPolygons}
           />
         </div>
       </div>
 
-      {/* Branding Footer */}
+      {/* Footer */}
       {showBranding && (
-        <div className={`p-3 border-t ${borderColor} ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-          <div className="flex items-center justify-center gap-3">
-            {companyLogo && (
-              <img 
-                src={companyLogo} 
-                alt={companyName || 'Company logo'} 
-                className="h-6 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
-            <span className={`text-xs ${mutedText}`}>
-              {companyName && <span className="font-medium">{companyName} · </span>}
-              Powered by <strong>HERE</strong> & <strong>MapQuest</strong>
-            </span>
-          </div>
+        <div className="prism-footer">
+          {companyLogo && (
+            <img 
+              src={companyLogo} 
+              alt={companyName || 'Company logo'} 
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span>
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by <strong>MapQuest</strong>
+          </span>
         </div>
       )}
     </div>

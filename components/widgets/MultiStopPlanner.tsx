@@ -35,13 +35,12 @@ interface MultiStopPlannerProps {
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
 export default function MultiStopPlanner({
-  accentColor = '#2563eb',
+  accentColor = '#3B82F6',
   darkMode = false,
   showBranding = true,
   companyName,
   companyLogo,
-  fontFamily = 'system-ui, -apple-system, sans-serif',
-  borderRadius = '0.5rem',
+  fontFamily,
   maxStops = 10,
 }: MultiStopPlannerProps) {
   const [stops, setStops] = useState<Stop[]>([
@@ -55,11 +54,11 @@ export default function MultiStopPlanner({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragNode = useRef<HTMLDivElement | null>(null);
 
-  const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
+  // Keep Tailwind classes for AddressAutocomplete compatibility
+  const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const inputBg = darkMode ? 'bg-gray-900' : 'bg-gray-50';
 
   const addStop = () => {
     if (stops.length < maxStops) {
@@ -80,13 +79,11 @@ export default function MultiStopPlanner({
     setRouteResult(null);
   };
 
-  // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
     dragNode.current = e.target as HTMLDivElement;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', index.toString());
-    // Add a slight delay to show dragging state
     setTimeout(() => {
       if (dragNode.current) {
         dragNode.current.style.opacity = '0.5';
@@ -117,7 +114,6 @@ export default function MultiStopPlanner({
       return;
     }
 
-    // Reorder the stops
     const newStops = [...stops];
     const [draggedStop] = newStops.splice(draggedIndex, 1);
     newStops.splice(dropIndex, 0, draggedStop);
@@ -126,7 +122,6 @@ export default function MultiStopPlanner({
     resetDragState();
     setRouteResult(null);
 
-    // Auto-recalculate if we have valid geocoded stops
     const validStops = newStops.filter(s => s.lat && s.lng);
     if (validStops.length >= 2) {
       await calculateRouteForStops(newStops);
@@ -179,14 +174,12 @@ export default function MultiStopPlanner({
         throw new Error('Need at least 2 valid addresses');
       }
 
-      // Build waypoints for multi-stop route
       const waypoints = validStops.map(s => ({ lat: s.lat!, lng: s.lng! }));
       
       let totalDistance = 0;
       let totalTime = 0;
       const legs: { distance: number; time: number }[] = [];
 
-      // Get directions for each leg
       for (let i = 0; i < waypoints.length - 1; i++) {
         const from = `${waypoints[i].lat},${waypoints[i].lng}`;
         const to = `${waypoints[i + 1].lat},${waypoints[i + 1].lng}`;
@@ -230,36 +223,62 @@ export default function MultiStopPlanner({
       }
     : { lat: 39.8283, lng: -98.5795 };
 
-  // Simple gray markers with numbers
   const markers = validStops.map((stop, index) => ({
     lat: stop.lat!,
     lng: stop.lng!,
     label: `${index + 1}`,
-    color: darkMode ? '#6b7280' : '#4b5563', // gray-500 / gray-600
+    color: darkMode ? '#6b7280' : '#4b5563',
   }));
 
-  // Build waypoints for route display (all stops except first and last)
   const routeWaypoints = validStops.length > 2 
     ? validStops.slice(1, -1).map(s => ({ lat: s.lat!, lng: s.lng! }))
     : undefined;
 
   return (
-    <div className={`rounded-xl border ${borderColor} overflow-hidden ${bgColor}`} style={{ minWidth: '900px', fontFamily, borderRadius }}>
+    <div 
+      className="prism-widget"
+      data-theme={darkMode ? 'dark' : 'light'}
+      style={{ 
+        minWidth: '900px', 
+        fontFamily: fontFamily || 'var(--brand-font)',
+        '--brand-primary': accentColor,
+      } as React.CSSProperties}
+    >
       <div className="flex" style={{ height: '500px' }}>
         {/* Sidebar */}
-        <div className={`w-96 border-r ${borderColor} flex flex-col overflow-hidden`}>
+        <div 
+          className="w-80 flex flex-col overflow-hidden"
+          style={{ borderRight: '1px solid var(--border-subtle)' }}
+        >
           {/* Header */}
-          <div className={`p-4 border-b ${borderColor}`}>
+          <div 
+            className="p-3"
+            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          >
             <div className="flex items-center gap-2">
-              <Route className={`w-5 h-5 ${mutedText}`} />
-              <h3 className={`font-semibold ${textColor}`}>Multi-Stop Route Planner</h3>
+              <div 
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: `${accentColor}15` }}
+              >
+                <Route className="w-4 h-4" style={{ color: accentColor }} />
+              </div>
+              <div>
+                <h3 
+                  className="font-bold"
+                  style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
+                >
+                  Multi-Stop Planner
+                </h3>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Drag stops to reorder
+                </p>
+              </div>
             </div>
-            <p className={`text-xs mt-1 ${mutedText}`}>Drag stops to reorder your route</p>
           </div>
 
           {/* Stops List */}
-          <div className="flex-1 overflow-y-auto p-4 min-h-0">
-            <div className="space-y-2">
+          <div className="flex-1 overflow-y-auto prism-scrollbar p-3 min-h-0">
+            <div className="space-y-1.5">
               {stops.map((stop, index) => (
                 <div
                   key={stop.id}
@@ -270,21 +289,26 @@ export default function MultiStopPlanner({
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, index)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
-                    dragOverIndex === index 
-                      ? (darkMode ? 'bg-gray-700 border-2 border-dashed border-gray-500' : 'bg-gray-100 border-2 border-dashed border-gray-300')
-                      : (darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50')
-                  } ${draggedIndex === index ? 'opacity-50' : ''}`}
+                  className={`flex items-center gap-1.5 p-2 rounded-lg transition-all ${
+                    draggedIndex === index ? 'opacity-50' : ''
+                  }`}
+                  style={{
+                    background: dragOverIndex === index ? 'var(--bg-hover)' : 'transparent',
+                    border: dragOverIndex === index ? '2px dashed var(--border-default)' : '2px solid transparent',
+                  }}
                 >
-                  <GripVertical className={`w-4 h-4 ${mutedText} cursor-grab active:cursor-grabbing flex-shrink-0`} />
+                  <GripVertical 
+                    className="w-4 h-4 cursor-grab active:cursor-grabbing flex-shrink-0"
+                    style={{ color: 'var(--text-muted)' }}
+                  />
                   
-                  {/* Simple numbered circle - gray/subtle */}
                   <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 border ${
-                      darkMode 
-                        ? 'bg-gray-700 border-gray-600 text-gray-300' 
-                        : 'bg-gray-100 border-gray-300 text-gray-600'
-                    }`}
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
+                    style={{ 
+                      background: 'var(--bg-panel)',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-secondary)',
+                    }}
                   >
                     {index + 1}
                   </div>
@@ -308,14 +332,19 @@ export default function MultiStopPlanner({
                       className="w-full"
                     />
                     {stop.geocoded && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-green-500 z-20" title="Geocoded" />
+                      <div 
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full z-20"
+                        style={{ background: 'var(--color-success)' }}
+                        title="Geocoded" 
+                      />
                     )}
                   </div>
 
                   {stops.length > 2 && (
                     <button
                       onClick={() => removeStop(stop.id)}
-                      className={`p-1.5 rounded-lg ${darkMode ? 'hover:bg-gray-600 text-gray-400' : 'hover:bg-gray-200 text-gray-500'}`}
+                      className="p-1.5 rounded-lg transition-colors"
+                      style={{ color: 'var(--text-muted)' }}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -327,7 +356,11 @@ export default function MultiStopPlanner({
             {stops.length < maxStops && (
               <button
                 onClick={addStop}
-                className={`w-full mt-3 py-2 px-3 rounded-lg border border-dashed ${borderColor} ${mutedText} text-sm flex items-center justify-center gap-2 hover:border-gray-400 transition-colors`}
+                className="w-full mt-2 py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors"
+                style={{ 
+                  border: '2px dashed var(--border-default)',
+                  color: 'var(--text-muted)',
+                }}
               >
                 <Plus className="w-4 h-4" />
                 Add Stop
@@ -337,18 +370,51 @@ export default function MultiStopPlanner({
 
           {/* Route Summary */}
           {routeResult && (
-            <div className={`p-4 border-t ${borderColor} ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+            <div 
+              className="p-3"
+              style={{ 
+                borderTop: '1px solid var(--border-subtle)',
+                background: 'var(--bg-panel)',
+              }}
+            >
               <div className="flex items-center justify-between mb-2">
-                <span className={`text-sm font-medium ${textColor}`}>Route Summary</span>
+                <span 
+                  className="text-sm font-medium"
+                  style={{ color: 'var(--text-main)' }}
+                >
+                  Route Summary
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} border ${borderColor}`}>
-                  <p className={`text-xs ${mutedText}`}>Total Distance</p>
-                  <p className={`text-lg font-semibold ${textColor}`}>{routeResult.totalDistance.toFixed(1)} mi</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div 
+                  className="p-2 rounded-lg"
+                  style={{ 
+                    background: 'var(--bg-widget)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total Distance</p>
+                  <p 
+                    className="text-lg font-semibold"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    {routeResult.totalDistance.toFixed(1)} mi
+                  </p>
                 </div>
-                <div className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800' : 'bg-white'} border ${borderColor}`}>
-                  <p className={`text-xs ${mutedText}`}>Total Time</p>
-                  <p className={`text-lg font-semibold ${textColor}`}>{formatTime(routeResult.totalTime)}</p>
+                <div 
+                  className="p-2 rounded-lg"
+                  style={{ 
+                    background: 'var(--bg-widget)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total Time</p>
+                  <p 
+                    className="text-lg font-semibold"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    {formatTime(routeResult.totalTime)}
+                  </p>
                 </div>
               </div>
             </div>
@@ -356,22 +422,35 @@ export default function MultiStopPlanner({
 
           {/* Error */}
           {error && (
-            <div className={`mx-4 mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm`}>
+            <div 
+              className="mx-3 mb-3 p-2.5 rounded-lg text-sm"
+              style={{ 
+                background: 'var(--color-error-bg)',
+                border: '1px solid var(--color-error)',
+                color: 'var(--color-error)',
+              }}
+            >
               {error}
             </div>
           )}
 
           {/* Actions */}
-          <div className={`p-4 border-t ${borderColor}`}>
+          <div 
+            className="p-3"
+            style={{ borderTop: '1px solid var(--border-subtle)' }}
+          >
             <div className="flex gap-2">
               <button
                 onClick={calculateRoute}
                 disabled={loading || stops.filter(s => s.address.trim()).length < 2}
-                className="flex-1 py-2.5 px-4 rounded-lg text-white font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: accentColor }}
+                className="prism-btn prism-btn-primary flex-1 text-sm"
+                style={{ 
+                  background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                  boxShadow: `0 4px 12px ${accentColor}40`,
+                }}
               >
                 {loading ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Calculating...</>
+                  <><Loader2 className="w-4 h-4 prism-spinner" /> Calculating...</>
                 ) : (
                   <><ArrowUpDown className="w-4 h-4" /> Calculate Route</>
                 )}
@@ -379,10 +458,14 @@ export default function MultiStopPlanner({
               {routeResult && (
                 <button
                   onClick={resetRoute}
-                  className={`px-3 py-2.5 rounded-lg border ${borderColor} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}`}
+                  className="px-3 py-2 rounded-lg transition-colors"
+                  style={{ 
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-muted)',
+                  }}
                   title="Reset"
                 >
-                  <RotateCcw className={`w-4 h-4 ${mutedText}`} />
+                  <RotateCcw className="w-4 h-4" />
                 </button>
               )}
             </div>
@@ -407,24 +490,23 @@ export default function MultiStopPlanner({
         </div>
       </div>
 
+      {/* Footer */}
       {showBranding && (
-        <div className={`p-3 border-t ${borderColor} ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-          <div className="flex items-center justify-center gap-3">
-            {companyLogo && (
-              <img 
-                src={companyLogo} 
-                alt={companyName || 'Company logo'} 
-                className="h-6 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
-            <span className={`text-xs ${mutedText}`}>
-              {companyName && <span className="font-medium">{companyName} · </span>}
-              Powered by <strong>MapQuest</strong>
-            </span>
-          </div>
+        <div className="prism-footer">
+          {companyLogo && (
+            <img 
+              src={companyLogo} 
+              alt={companyName || 'Company logo'} 
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span>
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by <strong>MapQuest</strong>
+          </span>
         </div>
       )}
     </div>

@@ -19,6 +19,13 @@ interface MapCircle {
   fillOpacity?: number;
 }
 
+interface MapPolygon {
+  coordinates: { lat: number; lng: number }[];
+  color?: string;
+  fillOpacity?: number;
+  strokeWidth?: number;
+}
+
 interface MapQuestMapProps {
   apiKey: string;
   center: { lat: number; lng: number };
@@ -27,6 +34,7 @@ interface MapQuestMapProps {
   accentColor?: string;
   markers?: MapMarker[];
   circles?: MapCircle[];
+  polygons?: MapPolygon[];
   height?: string;
   showRoute?: boolean;
   routeStart?: { lat: number; lng: number };
@@ -56,6 +64,7 @@ export default function MapQuestMap({
   accentColor = '#2563eb',
   markers = [],
   circles = [],
+  polygons = [],
   height = '400px',
   showRoute = false,
   routeStart,
@@ -75,6 +84,7 @@ export default function MapQuestMap({
   const markersLayerRef = useRef<any>(null);
   const routeLayerRef = useRef<any>(null);
   const circlesLayerRef = useRef<any>(null);
+  const polygonsLayerRef = useRef<any>(null);
   const mapIdRef = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
   const [mapReady, setMapReady] = useState(false);
 
@@ -292,6 +302,7 @@ export default function MapQuestMap({
       markersLayerRef.current = L.layerGroup().addTo(map);
       routeLayerRef.current = L.layerGroup().addTo(map);
       circlesLayerRef.current = L.layerGroup().addTo(map);
+      polygonsLayerRef.current = L.layerGroup().addTo(map);
 
       if (onClick) {
         map.on('click', (e: any) => {
@@ -449,6 +460,33 @@ export default function MapQuestMap({
       }).addTo(circlesLayerRef.current);
     });
   }, [circles, accentColor, mapReady]);
+
+  // Update polygons (for isolines)
+  useEffect(() => {
+    if (!polygonsLayerRef.current || !mapReady) return;
+    const L = window.L;
+
+    polygonsLayerRef.current.clearLayers();
+
+    polygons.forEach((polygon) => {
+      const latLngs = polygon.coordinates.map(c => [c.lat, c.lng] as [number, number]);
+      
+      if (latLngs.length > 0) {
+        const poly = L.polygon(latLngs, {
+          color: polygon.color || accentColor,
+          fillColor: polygon.color || accentColor,
+          fillOpacity: polygon.fillOpacity ?? 0.2,
+          weight: polygon.strokeWidth ?? 2,
+          opacity: 0.8,
+        }).addTo(polygonsLayerRef.current);
+
+        // Fit bounds to show the polygon
+        if (mapRef.current) {
+          mapRef.current.fitBounds(poly.getBounds(), { padding: [30, 30] });
+        }
+      }
+    });
+  }, [polygons, accentColor, mapReady]);
 
   // Update route
   useEffect(() => {

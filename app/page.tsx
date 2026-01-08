@@ -11,7 +11,6 @@ import {
   NeighborhoodScore,
   MultiStopPlanner,
   DeliveryETA,
-  IsochroneVisualizer,
   NHLArenaExplorer,
   HereIsolineWidget,
 } from '@/components/widgets';
@@ -25,7 +24,7 @@ const SAMPLE_STORES = [
   { id: '3', name: 'Capitol Hill', address: '789 Broadway', city: 'Seattle', state: 'WA', zip: '98102', lat: 47.6205, lng: -122.3212, phone: '(206) 555-0300', hours: '8am - 10pm' },
 ];
 
-type WidgetId = 'nhl' | 'address' | 'store' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'isochrone' | 'here-isoline';
+type WidgetId = 'nhl' | 'address' | 'store' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'here-isoline';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
@@ -36,7 +35,6 @@ const WIDGETS = [
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', category: 'Bigger Bet' },
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', category: 'Bigger Bet' },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', category: 'Bigger Bet' },
-  { id: 'isochrone' as WidgetId, name: 'Isochrone Visualizer', description: 'Travel time zone visualization', category: 'Bigger Bet' },
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time (HERE API)', category: 'Bigger Bet' },
 ];
 
@@ -131,8 +129,6 @@ export default function Home() {
         return <MultiStopPlanner {...commonProps} />;
       case 'delivery':
         return <DeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
-      case 'isochrone':
-        return <IsochroneVisualizer {...commonProps} />;
       case 'here-isoline':
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
       default:

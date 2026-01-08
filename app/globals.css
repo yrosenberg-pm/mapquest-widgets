@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "../styles/design-tokens.css";
+@import "../styles/widget-base.css";
 
 :root {
   --background: #ffffff;

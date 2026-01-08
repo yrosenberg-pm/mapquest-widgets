@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Loader2, CheckCircle2, XCircle, Navigation } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Navigation, MapPin } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -30,13 +30,12 @@ const DEFAULT_CENTER = { lat: 39.7392, lng: -104.9903 };
 const DEFAULT_RADIUS = 25; // miles
 
 export default function ServiceAreaChecker({
-  accentColor = '#2563eb',
+  accentColor = '#3B82F6',
   darkMode = false,
   showBranding = true,
   companyName,
   companyLogo,
-  fontFamily = 'system-ui, -apple-system, sans-serif',
-  borderRadius = '0.5rem',
+  fontFamily,
   serviceCenter = DEFAULT_CENTER,
   serviceRadiusMiles = DEFAULT_RADIUS,
   validZipCodes,
@@ -53,11 +52,11 @@ export default function ServiceAreaChecker({
   } | null>(null);
   const [clickedPoint, setClickedPoint] = useState<{ lat: number; lng: number } | null>(null);
 
-  const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
+  // Keep Tailwind classes for AddressAutocomplete compatibility
+  const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const inputBg = darkMode ? 'bg-gray-900' : 'bg-gray-50';
 
   // Calculate distance between two points (Haversine formula)
   const getDistanceMiles = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
@@ -181,20 +180,55 @@ export default function ServiceAreaChecker({
   }
 
   return (
-    <div className={`rounded-xl border ${borderColor} overflow-hidden ${bgColor}`} style={{ minWidth: '700px', fontFamily, borderRadius }}>
+    <div 
+      className="prism-widget"
+      data-theme={darkMode ? 'dark' : 'light'}
+      style={{ 
+        minWidth: '700px', 
+        fontFamily: fontFamily || 'var(--brand-font)',
+        '--brand-primary': accentColor,
+      } as React.CSSProperties}
+    >
       {/* Header */}
-      <div className={`px-4 py-3 border-b ${borderColor}`}>
-        <h3 className={`font-semibold ${textColor}`}>Check Service Area</h3>
-        <p className={`text-xs mt-1 ${mutedText}`}>
-          Enter an address or click on the map to check if we deliver to your location
-        </p>
+      <div 
+        className="px-5 py-4"
+        style={{ 
+          borderBottom: '1px solid var(--border-subtle)',
+          background: 'var(--bg-panel)',
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <div 
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{ background: `${accentColor}15` }}
+          >
+            <MapPin className="w-4 h-4" style={{ color: accentColor }} />
+          </div>
+          <div>
+            <h3 
+              className="font-bold"
+              style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
+            >
+              Check Service Area
+            </h3>
+            <p 
+              className="text-xs"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Enter an address or click on the map to check delivery availability
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Content - Side by Side Layout */}
       <div className="flex" style={{ minHeight: '400px' }}>
         {/* Left Panel - Form & Results */}
-        <div className={`w-72 flex-shrink-0 p-4 border-r ${borderColor} flex flex-col`}>
-          <form onSubmit={handleSubmit} className="space-y-3">
+        <div 
+          className="w-72 flex-shrink-0 p-4 flex flex-col"
+          style={{ borderRight: '1px solid var(--border-subtle)' }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-2">
             <AddressAutocomplete
               value={address}
               onChange={setAddress}
@@ -214,12 +248,15 @@ export default function ServiceAreaChecker({
             <button
               type="submit"
               disabled={loading || !address.trim()}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-50 transition-colors"
-              style={{ backgroundColor: accentColor }}
+              className="prism-btn prism-btn-primary w-full"
+              style={{ 
+                background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                boxShadow: `0 4px 12px ${accentColor}40`,
+              }}
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 prism-spinner" />
                   Checking...
                 </>
               ) : (
@@ -233,25 +270,37 @@ export default function ServiceAreaChecker({
 
           {/* Result */}
           {result && (
-            <div className={`mt-4 p-4 rounded-lg ${result.inArea 
-              ? (darkMode ? 'bg-green-900/30 border-green-700' : 'bg-green-50 border-green-200') 
-              : (darkMode ? 'bg-red-900/30 border-red-700' : 'bg-red-50 border-red-200')
-            } border`}>
+            <div 
+              className="mt-3 p-4 rounded-xl"
+              style={{
+                background: result.inArea ? 'var(--color-success-bg)' : 'var(--color-error-bg)',
+                border: `1px solid ${result.inArea ? 'var(--color-success)' : 'var(--color-error)'}20`,
+              }}
+            >
               <div className="flex items-start gap-3">
                 {result.inArea ? (
-                  <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-success)' }} />
                 ) : (
-                  <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-error)' }} />
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className={`font-medium text-sm ${result.inArea ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+                  <div 
+                    className="font-semibold text-sm"
+                    style={{ color: result.inArea ? 'var(--color-success)' : 'var(--color-error)' }}
+                  >
                     {result.inArea ? 'We deliver here!' : 'Outside service area'}
                   </div>
-                  <div className={`text-xs mt-1 ${mutedText} break-words`}>
+                  <div 
+                    className="text-xs mt-1 break-words"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
                     {result.address}
                   </div>
                   {result.distance !== undefined && (
-                    <div className={`text-xs mt-1 ${mutedText}`}>
+                    <div 
+                      className="text-xs mt-1"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
                       {result.distance} miles from service center
                     </div>
                   )}
@@ -261,9 +310,15 @@ export default function ServiceAreaChecker({
           )}
 
           {/* Service Area Info */}
-          <div className={`mt-auto pt-4 text-xs ${mutedText}`}>
+          <div 
+            className="mt-auto pt-4 text-xs"
+            style={{ color: 'var(--text-muted)' }}
+          >
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: accentColor }} />
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: accentColor }} 
+              />
               Service center
             </div>
             <div>Delivery radius: {serviceRadiusMiles} miles</div>
@@ -299,25 +354,23 @@ export default function ServiceAreaChecker({
         </div>
       </div>
 
-      {/* Branding */}
+      {/* Footer / Branding */}
       {showBranding && (
-        <div className={`p-3 border-t ${borderColor} ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-          <div className="flex items-center justify-center gap-3">
-            {companyLogo && (
-              <img 
-                src={companyLogo} 
-                alt={companyName || 'Company logo'} 
-                className="h-6 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
-            <span className={`text-xs ${mutedText}`}>
-              {companyName && <span className="font-medium">{companyName} · </span>}
-              Powered by <strong>MapQuest</strong>
-            </span>
-          </div>
+        <div className="prism-footer">
+          {companyLogo && (
+            <img 
+              src={companyLogo} 
+              alt={companyName || 'Company logo'} 
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span>
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by <strong>MapQuest</strong>
+          </span>
         </div>
       )}
     </div>

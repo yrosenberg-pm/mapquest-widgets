@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -42,13 +42,12 @@ const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 export default function DirectionsEmbed({
   defaultFrom = '',
   defaultTo = '',
-  accentColor = '#2563eb',
+  accentColor = '#3B82F6',
   darkMode = false,
   showBranding = true,
   companyName,
   companyLogo,
-  fontFamily = 'system-ui, -apple-system, sans-serif',
-  borderRadius = '0.5rem',
+  fontFamily,
   onRouteCalculated,
 }: DirectionsEmbedProps) {
   const [from, setFrom] = useState(defaultFrom);
@@ -61,14 +60,11 @@ export default function DirectionsEmbed({
   const [error, setError] = useState<string | null>(null);
   const [stepsExpanded, setStepsExpanded] = useState(false);
 
-  const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
+  // Keep Tailwind classes for AddressAutocomplete compatibility
+  const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const inputBg = darkMode ? 'bg-gray-900' : 'bg-gray-50';
-
-  // Subtle marker color based on theme
-  const markerColor = darkMode ? '#6b7280' : '#4b5563'; // gray-500 / gray-600
 
   const routeTypes = [
     { id: 'fastest' as RouteType, label: 'Drive', icon: Car },
@@ -76,6 +72,8 @@ export default function DirectionsEmbed({
     { id: 'bicycle' as RouteType, label: 'Bike', icon: Bike },
   ];
 
+  // === ALL FUNCTIONAL LOGIC UNCHANGED ===
+  
   const calculateRoute = async () => {
     if (!from.trim() || !to.trim()) {
       setError('Please enter both start and destination');
@@ -86,7 +84,6 @@ export default function DirectionsEmbed({
     setError(null);
 
     try {
-      // Geocode both addresses
       const [fromResult, toResult] = await Promise.all([
         geocode(from),
         geocode(to),
@@ -105,7 +102,6 @@ export default function DirectionsEmbed({
       setFromCoords(fromLoc);
       setToCoords(toLoc);
 
-      // Get directions
       const directions = await getDirections(`${fromLoc.lat},${fromLoc.lng}`, `${toLoc.lat},${toLoc.lng}`, routeType);
 
       if (!directions) {
@@ -141,31 +137,68 @@ export default function DirectionsEmbed({
 
   const mapCenter = fromCoords || toCoords || { lat: 39.8283, lng: -98.5795 };
   
-  // Subtle gray markers instead of bright green/red
   const markers: Array<{ lat: number; lng: number; label: string; color: string }> = [];
-  if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: markerColor });
-  if (toCoords) markers.push({ ...toCoords, label: 'B', color: markerColor });
+  if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: '#64748B' });
+  if (toCoords) markers.push({ ...toCoords, label: 'B', color: '#64748B' });
+
+  // === END FUNCTIONAL LOGIC ===
 
   return (
-    <div className={`rounded-xl border ${borderColor} overflow-hidden ${bgColor}`} style={{ minWidth: '900px', fontFamily, borderRadius }}>
+    <div 
+      className="prism-widget"
+      data-theme={darkMode ? 'dark' : 'light'}
+      style={{ 
+        minWidth: '900px', 
+        fontFamily: fontFamily || 'var(--brand-font)',
+        '--brand-primary': accentColor,
+      } as React.CSSProperties}
+    >
       <div className="flex" style={{ height: '500px' }}>
         {/* Sidebar */}
-        <div className={`w-80 border-r ${borderColor} flex flex-col overflow-hidden`}>
+        <div 
+          className="w-80 flex flex-col overflow-hidden"
+          style={{ borderRight: '1px solid var(--border-subtle)' }}
+        >
           {/* Header */}
-          <div className={`p-4 border-b ${borderColor} flex-shrink-0`}>
+          <div 
+            className="p-5 flex-shrink-0"
+            style={{ 
+              borderBottom: '1px solid var(--border-subtle)',
+              background: 'var(--bg-panel)',
+            }}
+          >
             <div className="flex items-center gap-2">
-              <Navigation className={`w-5 h-5 ${mutedText}`} />
-              <h3 className={`font-semibold ${textColor}`}>Get Directions</h3>
+              <div 
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: `${accentColor}15` }}
+              >
+                <Navigation className="w-4 h-4" style={{ color: accentColor }} />
+              </div>
+              <h3 
+                className="font-bold text-lg"
+                style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
+              >
+                Get Directions
+              </h3>
             </div>
           </div>
 
           {/* Inputs */}
-          <div className={`p-4 border-b ${borderColor} flex-shrink-0`}>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium border ${
-                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-300 text-gray-600'
-                }`}>
+          <div 
+            className="p-5 flex-shrink-0"
+            style={{ borderBottom: '1px solid var(--border-subtle)' }}
+          >
+            <div className="space-y-1">
+              {/* From Input */}
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ 
+                    background: 'var(--bg-panel)',
+                    border: '2px solid var(--border-default)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   A
                 </div>
                 <AddressAutocomplete
@@ -186,10 +219,27 @@ export default function DirectionsEmbed({
                   iconClassName="hidden"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium border ${
-                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-300 text-gray-600'
-                }`}>
+
+              {/* Connection Line */}
+              <div className="flex items-center gap-3">
+                <div className="w-8 flex justify-center">
+                  <div 
+                    className="w-0.5 h-2 rounded-full"
+                    style={{ background: 'var(--border-default)' }}
+                  />
+                </div>
+              </div>
+
+              {/* To Input */}
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ 
+                    background: `${accentColor}15`,
+                    border: `2px solid ${accentColor}`,
+                    color: accentColor,
+                  }}
+                >
                   B
                 </div>
                 <AddressAutocomplete
@@ -213,56 +263,128 @@ export default function DirectionsEmbed({
             </div>
 
             {/* Route Type */}
-            <div className="flex gap-2 mt-4">
-              {routeTypes.map((type) => (
-                <button
-                  key={type.id}
-                  onClick={() => setRouteType(type.id)}
-                  className={`flex-1 flex flex-col items-center gap-1 px-3 py-2 rounded-lg border transition-all ${
-                    routeType === type.id
-                      ? 'border-2 text-white'
-                      : `${borderColor} ${mutedText} hover:border-gray-400`
-                  }`}
-                  style={routeType === type.id ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
-                >
-                  <type.icon className="w-4 h-4" />
-                  <span className="text-xs">{type.label}</span>
-                </button>
-              ))}
+            <div className="flex gap-2 mt-5">
+              {routeTypes.map((type) => {
+                const isActive = routeType === type.id;
+                return (
+                  <button
+                    key={type.id}
+                    onClick={() => setRouteType(type.id)}
+                    className="flex-1 flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl transition-all"
+                    style={{
+                      background: isActive ? accentColor : 'var(--bg-panel)',
+                      color: isActive ? 'white' : 'var(--text-muted)',
+                      border: isActive ? `2px solid ${accentColor}` : '2px solid var(--border-subtle)',
+                      boxShadow: isActive ? `0 4px 12px ${accentColor}30` : 'none',
+                    }}
+                  >
+                    <type.icon className="w-5 h-5" />
+                    <span className="text-xs font-semibold">{type.label}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Calculate Button */}
             <button
               onClick={calculateRoute}
               disabled={loading || !from.trim() || !to.trim()}
-              className="w-full mt-4 py-2.5 px-4 rounded-lg text-white font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-              style={{ backgroundColor: accentColor }}
+              className="prism-btn prism-btn-primary w-full mt-5"
+              style={{ 
+                background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                boxShadow: `0 4px 12px ${accentColor}40`,
+              }}
             >
               {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Calculating...</>
+                <><Loader2 className="w-4 h-4 prism-spinner" /> Calculating...</>
               ) : (
                 <><Navigation className="w-4 h-4" /> Get Directions</>
               )}
             </button>
 
             {error && (
-              <p className="mt-2 text-sm text-red-500">{error}</p>
+              <p 
+                className="mt-3 text-sm font-medium px-3 py-2 rounded-lg"
+                style={{ 
+                  color: 'var(--color-error)', 
+                  background: 'var(--color-error-bg)' 
+                }}
+              >
+                {error}
+              </p>
             )}
           </div>
 
           {/* Route Summary */}
           {route && (
-            <div className={`p-4 border-b ${borderColor} flex-shrink-0`}>
+            <div 
+              className="p-5 flex-shrink-0"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
               <div className="grid grid-cols-2 gap-3">
-                <div className={`p-2 rounded-lg ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-                  <p className={`text-xs ${mutedText}`}>Distance</p>
-                  <p className={`text-lg font-semibold ${textColor}`}>{formatDistance(route.distance)}</p>
+                <div 
+                  className="p-4 rounded-xl text-center"
+                  style={{ background: 'var(--bg-panel)' }}
+                >
+                  <p 
+                    className="text-xs font-medium uppercase tracking-wide mb-1"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Distance
+                  </p>
+                  <p 
+                    className="text-2xl font-bold"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    {formatDistance(route.distance)}
+                  </p>
                 </div>
-                <div className={`p-2 rounded-lg ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-                  <p className={`text-xs ${mutedText}`}>Time</p>
-                  <p className={`text-lg font-semibold ${textColor}`}>{formatTime(route.time)}</p>
+                <div 
+                  className="p-4 rounded-xl text-center"
+                  style={{ background: `${accentColor}10` }}
+                >
+                  <p 
+                    className="text-xs font-medium uppercase tracking-wide mb-1"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Time
+                  </p>
+                  <p 
+                    className="text-2xl font-bold"
+                    style={{ color: accentColor }}
+                  >
+                    {formatTime(route.time)}
+                  </p>
                 </div>
               </div>
+              
+              {/* Route Tags */}
+              {(route.hasTolls || route.hasHighway) && (
+                <div className="flex gap-2 mt-3">
+                  {route.hasHighway && (
+                    <span 
+                      className="text-xs font-medium px-2.5 py-1 rounded-full"
+                      style={{ 
+                        background: 'var(--color-info-bg)', 
+                        color: 'var(--color-info)' 
+                      }}
+                    >
+                      Highway
+                    </span>
+                  )}
+                  {route.hasTolls && (
+                    <span 
+                      className="text-xs font-medium px-2.5 py-1 rounded-full"
+                      style={{ 
+                        background: 'var(--color-warning-bg)', 
+                        color: 'var(--color-warning)' 
+                      }}
+                    >
+                      Tolls
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -271,29 +393,68 @@ export default function DirectionsEmbed({
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <button
                 onClick={() => setStepsExpanded(!stepsExpanded)}
-                className={`flex items-center justify-between px-4 py-3 flex-shrink-0 ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}`}
+                className="flex items-center justify-between px-5 py-4 flex-shrink-0 transition-colors"
+                style={{ background: 'transparent' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
-                <span className={`text-sm font-medium ${textColor}`}>
-                  Turn-by-turn ({route.steps.length} steps)
+                <span 
+                  className="text-sm font-semibold"
+                  style={{ color: 'var(--text-main)' }}
+                >
+                  Turn-by-turn directions
                 </span>
-                {stepsExpanded ? <ChevronUp className={`w-4 h-4 ${mutedText}`} /> : <ChevronDown className={`w-4 h-4 ${mutedText}`} />}
+                <div className="flex items-center gap-2">
+                  <span 
+                    className="text-xs font-medium px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
+                  >
+                    {route.steps.length} steps
+                  </span>
+                  {stepsExpanded ? (
+                    <ChevronUp className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                  )}
+                </div>
               </button>
 
               {stepsExpanded && (
-                <div className={`flex-1 overflow-y-auto border-t ${borderColor}`}>
+                <div 
+                  className="flex-1 overflow-y-auto prism-scrollbar"
+                  style={{ borderTop: '1px solid var(--border-subtle)' }}
+                >
                   {route.steps.map((step, index) => (
-                    <div key={index} className={`flex items-start gap-3 px-4 py-3 border-b last:border-0 ${borderColor}`}>
+                    <div 
+                      key={index} 
+                      className="flex items-start gap-3 px-5 py-4"
+                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                    >
                       <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 border ${
-                          darkMode ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-100 border-gray-300 text-gray-600'
-                        }`}
+                        className="prism-number-badge flex-shrink-0"
+                        style={{ 
+                          width: '24px', 
+                          height: '24px', 
+                          fontSize: '10px',
+                          background: index === 0 ? accentColor : 'var(--text-muted)',
+                        }}
                       >
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className={`text-sm ${textColor}`}>{step.narrative}</div>
-                        <div className={`text-xs mt-0.5 ${mutedText}`}>
-                          {formatDistance(step.distance)} · {formatTime(step.time)}
+                        <div 
+                          className="text-sm"
+                          style={{ color: 'var(--text-main)' }}
+                        >
+                          {step.narrative}
+                        </div>
+                        <div 
+                          className="text-xs mt-1 flex items-center gap-2"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          <span>{formatDistance(step.distance)}</span>
+                          <span>·</span>
+                          <span>{formatTime(step.time)}</span>
                         </div>
                       </div>
                     </div>
@@ -321,24 +482,23 @@ export default function DirectionsEmbed({
         </div>
       </div>
 
+      {/* Footer / Branding */}
       {showBranding && (
-        <div className={`p-3 border-t ${borderColor} ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-          <div className="flex items-center justify-center gap-3">
-            {companyLogo && (
-              <img 
-                src={companyLogo} 
-                alt={companyName || 'Company logo'} 
-                className="h-6 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
-            <span className={`text-xs ${mutedText}`}>
-              {companyName && <span className="font-medium">{companyName} · </span>}
-              Powered by <strong>MapQuest</strong>
-            </span>
-          </div>
+        <div className="prism-footer">
+          {companyLogo && (
+            <img 
+              src={companyLogo} 
+              alt={companyName || 'Company logo'} 
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span>
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by <strong>MapQuest</strong>
+          </span>
         </div>
       )}
     </div>

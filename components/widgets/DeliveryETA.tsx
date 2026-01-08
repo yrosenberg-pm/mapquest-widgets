@@ -45,8 +45,7 @@ export default function DeliveryETA({
   showBranding = true,
   companyName,
   companyLogo,
-  fontFamily = 'system-ui, -apple-system, sans-serif',
-  borderRadius = '0.5rem',
+  fontFamily,
   simulateMovement = true,
 }: DeliveryETAProps) {
   const [status, setStatus] = useState<DeliveryState>({
@@ -54,12 +53,6 @@ export default function DeliveryETA({
     driverName: 'Alex',
   });
   const [loading, setLoading] = useState(true);
-
-  const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
-  const textColor = darkMode ? 'text-white' : 'text-gray-900';
-  const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
-  const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const inactiveColor = darkMode ? '#374151' : '#e5e7eb';
 
   useEffect(() => {
     const initDelivery = async () => {
@@ -151,13 +144,38 @@ export default function DeliveryETA({
   const mapCenter = status.currentLocation || status.destinationLocation || { lat: 39.7392, lng: -104.9903 };
 
   return (
-    <div className={`rounded-xl border ${borderColor} overflow-hidden ${bgColor}`} style={{ minWidth: '550px', fontFamily, borderRadius }}>
-      <div className={`px-4 py-3 border-b ${borderColor} flex items-center justify-between`}>
+    <div 
+      className="prism-widget"
+      data-theme={darkMode ? 'dark' : 'light'}
+      style={{ 
+        minWidth: '550px', 
+        fontFamily: fontFamily || 'var(--brand-font)',
+        '--brand-primary': accentColor,
+      } as React.CSSProperties}
+    >
+      {/* Header */}
+      <div 
+        className="px-4 py-3 flex items-center justify-between"
+        style={{ borderBottom: '1px solid var(--border-subtle)' }}
+      >
         <div>
-          <h3 className={`font-semibold ${textColor}`}>Order {orderId}</h3>
-          <p className={`text-xs ${mutedText}`}>Live tracking</p>
+          <h3 
+            className="font-semibold"
+            style={{ color: 'var(--text-main)' }}
+          >
+            Order {orderId}
+          </h3>
+          <p 
+            className="text-xs"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Live tracking
+          </p>
         </div>
-        <div className={`text-xs ${mutedText} flex items-center gap-1`}>
+        <div 
+          className="text-xs flex items-center gap-1"
+          style={{ color: 'var(--text-muted)' }}
+        >
           <RefreshCw className="w-3 h-3" />
           {status.lastUpdate && `Updated ${status.lastUpdate.toLocaleTimeString()}`}
         </div>
@@ -165,54 +183,82 @@ export default function DeliveryETA({
 
       {loading ? (
         <div className="h-64 flex items-center justify-center">
-          <Loader2 className={`w-8 h-8 animate-spin ${mutedText}`} />
+          <Loader2 className="w-8 h-8 prism-spinner" style={{ color: 'var(--text-muted)' }} />
         </div>
       ) : (
         <>
-          <div className="px-4 py-3 flex items-center gap-3" style={{ backgroundColor: statusInfo.color + '15' }}>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: statusInfo.color + '25' }}>
+          {/* Status Banner */}
+          <div 
+            className="px-4 py-3 flex items-center gap-3"
+            style={{ backgroundColor: statusInfo.color + '15' }}
+          >
+            <div 
+              className="w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: statusInfo.color + '25' }}
+            >
               <StatusIcon className="w-5 h-5" style={{ color: statusInfo.color }} />
             </div>
             <div className="flex-1">
-              <div className={`font-medium ${textColor}`}>{statusInfo.text}</div>
+              <div 
+                className="font-medium"
+                style={{ color: 'var(--text-main)' }}
+              >
+                {statusInfo.text}
+              </div>
               {status.etaMinutes !== undefined && status.status !== 'delivered' && (
-                <div className={`text-sm ${mutedText}`}>{status.etaMinutes} min away · {status.distanceMiles?.toFixed(1)} miles</div>
+                <div 
+                  className="text-sm"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  {status.etaMinutes} min away · {status.distanceMiles?.toFixed(1)} miles
+                </div>
               )}
             </div>
             {status.status !== 'delivered' && status.etaMinutes !== undefined && (
               <div className="text-right">
                 <div className="text-2xl font-bold" style={{ color: statusInfo.color }}>{status.etaMinutes}</div>
-                <div className={`text-xs ${mutedText}`}>min</div>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>min</div>
               </div>
             )}
           </div>
 
-          <div className={`px-6 py-4 border-t ${borderColor}`}>
+          {/* Progress Bar */}
+          <div 
+            className="px-5 py-3"
+            style={{ borderTop: '1px solid var(--border-subtle)' }}
+          >
             <div className="relative h-3">
-              <div className="absolute top-1/2 left-0 right-0 h-1 -translate-y-1/2 rounded-full" style={{ backgroundColor: inactiveColor }} />
-              <div className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full transition-all duration-500" style={{ backgroundColor: accentColor, width: `${progressPercent}%` }} />
+              <div 
+                className="absolute top-1/2 left-0 right-0 h-1 -translate-y-1/2 rounded-full"
+                style={{ backgroundColor: 'var(--border-default)' }}
+              />
+              <div 
+                className="absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full transition-all duration-500"
+                style={{ backgroundColor: accentColor, width: `${progressPercent}%` }}
+              />
               <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 flex justify-between">
                 {steps.map((step, index) => (
                   <div
                     key={step}
                     className="w-3 h-3 rounded-full"
                     style={{
-                      backgroundColor: index <= currentIndex ? accentColor : inactiveColor,
+                      backgroundColor: index <= currentIndex ? accentColor : 'var(--border-default)',
                       boxShadow: index === currentIndex ? `0 0 0 4px ${accentColor}30` : undefined,
                     }}
                   />
                 ))}
               </div>
             </div>
-            <div className="flex justify-between mt-3">
-              <span className={`text-xs ${mutedText}`}>Preparing</span>
-              <span className={`text-xs ${mutedText}`}>On the way</span>
-              <span className={`text-xs ${mutedText}`}>Nearby</span>
-              <span className={`text-xs ${mutedText}`}>Delivered</span>
+            <div className="flex justify-between mt-2">
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Preparing</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>On the way</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Nearby</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Delivered</span>
             </div>
           </div>
 
-          <div className={`border-t ${borderColor}`} style={{ height: '300px' }}>
+          {/* Map */}
+          <div style={{ borderTop: '1px solid var(--border-subtle)', height: '280px' }}>
             <MapQuestMap
               apiKey={apiKey}
               center={mapCenter}
@@ -230,24 +276,23 @@ export default function DeliveryETA({
         </>
       )}
 
+      {/* Footer */}
       {showBranding && (
-        <div className={`p-3 border-t ${borderColor} ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-          <div className="flex items-center justify-center gap-3">
-            {companyLogo && (
-              <img 
-                src={companyLogo} 
-                alt={companyName || 'Company logo'} 
-                className="h-6 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
-            <span className={`text-xs ${mutedText}`}>
-              {companyName && <span className="font-medium">{companyName} · </span>}
-              Powered by <strong>MapQuest</strong>
-            </span>
-          </div>
+        <div className="prism-footer">
+          {companyLogo && (
+            <img 
+              src={companyLogo} 
+              alt={companyName || 'Company logo'} 
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span>
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by <strong>MapQuest</strong>
+          </span>
         </div>
       )}
     </div>

@@ -1,0 +1,127 @@
+/* Prism Design System - Design Tokens */
+/* MapQuest Widget Design System v1.0 */
+
+:root {
+  /* ========================================
+     Surface & Elevation - More pronounced
+     ======================================== */
+  --widget-radius: 16px;
+  --panel-radius: 12px;
+  --button-radius: 10px;
+  --input-radius: 10px;
+  
+  --elevation-none: none;
+  --elevation-low: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --elevation-medium: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --elevation-high: 0 16px 48px rgba(0, 0, 0, 0.16);
+  
+  /* ========================================
+     Brand Variables (Client Overridable)
+     ======================================== */
+  --brand-primary: #3B82F6;
+  --brand-primary-hover: #2563EB;
+  --brand-primary-active: #1D4ED8;
+  --brand-font: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  /* ========================================
+     Light Theme - Refined palette
+     ======================================== */
+  --bg-widget: #FFFFFF;
+  --bg-panel: #F8FAFC;
+  --bg-input: #F1F5F9;
+  --bg-hover: rgba(59, 130, 246, 0.06);
+  --bg-active: rgba(59, 130, 246, 0.12);
+  
+  --text-main: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --text-inverse: #FFFFFF;
+  
+  --border-subtle: #E2E8F0;
+  --border-default: #CBD5E1;
+  --border-strong: #94A3B8;
+  
+  /* ========================================
+     Feedback Colors - Vibrant
+     ======================================== */
+  --color-success: #10B981;
+  --color-success-bg: rgba(16, 185, 129, 0.12);
+  --color-warning: #F59E0B;
+  --color-warning-bg: rgba(245, 158, 11, 0.12);
+  --color-error: #EF4444;
+  --color-error-bg: rgba(239, 68, 68, 0.12);
+  --color-info: #3B82F6;
+  --color-info-bg: rgba(59, 130, 246, 0.12);
+  
+  /* ========================================
+     Spacing Scale
+     ======================================== */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  
+  /* ========================================
+     Typography Scale
+     ======================================== */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  
+  /* ========================================
+     Transitions
+     ======================================== */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  
+  /* ========================================
+     Z-Index Scale
+     ======================================== */
+  --z-base: 1;
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-overlay: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+}
+
+/* ========================================
+   Dark Theme - Rich dark palette
+   ======================================== */
+[data-theme='dark'],
+.dark-theme {
+  --bg-widget: #0F172A;
+  --bg-panel: #1E293B;
+  --bg-input: #334155;
+  --bg-hover: rgba(59, 130, 246, 0.12);
+  --bg-active: rgba(59, 130, 246, 0.2);
+  
+  --text-main: #F8FAFC;
+  --text-secondary: #E2E8F0;
+  --text-muted: #94A3B8;
+  --text-inverse: #FFFFFF;
+  
+  --border-subtle: #334155;
+  --border-default: #475569;
+  --border-strong: #94A3B8;
+  
+  --elevation-low: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --elevation-medium: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --elevation-high: 0 16px 48px rgba(0, 0, 0, 0.6);
+  
+  --color-success-bg: rgba(16, 185, 129, 0.2);
+  --color-warning-bg: rgba(245, 158, 11, 0.2);
+  --color-error-bg: rgba(239, 68, 68, 0.2);
+  --color-info-bg: rgba(59, 130, 246, 0.2);
+}

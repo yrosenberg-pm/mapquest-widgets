@@ -1,0 +1,403 @@
+/* Prism Design System - Widget Base Styles */
+/* Shared styles for all MapQuest widgets */
+
+/* ========================================
+   Widget Container - Prominent card style
+   ======================================== */
+.prism-widget {
+  font-family: var(--brand-font);
+  background: var(--bg-widget);
+  border-radius: var(--widget-radius);
+  box-shadow: var(--elevation-high);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  color: var(--text-main);
+  transition: box-shadow var(--transition-base);
+}
+
+.prism-widget * {
+  box-sizing: border-box;
+}
+
+/* ========================================
+   Panel Styles - Subtle backgrounds
+   ======================================== */
+.prism-panel {
+  background: var(--bg-panel);
+  border-radius: var(--panel-radius);
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-lg);
+}
+
+.prism-panel-floating {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--panel-radius);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--elevation-medium);
+}
+
+[data-theme='dark'] .prism-panel-floating,
+.dark-theme .prism-panel-floating {
+  background: rgba(30, 41, 59, 0.9);
+}
+
+/* ========================================
+   Button Styles - Modern with gradients
+   ======================================== */
+.prism-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  height: 44px;
+  padding: 0 var(--space-xl);
+  border-radius: var(--button-radius);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  border: none;
+  outline: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.prism-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.prism-btn:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+/* Primary Button - Gradient effect */
+.prism-btn-primary {
+  background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-primary-hover) 100%);
+  color: var(--text-inverse);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.prism-btn-primary:not(:disabled):hover {
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+.prism-btn-primary:not(:disabled):active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* Secondary/Ghost Button */
+.prism-btn-secondary {
+  background: transparent;
+  color: var(--brand-primary);
+  border: 2px solid var(--brand-primary);
+}
+
+.prism-btn-secondary:not(:disabled):hover {
+  background: var(--color-info-bg);
+}
+
+/* Ghost Button (no border) */
+.prism-btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.prism-btn-ghost:not(:disabled):hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+/* Icon Button */
+.prism-btn-icon {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: var(--button-radius);
+}
+
+/* Small Button */
+.prism-btn-sm {
+  height: 36px;
+  padding: 0 var(--space-lg);
+  font-size: var(--text-xs);
+}
+
+/* ========================================
+   Input Styles - Clean with focus ring
+   ======================================== */
+.prism-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--space-lg);
+  background: var(--bg-input);
+  border: 2px solid transparent;
+  border-radius: var(--input-radius);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  color: var(--text-main);
+  transition: all var(--transition-fast);
+  outline: none;
+}
+
+.prism-input::placeholder {
+  color: var(--text-muted);
+}
+
+.prism-input:hover {
+  background: var(--bg-panel);
+}
+
+.prism-input:focus {
+  background: var(--bg-widget);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 4px var(--color-info-bg);
+}
+
+/* ========================================
+   Typography
+   ======================================== */
+.prism-text-main {
+  color: var(--text-main);
+}
+
+.prism-text-secondary {
+  color: var(--text-secondary);
+}
+
+.prism-text-muted {
+  color: var(--text-muted);
+}
+
+.prism-heading {
+  font-weight: var(--font-semibold);
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.prism-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+/* ========================================
+   Dividers
+   ======================================== */
+.prism-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  border: none;
+  margin: var(--space-lg) 0;
+}
+
+.prism-divider-vertical {
+  width: 1px;
+  height: 100%;
+  background: var(--border-subtle);
+}
+
+/* ========================================
+   Status Indicators / Badges
+   ======================================== */
+.prism-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 6px 12px;
+  border-radius: 100px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.prism-badge-success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.prism-badge-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.prism-badge-error {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.prism-badge-info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+/* ========================================
+   Loading States
+   ======================================== */
+.prism-spinner {
+  animation: prism-spin 0.8s linear infinite;
+}
+
+@keyframes prism-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.prism-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-panel) 25%,
+    var(--bg-input) 50%,
+    var(--bg-panel) 75%
+  );
+  background-size: 200% 100%;
+  animation: prism-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--panel-radius);
+}
+
+@keyframes prism-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ========================================
+   Scrollbar Styling - Minimal
+   ======================================== */
+.prism-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.prism-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.prism-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.prism-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+.prism-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* ========================================
+   Widget Header
+   ======================================== */
+.prism-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-lg) var(--space-xl);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-panel);
+}
+
+.prism-header-logo {
+  max-height: 32px;
+  width: auto;
+  object-fit: contain;
+}
+
+.prism-header-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+/* ========================================
+   Widget Footer / Branding - Refined
+   ======================================== */
+.prism-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.prism-footer-logo {
+  height: 20px;
+  width: auto;
+  object-fit: contain;
+  opacity: 0.8;
+}
+
+/* ========================================
+   Store/Result List Items
+   ======================================== */
+.prism-list-item {
+  padding: var(--space-lg);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--transition-fast);
+  cursor: pointer;
+}
+
+.prism-list-item:hover {
+  background: var(--bg-hover);
+}
+
+.prism-list-item-selected {
+  background: var(--color-info-bg);
+}
+
+.prism-list-item-selected:hover {
+  background: var(--color-info-bg);
+}
+
+/* ========================================
+   Number Badge (for list items)
+   ======================================== */
+.prism-number-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  color: var(--text-inverse);
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.prism-number-badge-active {
+  background: var(--brand-primary);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* ========================================
+   Responsive - Mobile Bottom Sheet
+   ======================================== */
+@media (max-width: 480px) {
+  .prism-widget {
+    border-radius: var(--widget-radius) var(--widget-radius) 0 0;
+  }
+  
+  .prism-panel-mobile-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: var(--widget-radius) var(--widget-radius) 0 0;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+}

@@ -37,13 +37,12 @@ interface StoreLocatorProps {
 export default function StoreLocator({
   stores,
   apiKey,
-  accentColor = '#2563eb',
+  accentColor = '#3B82F6',
   darkMode = false,
   showBranding = true,
   companyName,
   companyLogo,
-  fontFamily = 'system-ui, -apple-system, sans-serif',
-  borderRadius = '0.5rem',
+  fontFamily,
   maxResults = 10,
   onStoreSelect,
 }: StoreLocatorProps) {
@@ -54,12 +53,14 @@ export default function StoreLocator({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
+  // Keep Tailwind classes for AddressAutocomplete compatibility
+  const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
 
+  // === ALL FUNCTIONAL LOGIC UNCHANGED BELOW ===
+  
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
     const R = 3959;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -152,20 +153,42 @@ export default function StoreLocator({
       lng: store.lng,
       title: store.name,
       label: String(idx + 1),
-      color: selectedStore?.id === store.id ? accentColor : '#6b7280',
+      color: selectedStore?.id === store.id ? accentColor : '#64748B',
     })),
   ];
 
+  // === END FUNCTIONAL LOGIC ===
+
   return (
     <div 
-      className={`rounded-xl border ${borderColor} overflow-hidden ${bgColor}`} 
-      style={{ minWidth: '900px', fontFamily, borderRadius }}
+      className="prism-widget"
+      data-theme={darkMode ? 'dark' : 'light'}
+      style={{ 
+        minWidth: '900px', 
+        fontFamily: fontFamily || 'var(--brand-font)',
+        '--brand-primary': accentColor,
+      } as React.CSSProperties}
     >
       <div className="flex" style={{ height: '500px' }}>
         {/* Left Panel */}
-        <div className={`w-80 flex flex-col border-r ${borderColor}`}>
-          {/* Search */}
-          <div className={`p-4 border-b ${borderColor}`}>
+        <div 
+          className="w-80 flex flex-col"
+          style={{ borderRight: '1px solid var(--border-subtle)' }}
+        >
+          {/* Search Header */}
+          <div 
+            className="p-5"
+            style={{ 
+              borderBottom: '1px solid var(--border-subtle)',
+              background: 'var(--bg-panel)',
+            }}
+          >
+            <h3 
+              className="text-lg font-bold mb-3"
+              style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
+            >
+              Find a Store
+            </h3>
             <AddressAutocomplete
               value={searchQuery}
               onChange={setSearchQuery}
@@ -181,95 +204,176 @@ export default function StoreLocator({
               textColor={textColor}
               mutedText={mutedText}
               borderColor={borderColor}
-              style={{ borderRadius }}
             />
             <button
               onClick={searchLocation}
               disabled={loading || !searchQuery.trim()}
-              className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-              style={{ backgroundColor: accentColor, borderRadius }}
+              className="prism-btn prism-btn-primary w-full mt-4"
+              style={{ 
+                '--brand-primary': accentColor,
+                background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                boxShadow: `0 4px 12px ${accentColor}40`,
+              } as React.CSSProperties}
             >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              {loading ? <Loader2 className="w-4 h-4 prism-spinner" /> : <Search className="w-4 h-4" />}
               {loading ? 'Searching...' : 'Find Stores'}
             </button>
-            {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+            {error && (
+              <p 
+                className="mt-3 text-sm font-medium px-3 py-2 rounded-lg"
+                style={{ 
+                  color: 'var(--color-error)', 
+                  background: 'var(--color-error-bg)' 
+                }}
+              >
+                {error}
+              </p>
+            )}
           </div>
 
           {/* Results */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto prism-scrollbar">
             {nearbyStores.length === 0 && !loading && (
-              <div className={`p-4 text-center ${mutedText} text-sm`}>
+              <div 
+                className="p-6 text-center text-sm"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <div 
+                  className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center"
+                  style={{ background: 'var(--bg-panel)' }}
+                >
+                  <Search className="w-5 h-5" style={{ color: 'var(--text-muted)' }} />
+                </div>
                 Enter your location to find nearby stores
               </div>
             )}
-            {nearbyStores.map((store, idx) => (
-              <button
-                key={store.id}
-                onClick={() => handleStoreSelect(store)}
-                className={`w-full p-4 text-left border-b ${borderColor} transition-colors ${
-                  selectedStore?.id === store.id 
-                    ? darkMode ? 'bg-gray-700' : 'bg-blue-50'
-                    : darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div 
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                    style={{ backgroundColor: selectedStore?.id === store.id ? accentColor : '#6b7280' }}
-                  >
-                    {idx + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className={`font-medium ${textColor}`}>{store.name}</div>
-                    <div className={`text-sm ${mutedText}`}>{store.address}</div>
-                    <div className={`text-sm ${mutedText}`}>{store.city}, {store.state} {store.zip}</div>
-                    <div className="flex items-center gap-3 mt-1">
-                      {store.distance !== undefined && (
-                        <span className={`text-xs ${mutedText}`}>
-                          {store.distance.toFixed(1)} mi
-                        </span>
-                      )}
-                      {store.duration !== undefined && store.duration !== null && (
-                        <span className={`text-xs font-medium`} style={{ color: accentColor }}>
-                          {store.duration} min drive
-                        </span>
-                      )}
+            {nearbyStores.map((store, idx) => {
+              const isSelected = selectedStore?.id === store.id;
+              return (
+                <button
+                  key={store.id}
+                  onClick={() => handleStoreSelect(store)}
+                  className={`prism-list-item w-full text-left ${isSelected ? 'prism-list-item-selected' : ''}`}
+                  style={{
+                    padding: '16px 20px',
+                    borderBottom: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div 
+                      className={`prism-number-badge ${isSelected ? 'prism-number-badge-active' : ''}`}
+                      style={isSelected ? { 
+                        background: accentColor,
+                        boxShadow: `0 2px 8px ${accentColor}40`,
+                      } : {}}
+                    >
+                      {idx + 1}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div 
+                        className="font-semibold"
+                        style={{ color: 'var(--text-main)' }}
+                      >
+                        {store.name}
+                      </div>
+                      <div 
+                        className="text-sm mt-0.5"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        {store.address}
+                      </div>
+                      <div 
+                        className="text-sm"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        {store.city}, {store.state} {store.zip}
+                      </div>
+                      <div className="flex items-center gap-3 mt-2">
+                        {store.distance !== undefined && (
+                          <span 
+                            className="text-xs font-medium px-2 py-1 rounded-full"
+                            style={{ 
+                              color: 'var(--text-secondary)',
+                              background: 'var(--bg-panel)',
+                            }}
+                          >
+                            {store.distance.toFixed(1)} mi
+                          </span>
+                        )}
+                        {store.duration !== undefined && store.duration !== null && (
+                          <span 
+                            className="text-xs font-semibold px-2 py-1 rounded-full"
+                            style={{ 
+                              color: accentColor,
+                              background: `${accentColor}15`,
+                            }}
+                          >
+                            {store.duration} min drive
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight 
+                      className="w-5 h-5 flex-shrink-0 mt-1"
+                      style={{ color: isSelected ? accentColor : 'var(--text-muted)' }}
+                    />
                   </div>
-                  <ChevronRight className={`w-4 h-4 ${mutedText} flex-shrink-0`} />
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
 
           {/* Selected Store Details */}
           {selectedStore && (
-            <div className={`p-4 border-t ${borderColor} ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
-              <div className="flex items-start justify-between mb-2">
-                <div className={`font-medium ${textColor}`}>{selectedStore.name}</div>
-                <button onClick={() => setSelectedStore(null)} className={mutedText}>
-                  <X className="w-4 h-4" />
+            <div 
+              className="p-5"
+              style={{ 
+                borderTop: '1px solid var(--border-subtle)',
+                background: 'var(--bg-panel)',
+              }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div 
+                  className="font-bold text-base"
+                  style={{ color: 'var(--text-main)' }}
+                >
+                  {selectedStore.name}
+                </div>
+                <button 
+                  onClick={() => setSelectedStore(null)}
+                  className="p-1.5 rounded-lg transition-colors"
+                  style={{ background: 'var(--bg-input)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
+                >
+                  <X className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                 </button>
               </div>
-              <div className={`text-sm ${mutedText} space-y-1`}>
+              <div 
+                className="text-sm space-y-1.5"
+                style={{ color: 'var(--text-secondary)' }}
+              >
                 <div>{selectedStore.address}</div>
                 <div>{selectedStore.city}, {selectedStore.state} {selectedStore.zip}</div>
                 {selectedStore.phone && (
-                  <div className="flex items-center gap-1">
-                    <Phone className="w-3 h-3" />
-                    {selectedStore.phone}
+                  <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                    <Phone className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                    <span className="font-medium">{selectedStore.phone}</span>
                   </div>
                 )}
                 {selectedStore.hours && (
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {selectedStore.hours}
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                    <span>{selectedStore.hours}</span>
                   </div>
                 )}
               </div>
               <button
-                className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium"
-                style={{ backgroundColor: accentColor, borderRadius }}
+                className="prism-btn prism-btn-primary w-full mt-4"
+                style={{ 
+                  background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                  boxShadow: `0 4px 12px ${accentColor}40`,
+                }}
                 onClick={() => {
                   window.open(
                     `https://www.mapquest.com/directions/to/${selectedStore.lat},${selectedStore.lng}`,
@@ -298,24 +402,23 @@ export default function StoreLocator({
         </div>
       </div>
 
+      {/* Footer / Branding */}
       {showBranding && (
-        <div className={`p-3 border-t ${borderColor} ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
-          <div className="flex items-center justify-center gap-3">
-            {companyLogo && (
-              <img 
-                src={companyLogo} 
-                alt={companyName || 'Company logo'} 
-                className="h-6 object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
-            <span className={`text-xs ${mutedText}`}>
-              {companyName && <span className="font-medium">{companyName} · </span>}
-              Powered by <strong>MapQuest</strong>
-            </span>
-          </div>
+        <div className="prism-footer">
+          {companyLogo && (
+            <img 
+              src={companyLogo} 
+              alt={companyName || 'Company logo'} 
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span>
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by <strong>MapQuest</strong>
+          </span>
         </div>
       )}
     </div>
