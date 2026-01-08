@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Utensils, ParkingCircle, Cloud, Sun, CloudRain, Snowflake, Navigation, Search, Droplets, Wind, Star, Sparkles, ExternalLink, Hotel, Car, Bike, PersonStanding, Train } from 'lucide-react';
+import { Utensils, ParkingCircle, Cloud, Sun, CloudRain, Snowflake, Navigation, Search, Droplets, Wind, Star, ExternalLink, Hotel, Car, Bike, PersonStanding, Train } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 
@@ -1079,15 +1079,6 @@ export default function NHLArenaExplorer({
                 )}
               </div>
 
-              {/* Footer */}
-              {showBranding && (
-                <div className="prism-footer">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-3.5 h-3.5 text-orange-400" />
-                    <span>Powered by <strong>MapQuest</strong></span>
-                  </div>
-                </div>
-              )}
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center">
@@ -1111,6 +1102,13 @@ export default function NHLArenaExplorer({
                   Choose a team to explore
                 </p>
               </div>
+            </div>
+          )}
+          
+          {/* Footer - always visible */}
+          {showBranding && (
+            <div className="prism-footer">
+              <span>Powered by <strong>MapQuest</strong></span>
             </div>
           )}
         </div>
