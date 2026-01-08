@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import { Navigation, Car, Bike, PersonStanding, Train, Loader2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -22,7 +22,7 @@ interface RouteInfo {
   steps: RouteStep[];
 }
 
-type RouteType = 'fastest' | 'shortest' | 'pedestrian' | 'bicycle';
+type RouteType = 'fastest' | 'shortest' | 'pedestrian' | 'bicycle' | 'transit';
 
 interface DirectionsEmbedProps {
   defaultFrom?: string;
@@ -59,6 +59,57 @@ export default function DirectionsEmbed({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stepsExpanded, setStepsExpanded] = useState(false);
+  const [transitPolyline, setTransitPolyline] = useState<{ lat: number; lng: number }[]>([]);
+  const [transitSteps, setTransitSteps] = useState<{ type: string; instruction: string; duration: string; lineName?: string }[]>([]);
+  const [transitSegments, setTransitSegments] = useState<{ type: string; coords: { lat: number; lng: number }[] }[]>([]);
+  const [transitRouteInfo, setTransitRouteInfo] = useState<{ distance: string; duration: string; mode: string } | null>(null);
+
+  // HERE Flexible Polyline decoder
+  const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
+    const DECODING_TABLE: Record<string, number> = {};
+    const ENCODING_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    for (let i = 0; i < ENCODING_CHARS.length; i++) {
+      DECODING_TABLE[ENCODING_CHARS[i]] = i;
+    }
+    
+    const result: { lat: number; lng: number }[] = [];
+    let index = 0;
+    let lat = 0;
+    let lng = 0;
+    
+    // Skip header byte
+    index++;
+    
+    while (index < encoded.length) {
+      // Decode latitude
+      let shift = 0;
+      let value = 0;
+      while (index < encoded.length) {
+        const char = encoded[index++];
+        const num = DECODING_TABLE[char] || 0;
+        value |= (num & 0x1F) << shift;
+        shift += 5;
+        if (num < 32) break;
+      }
+      lat += (value & 1) ? ~(value >> 1) : (value >> 1);
+      
+      // Decode longitude
+      shift = 0;
+      value = 0;
+      while (index < encoded.length) {
+        const char = encoded[index++];
+        const num = DECODING_TABLE[char] || 0;
+        value |= (num & 0x1F) << shift;
+        shift += 5;
+        if (num < 32) break;
+      }
+      lng += (value & 1) ? ~(value >> 1) : (value >> 1);
+      
+      result.push({ lat: lat / 1e5, lng: lng / 1e5 });
+    }
+    
+    return result;
+  };
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -70,6 +121,7 @@ export default function DirectionsEmbed({
     { id: 'fastest' as RouteType, label: 'Drive', icon: Car },
     { id: 'pedestrian' as RouteType, label: 'Walk', icon: PersonStanding },
     { id: 'bicycle' as RouteType, label: 'Bike', icon: Bike },
+    { id: 'transit' as RouteType, label: 'Transit', icon: Train },
   ];
 
   // === ALL FUNCTIONAL LOGIC UNCHANGED ===
@@ -82,6 +134,10 @@ export default function DirectionsEmbed({
 
     setLoading(true);
     setError(null);
+    setTransitPolyline([]);
+    setTransitSteps([]);
+    setTransitSegments([]);
+    setTransitRouteInfo(null);
 
     try {
       const [fromResult, toResult] = await Promise.all([
@@ -102,26 +158,138 @@ export default function DirectionsEmbed({
       setFromCoords(fromLoc);
       setToCoords(toLoc);
 
-      const directions = await getDirections(`${fromLoc.lat},${fromLoc.lng}`, `${toLoc.lat},${toLoc.lng}`, routeType);
+      if (routeType === 'transit') {
+        // Use HERE Public Transit API
+        const hereRes = await fetch('/api/here?' + new URLSearchParams({
+          endpoint: 'transit',
+          origin: `${fromLoc.lat},${fromLoc.lng}`,
+          destination: `${toLoc.lat},${toLoc.lng}`,
+          departureTime: new Date().toISOString(),
+        }));
+        const hereData = await hereRes.json();
+        
+        if (hereData.error) {
+          throw new Error(hereData.details || 'Transit routing failed');
+        }
+        
+        if (hereData.routes && hereData.routes.length > 0) {
+          const route = hereData.routes[0];
+          const sections = route.sections || [];
+          
+          let totalDistance = 0;
+          let totalDuration = 0;
+          const transitModes: string[] = [];
+          const transitLines: string[] = [];
+          const steps: { type: string; instruction: string; duration: string; lineName?: string }[] = [];
+          const segments: { type: string; coords: { lat: number; lng: number }[] }[] = [];
+          
+          // Mode name mapping
+          const modeNameMap: Record<string, string> = {
+            'pedestrian': 'Walk',
+            'subway': 'Subway',
+            'bus': 'Bus',
+            'tram': 'Tram',
+            'rail': 'Train',
+            'ferry': 'Ferry',
+            'lightRail': 'Light Rail',
+            'intercityRail': 'Train',
+            'highSpeedTrain': 'Train',
+            'monorail': 'Monorail',
+          };
+          
+          for (const section of sections) {
+            if (section.travelSummary) {
+              totalDistance += section.travelSummary.length || 0;
+              totalDuration += section.travelSummary.duration || 0;
+            }
+            
+            const sectionType = section.transport?.mode || section.type || 'unknown';
+            if (sectionType !== 'pedestrian' && sectionType !== 'unknown') {
+              transitModes.push(sectionType);
+            }
+            
+            const lineName = section.transport?.name || section.transport?.shortName || section.transport?.headsign;
+            if (lineName) {
+              transitLines.push(lineName);
+            }
+            
+            // Build step instruction
+            const modeName = modeNameMap[sectionType] || sectionType;
+            let instruction = '';
+            if (sectionType === 'pedestrian') {
+              const walkDist = section.travelSummary?.length ? (section.travelSummary.length * 0.000621371).toFixed(2) : '?';
+              instruction = `Walk ${walkDist} mi`;
+            } else if (lineName) {
+              instruction = `Take ${lineName}`;
+            } else {
+              instruction = `Take ${modeName}`;
+            }
+            
+            const durationMins = section.travelSummary?.duration ? Math.round(section.travelSummary.duration / 60) : 0;
+            steps.push({
+              type: sectionType,
+              instruction,
+              duration: durationMins > 0 ? `${durationMins} min` : '',
+              lineName,
+            });
+            
+            // Decode polyline for this section
+            if (section.polyline) {
+              const coords = decodeFlexiblePolyline(section.polyline);
+              if (coords.length > 0) {
+                segments.push({ type: sectionType, coords });
+              }
+            }
+          }
+          
+          // Build mode description
+          const uniqueModes = [...new Set(transitModes)];
+          const uniqueLines = [...new Set(transitLines)];
+          
+          let modeDescription = 'Transit';
+          if (uniqueModes.length > 0) {
+            const modeNames = uniqueModes.map(m => modeNameMap[m] || m);
+            modeDescription = modeNames.join(' + ');
+            if (uniqueLines.length > 0 && uniqueLines.length <= 2) {
+              modeDescription += ` (${uniqueLines.join(', ')})`;
+            }
+          }
+          
+          setTransitSegments(segments);
+          setTransitSteps(steps);
+          setTransitRouteInfo({
+            distance: (totalDistance * 0.000621371).toFixed(1) + ' mi',
+            duration: Math.round(totalDuration / 60) + ' min',
+            mode: modeDescription,
+          });
+          setRoute(null); // Clear MapQuest route
+        } else {
+          throw new Error('No transit route found for this trip');
+        }
+      } else {
+        // Use MapQuest for other route types
+        const directions = await getDirections(`${fromLoc.lat},${fromLoc.lng}`, `${toLoc.lat},${toLoc.lng}`, routeType);
 
-      if (!directions) {
-        throw new Error('Could not calculate route');
+        if (!directions) {
+          throw new Error('Could not calculate route');
+        }
+
+        const routeInfo: RouteInfo = {
+          distance: directions.distance,
+          time: directions.time,
+          fuelUsed: directions.fuelUsed,
+          hasTolls: directions.hasTolls,
+          hasHighway: directions.hasHighway,
+          steps: directions.steps || [],
+        };
+
+        setRoute(routeInfo);
+        onRouteCalculated?.(routeInfo);
       }
-
-      const routeInfo: RouteInfo = {
-        distance: directions.distance,
-        time: directions.time,
-        fuelUsed: directions.fuelUsed,
-        hasTolls: directions.hasTolls,
-        hasHighway: directions.hasHighway,
-        steps: directions.steps || [],
-      };
-
-      setRoute(routeInfo);
-      onRouteCalculated?.(routeInfo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to calculate route');
       setRoute(null);
+      setTransitRouteInfo(null);
     } finally {
       setLoading(false);
     }
@@ -388,6 +556,155 @@ export default function DirectionsEmbed({
             </div>
           )}
 
+          {/* Transit Route Summary */}
+          {transitRouteInfo && (
+            <div 
+              className="p-5 flex-shrink-0"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              <div className="grid grid-cols-2 gap-3">
+                <div 
+                  className="p-4 rounded-xl text-center"
+                  style={{ background: 'var(--bg-panel)' }}
+                >
+                  <p 
+                    className="text-xs font-medium uppercase tracking-wide mb-1"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Distance
+                  </p>
+                  <p 
+                    className="text-2xl font-bold"
+                    style={{ color: 'var(--text-main)' }}
+                  >
+                    {transitRouteInfo.distance}
+                  </p>
+                </div>
+                <div 
+                  className="p-4 rounded-xl text-center"
+                  style={{ background: `${accentColor}10` }}
+                >
+                  <p 
+                    className="text-xs font-medium uppercase tracking-wide mb-1"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Time
+                  </p>
+                  <p 
+                    className="text-2xl font-bold"
+                    style={{ color: accentColor }}
+                  >
+                    {transitRouteInfo.duration}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Transit Mode Tag */}
+              <div className="flex gap-2 mt-3">
+                <span 
+                  className="text-xs font-medium px-2.5 py-1 rounded-full"
+                  style={{ 
+                    background: `${accentColor}15`, 
+                    color: accentColor 
+                  }}
+                >
+                  <Train className="w-3 h-3 inline mr-1" />
+                  {transitRouteInfo.mode}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Transit Steps */}
+          {transitSteps.length > 0 && (
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <button
+                onClick={() => setStepsExpanded(!stepsExpanded)}
+                className="flex items-center justify-between px-5 py-4 flex-shrink-0 transition-colors"
+                style={{ background: 'transparent' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
+                <span 
+                  className="text-sm font-semibold"
+                  style={{ color: 'var(--text-main)' }}
+                >
+                  Transit directions
+                </span>
+                <div className="flex items-center gap-2">
+                  <span 
+                    className="text-xs font-medium px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
+                  >
+                    {transitSteps.length} steps
+                  </span>
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    {stepsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </span>
+                </div>
+              </button>
+              
+              {stepsExpanded && (
+                <div 
+                  className="flex-1 overflow-y-auto prism-scrollbar px-5 pb-5"
+                  style={{ maxHeight: '250px' }}
+                >
+                  <div className="space-y-1">
+                    {transitSteps.map((step, i) => {
+                      const stepColors: Record<string, string> = {
+                        pedestrian: '#6B7280',
+                        subway: '#8B5CF6',
+                        bus: '#F59E0B',
+                        tram: '#10B981',
+                        rail: '#3B82F6',
+                        ferry: '#06B6D4',
+                        lightRail: '#10B981',
+                      };
+                      const stepColor = stepColors[step.type] || accentColor;
+                      const isDotted = step.type === 'pedestrian' || step.type === 'subway';
+                      
+                      return (
+                        <div key={i} className="flex items-start gap-3">
+                          <div className="flex flex-col items-center">
+                            <div 
+                              className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5"
+                              style={{ backgroundColor: stepColor }}
+                            />
+                            {i < transitSteps.length - 1 && (
+                              <div 
+                                className="w-0.5 h-8 mt-1"
+                                style={{ 
+                                  backgroundImage: isDotted ? `repeating-linear-gradient(to bottom, ${stepColor} 0px, ${stepColor} 3px, transparent 3px, transparent 6px)` : 'none',
+                                  backgroundColor: isDotted ? 'transparent' : stepColor + '60',
+                                }}
+                              />
+                            )}
+                          </div>
+                          <div className="flex-1 pb-2">
+                            <p 
+                              className="text-sm font-medium"
+                              style={{ color: 'var(--text-main)' }}
+                            >
+                              {step.instruction}
+                            </p>
+                            {step.duration && (
+                              <p 
+                                className="text-xs mt-0.5"
+                                style={{ color: 'var(--text-muted)' }}
+                              >
+                                {step.duration}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Turn-by-Turn */}
           {route && route.steps.length > 0 && (
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -473,9 +790,12 @@ export default function DirectionsEmbed({
             accentColor={accentColor}
             height="500px"
             markers={markers}
-            showRoute={!!(fromCoords && toCoords)}
+            showRoute={!!(fromCoords && toCoords) && routeType !== 'transit'}
             routeStart={fromCoords || undefined}
             routeEnd={toCoords || undefined}
+            routeType={routeType === 'transit' || routeType === 'shortest' ? undefined : routeType}
+            transitSegments={routeType === 'transit' && transitSegments.length > 0 ? transitSegments : undefined}
+            routePolyline={routeType === 'transit' && transitSegments.length === 0 ? transitPolyline : undefined}
           />
         </div>
       </div>

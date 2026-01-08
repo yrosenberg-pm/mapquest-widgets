@@ -246,6 +246,37 @@ export default function MapQuestMap({
           transform: translate(-50%, -50%) scale(1.5);
         }
       }
+      
+      /* Custom tooltip styling for marker hover */
+      .marker-tooltip {
+        background: rgba(15, 23, 42, 0.95) !important;
+        color: #fff !important;
+        border: none !important;
+        border-radius: 6px !important;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+        white-space: nowrap !important;
+        max-width: 200px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      .marker-tooltip::before {
+        border-top-color: rgba(15, 23, 42, 0.95) !important;
+      }
+      .leaflet-tooltip-top::before {
+        border-top-color: rgba(15, 23, 42, 0.95) !important;
+      }
+      .leaflet-tooltip-bottom::before {
+        border-bottom-color: rgba(15, 23, 42, 0.95) !important;
+      }
+      .leaflet-tooltip-left::before {
+        border-left-color: rgba(15, 23, 42, 0.95) !important;
+      }
+      .leaflet-tooltip-right::before {
+        border-right-color: rgba(15, 23, 42, 0.95) !important;
+      }
     `;
     document.head.appendChild(style);
   }, []);
@@ -456,6 +487,15 @@ export default function MapQuestMap({
       const m = L.marker([marker.lat, marker.lng], { icon, zIndexOffset }).addTo(markersLayerRef.current);
       
       if (marker.label) {
+        // Tooltip for hover state - shows location name on hover
+        m.bindTooltip(marker.label, { 
+          direction: 'top',
+          offset: type === 'home' ? [0, -20] : type === 'poi' ? [0, -14] : [0, -18],
+          className: 'marker-tooltip',
+          permanent: false,
+        });
+        
+        // Also keep popup for click (more detailed view)
         m.bindPopup(marker.label, { closeButton: false });
       }
       
