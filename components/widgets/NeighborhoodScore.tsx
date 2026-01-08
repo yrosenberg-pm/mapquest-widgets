@@ -186,6 +186,102 @@ export default function NeighborhoodScore({
   const [showSearchArea, setShowSearchArea] = useState(true);
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
   const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const [boundaryMode, setBoundaryMode] = useState<'radius' | 'isoline'>('radius');
+  const [isolinePolygon, setIsolinePolygon] = useState<{ lat: number; lng: number }[] | null>(null);
+  const [isolineLoading, setIsolineLoading] = useState(false);
+
+  // HERE Flexible Polyline decoder for isolines
+  const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
+    const DECODING_TABLE: Record<string, number> = {};
+    const ENCODING_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    for (let i = 0; i < ENCODING_CHARS.length; i++) {
+      DECODING_TABLE[ENCODING_CHARS[i]] = i;
+    }
+    
+    const result: { lat: number; lng: number }[] = [];
+    let index = 0;
+    let lat = 0;
+    let lng = 0;
+    
+    // Skip header byte
+    index++;
+    
+    while (index < encoded.length) {
+      // Decode latitude
+      let shift = 0;
+      let value = 0;
+      while (index < encoded.length) {
+        const char = encoded[index++];
+        const num = DECODING_TABLE[char] || 0;
+        value |= (num & 0x1F) << shift;
+        shift += 5;
+        if (num < 32) break;
+      }
+      lat += (value & 1) ? ~(value >> 1) : (value >> 1);
+      
+      // Decode longitude
+      shift = 0;
+      value = 0;
+      while (index < encoded.length) {
+        const char = encoded[index++];
+        const num = DECODING_TABLE[char] || 0;
+        value |= (num & 0x1F) << shift;
+        shift += 5;
+        if (num < 32) break;
+      }
+      lng += (value & 1) ? ~(value >> 1) : (value >> 1);
+      
+      result.push({ lat: lat / 1e5, lng: lng / 1e5 });
+    }
+    
+    return result;
+  };
+
+  // Fetch isoline when location changes or mode switches to isoline
+  const fetchIsoline = async (loc: { lat: number; lng: number }, walkMinutes: number) => {
+    setIsolineLoading(true);
+    try {
+      const rangeSeconds = walkMinutes * 60;
+      const res = await fetch('/api/here?' + new URLSearchParams({
+        endpoint: 'isoline',
+        origin: `${loc.lat},${loc.lng}`,
+        rangeType: 'time',
+        rangeValues: String(rangeSeconds),
+        transportMode: 'pedestrian',
+      }));
+      const data = await res.json();
+      
+      if (data.isolines && data.isolines.length > 0) {
+        const isolineData = data.isolines[0];
+        if (isolineData.polygons && isolineData.polygons.length > 0) {
+          const polygonData = isolineData.polygons[0];
+          if (polygonData.outer) {
+            const coordinates = decodeFlexiblePolyline(polygonData.outer);
+            setIsolinePolygon(coordinates);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch isoline:', err);
+      setIsolinePolygon(null);
+    }
+    setIsolineLoading(false);
+  };
+
+  // Fetch isoline when boundary mode changes to isoline or when location changes
+  useEffect(() => {
+    if (boundaryMode === 'isoline' && location) {
+      // Use walking time based on selected category's search radius, or default 20 min walk
+      const searchRadius = selectedCategory 
+        ? (categoryConfigs[selectedCategory.category.id]?.searchRadius || 2)
+        : 2;
+      // Roughly 20 min per mile walking
+      const walkMinutes = Math.round(searchRadius * 20);
+      fetchIsoline(location, walkMinutes);
+    } else {
+      setIsolinePolygon(null);
+    }
+  }, [boundaryMode, location, selectedCategory]);
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -766,21 +862,45 @@ export default function NeighborhoodScore({
 
         {/* Map */}
         <div className="flex-1 relative">
-          {/* Search Area Toggle */}
+          {/* Search Area Controls */}
           {location && (
-            <button
-              onClick={() => setShowSearchArea(!showSearchArea)}
-              className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
-              style={{ 
-                background: darkMode ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.95)',
-                border: `1px solid ${darkMode ? 'rgba(71, 85, 105, 0.5)' : 'rgba(203, 213, 225, 0.8)'}`,
-                color: showSearchArea ? accentColor : (darkMode ? '#94A3B8' : '#64748B'),
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              }}
-            >
-              {showSearchArea ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-              {showSearchArea ? 'Hide radius' : 'Show radius'}
-            </button>
+            <div className="absolute top-3 right-3 z-10 flex gap-1.5">
+              {/* Toggle visibility */}
+              <button
+                onClick={() => setShowSearchArea(!showSearchArea)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
+                style={{ 
+                  background: darkMode ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                  border: `1px solid ${darkMode ? 'rgba(71, 85, 105, 0.5)' : 'rgba(203, 213, 225, 0.8)'}`,
+                  color: showSearchArea ? accentColor : (darkMode ? '#94A3B8' : '#64748B'),
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                }}
+              >
+                {showSearchArea ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              </button>
+
+              {/* Toggle boundary mode */}
+              {showSearchArea && (
+                <button
+                  onClick={() => setBoundaryMode(boundaryMode === 'radius' ? 'isoline' : 'radius')}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
+                  style={{ 
+                    background: darkMode ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                    border: `1px solid ${darkMode ? 'rgba(71, 85, 105, 0.5)' : 'rgba(203, 213, 225, 0.8)'}`,
+                    color: boundaryMode === 'isoline' ? accentColor : (darkMode ? '#94A3B8' : '#64748B'),
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  {isolineLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : boundaryMode === 'isoline' ? (
+                    '🚶 Walk time'
+                  ) : (
+                    '📍 Radius'
+                  )}
+                </button>
+              )}
+            </div>
           )}
           <MapQuestMap
             apiKey={apiKey}
@@ -844,7 +964,7 @@ export default function NeighborhoodScore({
             })()}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
-            circles={showSearchArea && location ? (() => {
+            circles={showSearchArea && location && boundaryMode === 'radius' ? (() => {
               // Get search radius for current category or use default 2 miles
               const searchRadius = selectedCategory 
                 ? (categoryConfigs[selectedCategory.category.id]?.searchRadius || 2)
@@ -859,6 +979,13 @@ export default function NeighborhoodScore({
                 fillOpacity: 0.08,
               }];
             })() : []}
+            polygons={showSearchArea && boundaryMode === 'isoline' && isolinePolygon ? [{
+              coordinates: isolinePolygon,
+              color: selectedCategory 
+                ? (categoryColors[selectedCategory.category.id] || accentColor)
+                : accentColor,
+              fillOpacity: 0.15,
+            }] : []}
           />
         </div>
       </div>

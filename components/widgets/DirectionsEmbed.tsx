@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Navigation, Car, Bike, PersonStanding, Train, Loader2, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import { Navigation, Car, Bike, PersonStanding, Train, Loader2, ChevronDown, ChevronUp, MapPin, Clock } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -63,6 +63,26 @@ export default function DirectionsEmbed({
   const [transitSteps, setTransitSteps] = useState<{ type: string; instruction: string; duration: string; lineName?: string }[]>([]);
   const [transitSegments, setTransitSegments] = useState<{ type: string; coords: { lat: number; lng: number }[] }[]>([]);
   const [transitRouteInfo, setTransitRouteInfo] = useState<{ distance: string; duration: string; mode: string } | null>(null);
+  const [departureTime, setDepartureTime] = useState<'now' | Date>('now');
+  const [showDepartureOptions, setShowDepartureOptions] = useState(false);
+
+  // Helper to format departure time for display
+  const formatDepartureTime = (time: 'now' | Date) => {
+    if (time === 'now') return 'Leave now';
+    const now = new Date();
+    const isToday = time.toDateString() === now.toDateString();
+    const isTomorrow = time.toDateString() === new Date(now.getTime() + 86400000).toDateString();
+    const timeStr = time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (isToday) return `Today at ${timeStr}`;
+    if (isTomorrow) return `Tomorrow at ${timeStr}`;
+    return time.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }) + ` at ${timeStr}`;
+  };
+
+  // Get departure time as ISO string
+  const getDepartureISO = () => {
+    if (departureTime === 'now') return new Date().toISOString();
+    return departureTime.toISOString();
+  };
 
   // HERE Flexible Polyline decoder
   const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
@@ -164,7 +184,7 @@ export default function DirectionsEmbed({
           endpoint: 'transit',
           origin: `${fromLoc.lat},${fromLoc.lng}`,
           destination: `${toLoc.lat},${toLoc.lng}`,
-          departureTime: new Date().toISOString(),
+          departureTime: getDepartureISO(),
         }));
         const hereData = await hereRes.json();
         
@@ -452,6 +472,100 @@ export default function DirectionsEmbed({
                 );
               })}
             </div>
+
+            {/* Departure Time - Only show for transit */}
+            {routeType === 'transit' && (
+              <div className="mt-4 relative">
+                <button
+                  onClick={() => setShowDepartureOptions(!showDepartureOptions)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
+                  style={{
+                    background: 'var(--bg-panel)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4" style={{ color: accentColor }} />
+                    <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>
+                      {formatDepartureTime(departureTime)}
+                    </span>
+                  </div>
+                  <ChevronDown 
+                    className={`w-4 h-4 transition-transform ${showDepartureOptions ? 'rotate-180' : ''}`} 
+                    style={{ color: 'var(--text-muted)' }} 
+                  />
+                </button>
+
+                {showDepartureOptions && (
+                  <div 
+                    className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20"
+                    style={{
+                      background: 'var(--bg-widget)',
+                      border: '1px solid var(--border-subtle)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    }}
+                  >
+                    {/* Leave Now Option */}
+                    <button
+                      onClick={() => { setDepartureTime('now'); setShowDepartureOptions(false); }}
+                      className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                      style={{ 
+                        background: departureTime === 'now' ? `${accentColor}15` : 'transparent',
+                        color: departureTime === 'now' ? accentColor : 'var(--text-main)',
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = departureTime === 'now' ? `${accentColor}15` : 'var(--bg-hover)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = departureTime === 'now' ? `${accentColor}15` : 'transparent'}
+                    >
+                      Leave now
+                    </button>
+
+                    {/* Quick Time Options */}
+                    {[15, 30, 60].map((mins) => {
+                      const time = new Date(Date.now() + mins * 60000);
+                      const label = mins < 60 ? `In ${mins} minutes` : 'In 1 hour';
+                      return (
+                        <button
+                          key={mins}
+                          onClick={() => { setDepartureTime(time); setShowDepartureOptions(false); }}
+                          className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                          style={{ color: 'var(--text-main)' }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+
+                    {/* Custom Time Input */}
+                    <div 
+                      className="px-3 py-2.5"
+                      style={{ borderTop: '1px solid var(--border-subtle)' }}
+                    >
+                      <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
+                        Custom time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        min={new Date().toISOString().slice(0, 16)}
+                        className="w-full px-2 py-1.5 rounded-lg text-sm"
+                        style={{
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-subtle)',
+                          color: 'var(--text-main)',
+                        }}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setDepartureTime(new Date(e.target.value));
+                            setShowDepartureOptions(false);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Calculate Button */}
             <button
