@@ -485,24 +485,74 @@ export default function NHLArenaExplorer({
     : { lat: 39.8283, lng: -98.5795 };
 
   const mapMarkers = (() => {
-    const markers: Array<{ lat: number; lng: number; label: string; color?: string }> = [];
+    const markers: Array<{ lat: number; lng: number; label: string; color?: string; type?: 'home' | 'poi' }> = [];
     
     if (routeStart) {
       markers.push({ 
         lat: routeStart.lat, 
         lng: routeStart.lng, 
         label: fromAddress || 'Starting Point',
-        color: '#10b981'
+        color: '#10b981',
+        type: 'home'
       });
     }
     
     if (selectedStadium) {
+      // Stadium marker
       markers.push({ 
         lat: selectedStadium.lat, 
         lng: selectedStadium.lng, 
         label: selectedStadium.arena,
         color: selectedStadium.color
       });
+      
+      // POI markers based on active tab (or show all if on overview/directions)
+      const showAllPOIs = activeTab === 'overview' || activeTab === 'directions';
+      
+      // Parking markers (blue)
+      if (showAllPOIs || activeTab === 'parking') {
+        places.parking.forEach(p => {
+          if (p.lat && p.lng) {
+            markers.push({
+              lat: p.lat,
+              lng: p.lng,
+              label: `🅿️ ${p.name}`,
+              color: '#3b82f6',
+              type: 'poi'
+            });
+          }
+        });
+      }
+      
+      // Food markers (orange/red)
+      if (showAllPOIs || activeTab === 'food') {
+        places.food.forEach(p => {
+          if (p.lat && p.lng) {
+            markers.push({
+              lat: p.lat,
+              lng: p.lng,
+              label: `🍽️ ${p.name}`,
+              color: '#f97316',
+              type: 'poi'
+            });
+          }
+        });
+      }
+      
+      // Hotel markers (purple)
+      if (showAllPOIs || activeTab === 'hotels') {
+        places.hotels.forEach(p => {
+          if (p.lat && p.lng) {
+            markers.push({
+              lat: p.lat,
+              lng: p.lng,
+              label: `🏨 ${p.name}`,
+              color: '#8b5cf6',
+              type: 'poi'
+            });
+          }
+        });
+      }
     } else {
       markers.push(...NHL_STADIUMS.map(s => ({ 
         lat: s.lat, 
