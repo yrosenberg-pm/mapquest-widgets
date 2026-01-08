@@ -69,7 +69,7 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'schools', name: 'Schools', icon: GraduationCap, group: 'Education', mqCategory: 'sic:821101', weight: 2 },
   { id: 'pharmacy', name: 'Pharmacy', icon: Pill, group: 'Amenities', mqCategory: 'sic:591205', weight: 2 },
   { id: 'banks', name: 'Banks', icon: Building2, group: 'Amenities', mqCategory: 'sic:602101', weight: 1 },
-  { id: 'publicTransit', name: 'Public Transportation', icon: Bus, group: 'Transportation', mqCategory: 'multi:sic:411101,sic:411104,sic:411201,sic:401101,transit center,light rail', weight: 2 },
+  { id: 'publicTransit', name: 'Public Transportation', icon: Bus, group: 'Transportation', mqCategory: 'multi:sic:411101,sic:411104,sic:411201,sic:401101,sic:413101,sic:448301,metro station,subway,train station,light rail,trolley,streetcar,ferry terminal,transit center,amtrak,commuter rail', weight: 2 },
 ];
 
 const STANDARD_THRESHOLDS = [
