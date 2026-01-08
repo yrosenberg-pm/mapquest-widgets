@@ -347,8 +347,8 @@ export default function NHLArenaExplorer({
                 placeholder="Search teams..." 
                 value={searchQuery} 
                 onChange={e => setSearchQuery(e.target.value)}
-                className="prism-input w-full pl-8 text-sm"
-                style={{ height: '36px' }}
+                className="prism-input w-full text-sm"
+                style={{ height: '36px', paddingLeft: '42px' }}
               />
             </div>
           </div>
