@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { Utensils, ParkingCircle, Cloud, Sun, CloudRain, Snowflake, Navigation, Search, Droplets, Wind, Star, Sparkles, ExternalLink, Moon, Hotel, Car, Bike, PersonStanding, Train } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 const NHL_STADIUMS = [
   { id: 1, abbrev: 'ANA', team: 'Anaheim Ducks', arena: 'Honda Center', city: 'Anaheim', state: 'CA', lat: 33.8078, lng: -117.8765, capacity: 17174, color: '#F47A38', year: 1993, conference: 'Western', division: 'Pacific' },
@@ -491,13 +492,17 @@ export default function NHLArenaExplorer({
                       </div>
                       <label className={`text-sm font-medium ${theme.text} block mb-2`}>Your Starting Location</label>
                       <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          placeholder="Enter address..." 
-                          value={fromAddress} 
-                          onChange={e => setFromAddress(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && getDirections()}
-                          className={`flex-1 px-3 py-2 rounded-lg ${theme.input} ${theme.text} text-sm border ${theme.border} focus:outline-none focus:ring-2 focus:ring-orange-500/50`} 
+                        <AddressAutocomplete
+                          value={fromAddress}
+                          onChange={setFromAddress}
+                          placeholder="Enter address..."
+                          darkMode={darkMode}
+                          inputBg={theme.input.replace('bg-', '')}
+                          textColor={theme.text.replace('text-', '')}
+                          mutedText={theme.muted.replace('text-', '')}
+                          borderColor={theme.border.replace('border-', '')}
+                          className="flex-1"
+                          iconClassName="hidden"
                         />
                         <button 
                           onClick={getDirections} 

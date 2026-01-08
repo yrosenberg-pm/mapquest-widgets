@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { geocode, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 interface Category {
   id: string;
@@ -361,6 +362,12 @@ export default function NeighborhoodScore({
       console.log(`\n=== Overall Neighborhood Score: ${overall.toFixed(1)} / 5 ===\n`);
       setOverallScore(overall);
 
+      // Center map on the input location
+      if (loc) {
+        setMapZoomToLocation({ lat: loc.lat, lng: loc.lng, zoom: 14 });
+        setMapFitBounds(undefined);
+      }
+
       onScoreCalculated?.({ overall, categories: categoryScores });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
@@ -428,29 +435,32 @@ export default function NeighborhoodScore({
               <h3 className={`font-semibold ${textColor}`}>Neighborhood Score</h3>
               <p className={`text-xs mt-0.5 ${mutedText}`}>Walk score-style analysis</p>
             </div>
-            <div className="relative">
-              <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText}`} />
-              <input
-                type="text"
-                value={address}
-                onChange={(e) => {
-                  const newAddress = e.target.value;
-                  setAddress(newAddress);
-                  // Clear previous results when address changes (only if we have existing results)
-                  if ((scores.length > 0 || overallScore !== null) && newAddress !== address) {
-                    setScores([]);
-                    setOverallScore(null);
-                    setSelectedCategory(null);
-                    setSelectedPlace(null);
-                    setLocation(null);
-                    setError(null);
-                  }
-                }}
-                onKeyDown={(e) => e.key === 'Enter' && calculateScores()}
-                placeholder="Enter an address..."
-                className={`w-full pl-10 pr-4 py-2.5 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm`}
-              />
-            </div>
+            <AddressAutocomplete
+              value={address}
+              onChange={(newAddress) => {
+                setAddress(newAddress);
+                // Clear previous results when address changes (only if we have existing results)
+                if ((scores.length > 0 || overallScore !== null) && newAddress !== address) {
+                  setScores([]);
+                  setOverallScore(null);
+                  setSelectedCategory(null);
+                  setSelectedPlace(null);
+                  setLocation(null);
+                  setError(null);
+                }
+              }}
+              onSelect={(result) => {
+                if (result.lat && result.lng) {
+                  setLocation({ lat: result.lat, lng: result.lng });
+                }
+              }}
+              placeholder="Enter an address..."
+              darkMode={darkMode}
+              inputBg={inputBg}
+              textColor={textColor}
+              mutedText={mutedText}
+              borderColor={borderColor}
+            />
             <button
               onClick={calculateScores}
               disabled={loading || (!address && !location)}

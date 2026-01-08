@@ -2,9 +2,10 @@
 'use client';
 
 import { useState } from 'react';
-import { MapPin, Search, Phone, Clock, Navigation, Loader2, ChevronRight, X } from 'lucide-react';
+import { Search, Phone, Clock, Navigation, Loader2, ChevronRight, X } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 interface StoreLocation {
   id: string;
@@ -165,18 +166,23 @@ export default function StoreLocator({
         <div className={`w-80 flex flex-col border-r ${borderColor}`}>
           {/* Search */}
           <div className={`p-4 border-b ${borderColor}`}>
-            <div className="relative">
-              <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText}`} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && searchLocation()}
-                placeholder="Enter city, zip, or address..."
-                className={`w-full pl-10 pr-4 py-2.5 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm`}
-                style={{ borderRadius }}
-              />
-            </div>
+            <AddressAutocomplete
+              value={searchQuery}
+              onChange={setSearchQuery}
+              onSelect={(result) => {
+                if (result.lat && result.lng) {
+                  setUserLocation({ lat: result.lat, lng: result.lng });
+                  searchLocation();
+                }
+              }}
+              placeholder="Enter city, zip, or address..."
+              darkMode={darkMode}
+              inputBg={inputBg}
+              textColor={textColor}
+              mutedText={mutedText}
+              borderColor={borderColor}
+              style={{ borderRadius }}
+            />
             <button
               onClick={searchLocation}
               disabled={loading || !searchQuery.trim()}

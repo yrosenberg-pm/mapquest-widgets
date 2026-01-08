@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Briefcase, MapPin, Clock, Car, Train, Bike, PersonStanding, Loader2, Sun, Sunset, Moon, Building2, Home, Navigation, ChevronDown } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -287,17 +288,21 @@ export default function CommuteTimeCalculator({
 
                   <div>
                     <label className={`block text-xs mb-1 ${mutedText}`}>Address</label>
-                    <input
-                      type="text"
+                    <AddressAutocomplete
                       value={baseLocation}
-                      onChange={(e) => setBaseLocation(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && baseLocation.trim()) {
-                          setBaseLocationAddress();
+                      onChange={setBaseLocation}
+                      onSelect={(result) => {
+                        if (result.lat && result.lng) {
+                          setBaseCoords({ lat: result.lat, lng: result.lng });
                         }
                       }}
                       placeholder={`Enter your ${baseLabel.toLowerCase()} address`}
-                      className={`w-full px-3 py-2 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
+                      darkMode={darkMode}
+                      inputBg={inputBg}
+                      textColor={textColor}
+                      mutedText={mutedText}
+                      borderColor={borderColor}
+                      className="w-full"
                     />
                   </div>
 
@@ -374,18 +379,22 @@ export default function CommuteTimeCalculator({
                   }`}>
                     <MapPin className="w-3 h-3" />
                   </div>
-                  <input
-                    type="text"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && destination.trim()) {
-                        calculateCommute();
-                      }
-                    }}
-                    placeholder="Property address, job location..."
-                    className={`flex-1 px-3 py-2 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
-                  />
+                  <AddressAutocomplete
+                      value={destination}
+                      onChange={setDestination}
+                      onSelect={(result) => {
+                        if (result.lat && result.lng) {
+                          setDestCoords({ lat: result.lat, lng: result.lng });
+                        }
+                      }}
+                      placeholder="Property address, job location..."
+                      darkMode={darkMode}
+                      inputBg={inputBg}
+                      textColor={textColor}
+                      mutedText={mutedText}
+                      borderColor={borderColor}
+                      className="flex-1"
+                    />
                 </div>
               </div>
 

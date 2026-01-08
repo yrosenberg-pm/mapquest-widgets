@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 interface RouteStep {
   narrative: string;
@@ -167,12 +168,22 @@ export default function DirectionsEmbed({
                 }`}>
                   A
                 </div>
-                <input
-                  type="text"
+                <AddressAutocomplete
                   value={from}
-                  onChange={(e) => setFrom(e.target.value)}
+                  onChange={setFrom}
+                  onSelect={(result) => {
+                    if (result.lat && result.lng) {
+                      setFromCoords({ lat: result.lat, lng: result.lng });
+                    }
+                  }}
                   placeholder="Enter start location"
-                  className={`flex-1 px-3 py-2 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
+                  darkMode={darkMode}
+                  inputBg={inputBg}
+                  textColor={textColor}
+                  mutedText={mutedText}
+                  borderColor={borderColor}
+                  className="flex-1"
+                  iconClassName="hidden"
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -181,12 +192,22 @@ export default function DirectionsEmbed({
                 }`}>
                   B
                 </div>
-                <input
-                  type="text"
+                <AddressAutocomplete
                   value={to}
-                  onChange={(e) => setTo(e.target.value)}
+                  onChange={setTo}
+                  onSelect={(result) => {
+                    if (result.lat && result.lng) {
+                      setToCoords({ lat: result.lat, lng: result.lng });
+                    }
+                  }}
                   placeholder="Enter destination"
-                  className={`flex-1 px-3 py-2 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
+                  darkMode={darkMode}
+                  inputBg={inputBg}
+                  textColor={textColor}
+                  mutedText={mutedText}
+                  borderColor={borderColor}
+                  className="flex-1"
+                  iconClassName="hidden"
                 />
               </div>
             </div>

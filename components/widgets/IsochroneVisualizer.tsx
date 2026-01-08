@@ -2,9 +2,10 @@
 'use client';
 
 import { useState } from 'react';
-import { MapPin, Clock, Car, Bike, PersonStanding, Loader2 } from 'lucide-react';
-import { geocode, getRouteMatrix } from '@/lib/mapquest';
+import { Clock, Car, Bike, PersonStanding, Loader2 } from 'lucide-react';
+import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 interface IsochroneRing {
   minutes: number;
@@ -94,22 +95,156 @@ export default function IsochroneVisualizer({
         throw new Error('No location available');
       }
 
-      const numDirections = 8;
+      // Ultra-optimized: Only 4 API calls (N, S, E, W) then interpolate
       const generatedRings: IsochroneRing[] = [];
+      const numDirections = 16; // For smooth rendering, but only 4 will use actual routes
 
+      // Helper function to find distance for a target time in a given direction
+      const findDistanceForTime = async (
+        angle: number,
+        targetMinutes: number,
+        center: { lat: number; lng: number }
+      ): Promise<number> => {
+        const avgSpeedMph = travelMode === 'pedestrian' ? 3 : travelMode === 'bicycle' ? 12 : 30;
+        const estimatedDistance = (targetMinutes / 60) * avgSpeedMph;
+        
+        // Only use actual routes for driving mode
+        if (travelMode !== 'fastest') {
+          return estimatedDistance;
+        }
+        
+        // Try 2 distances around the estimate
+        const testDistances = [
+          estimatedDistance * 0.9,
+          estimatedDistance * 1.1,
+        ];
+        
+        let bestDistance = estimatedDistance;
+        let closestTime = Infinity;
+        
+        // Try distances in parallel with timeout
+        const routePromises = testDistances.map(async (testDist) => {
+          const latOffset = testDist * Math.cos(angle) / 69;
+          const lngOffset = testDist * Math.sin(angle) / (69 * Math.cos(center.lat * Math.PI / 180));
+          const testPoint = {
+            lat: center.lat + latOffset,
+            lng: center.lng + lngOffset,
+          };
+          
+          try {
+            // Add timeout to prevent hanging
+            const timeoutPromise = new Promise<null>((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), 5000)
+            );
+            
+            const routePromise = getDirections(
+              `${center.lat},${center.lng}`,
+              `${testPoint.lat},${testPoint.lng}`,
+              'fastest'
+            );
+            
+            const route = await Promise.race([routePromise, timeoutPromise]);
+            
+            if (route && (route as any).time) {
+              const travelTimeMinutes = (route as any).time / 60;
+              return { distance: testDist, time: travelTimeMinutes };
+            }
+          } catch (err) {
+            // Silently fail and continue
+          }
+          return null;
+        });
+        
+        const results = await Promise.all(routePromises);
+        
+        // Find the best match
+        for (const result of results) {
+          if (result) {
+            const timeDiff = Math.abs(result.time - targetMinutes);
+            if (timeDiff < Math.abs(closestTime - targetMinutes)) {
+              closestTime = result.time;
+              bestDistance = result.distance;
+            }
+          }
+        }
+        
+        return bestDistance;
+      };
+
+      // Calculate all rings
       for (let i = 0; i < timeRanges.length; i++) {
-        const minutes = timeRanges[i];
-        const estimatedDistance = travelMode === 'pedestrian' 
-          ? minutes * 0.05 / 60 * 3
-          : travelMode === 'bicycle'
-          ? minutes * 0.05 / 60 * 12
-          : minutes * 0.05 / 60 * 30;
-
+        const targetMinutes = timeRanges[i];
         const points: { lat: number; lng: number }[] = [];
+        
+        // Calculate 4 cardinal directions (N, S, E, W) with actual routes
+        const cardinalAngles = [
+          0,      // North (0°)
+          Math.PI / 2,  // East (90°)
+          Math.PI,      // South (180°)
+          3 * Math.PI / 2  // West (270°)
+        ];
+        
+        const cardinalDistances = await Promise.all(
+          cardinalAngles.map(angle => findDistanceForTime(angle, targetMinutes, center))
+        );
+        
+        // Now interpolate all other directions based on the 4 cardinal points
         for (let j = 0; j < numDirections; j++) {
           const angle = (j / numDirections) * 2 * Math.PI;
-          const latOffset = estimatedDistance * Math.cos(angle) / 69;
-          const lngOffset = estimatedDistance * Math.sin(angle) / (69 * Math.cos(center.lat * Math.PI / 180));
+          
+          // Find which cardinal directions to interpolate between
+          let distance: number;
+          
+          if (j % (numDirections / 4) === 0) {
+            // This is a cardinal direction - use the calculated distance
+            const cardinalIndex = Math.floor(j / (numDirections / 4)) % 4;
+            distance = cardinalDistances[cardinalIndex];
+          } else {
+            // Interpolate between the two nearest cardinal directions
+            const normalizedAngle = angle % (2 * Math.PI);
+            let cardinalIndex1: number, cardinalIndex2: number;
+            let weight1: number, weight2: number;
+            
+            if (normalizedAngle < Math.PI / 4 || normalizedAngle >= 7 * Math.PI / 4) {
+              // Between West and North
+              cardinalIndex1 = 3; // West
+              cardinalIndex2 = 0; // North
+              const t = normalizedAngle < Math.PI / 4 
+                ? normalizedAngle / (Math.PI / 4)
+                : (normalizedAngle - 7 * Math.PI / 4) / (Math.PI / 4);
+              weight1 = 1 - t;
+              weight2 = t;
+            } else if (normalizedAngle < 3 * Math.PI / 4) {
+              // Between North and East
+              cardinalIndex1 = 0; // North
+              cardinalIndex2 = 1; // East
+              const t = (normalizedAngle - Math.PI / 4) / (Math.PI / 2);
+              weight1 = 1 - t;
+              weight2 = t;
+            } else if (normalizedAngle < 5 * Math.PI / 4) {
+              // Between East and South
+              cardinalIndex1 = 1; // East
+              cardinalIndex2 = 2; // South
+              const t = (normalizedAngle - 3 * Math.PI / 4) / (Math.PI / 2);
+              weight1 = 1 - t;
+              weight2 = t;
+            } else {
+              // Between South and West
+              cardinalIndex1 = 2; // South
+              cardinalIndex2 = 3; // West
+              const t = (normalizedAngle - 5 * Math.PI / 4) / (Math.PI / 2);
+              weight1 = 1 - t;
+              weight2 = t;
+            }
+            
+            // Interpolate distance
+            distance = cardinalDistances[cardinalIndex1] * weight1 + 
+                      cardinalDistances[cardinalIndex2] * weight2;
+          }
+          
+          // Calculate point at this distance and angle
+          const latOffset = distance * Math.cos(angle) / 69;
+          const lngOffset = distance * Math.sin(angle) / (69 * Math.cos(center.lat * Math.PI / 180));
           points.push({
             lat: center.lat + latOffset,
             lng: center.lng + lngOffset,
@@ -117,7 +252,7 @@ export default function IsochroneVisualizer({
         }
 
         generatedRings.push({
-          minutes,
+          minutes: targetMinutes,
           color: RING_COLORS[i % RING_COLORS.length],
           points,
         });
@@ -166,16 +301,21 @@ export default function IsochroneVisualizer({
             {/* Address Input */}
             <div className="mb-4">
               <label className={`block text-sm font-medium mb-2 ${mutedText}`}>Starting Location</label>
-              <div className="relative">
-                <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText}`} />
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Enter an address..."
-                  className={`w-full pl-10 pr-4 py-2.5 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm`}
-                />
-              </div>
+              <AddressAutocomplete
+                value={address}
+                onChange={setAddress}
+                onSelect={(result) => {
+                  if (result.lat && result.lng) {
+                    setLocation({ lat: result.lat, lng: result.lng });
+                  }
+                }}
+                placeholder="Enter an address..."
+                darkMode={darkMode}
+                inputBg={inputBg}
+                textColor={textColor}
+                mutedText={mutedText}
+                borderColor={borderColor}
+              />
             </div>
 
             {/* Travel Mode */}

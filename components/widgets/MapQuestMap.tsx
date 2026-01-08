@@ -194,21 +194,37 @@ export default function MapQuestMap({
         filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
       }
       
-      /* Pulsing animation for home marker */
+      /* Subtle pulsing blue ring for home marker */
       .pulse-marker {
-        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        position: relative;
       }
       
-      @keyframes pulse {
-        0%, 100% {
-          opacity: 1;
-          transform: scale(1);
-          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+      .pulse-ring {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        border: 2px solid #3b82f6;
+        opacity: 0;
+        animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        pointer-events: none;
+      }
+      
+      @keyframes pulse-ring {
+        0% {
+          opacity: 0.6;
+          transform: translate(-50%, -50%) scale(0.8);
         }
         50% {
-          opacity: 0.9;
-          transform: scale(1.2);
-          filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+          opacity: 0.3;
+          transform: translate(-50%, -50%) scale(1.2);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -50%) scale(1.5);
         }
       }
     `;
@@ -369,13 +385,16 @@ export default function MapQuestMap({
       let markerHtml: string;
       
       if (type === 'home') {
-        // Home icon - circle with house shape
+        // Home icon - circle with house shape, with subtle pulsing blue ring
         markerHtml = `
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="2.5"/>
-            <path d="M16 10L12 14V22H20V14L16 10Z" fill="white"/>
-            <rect x="14" y="18" width="4" height="4" fill="${color}"/>
-          </svg>
+          <div style="position: relative; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+            <div class="pulse-ring"></div>
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: relative; z-index: 1;">
+              <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="2.5"/>
+              <path d="M16 10L12 14V22H20V14L16 10Z" fill="white"/>
+              <rect x="14" y="18" width="4" height="4" fill="${color}"/>
+            </svg>
+          </div>
         `;
       } else {
         // POI icon - standard pin

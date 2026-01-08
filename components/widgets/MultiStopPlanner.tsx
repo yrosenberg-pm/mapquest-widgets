@@ -2,9 +2,10 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { MapPin, Plus, Trash2, GripVertical, Loader2, RotateCcw, ArrowUpDown, Route } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Loader2, RotateCcw, ArrowUpDown, Route } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 interface Stop {
   id: string;
@@ -289,16 +290,25 @@ export default function MultiStopPlanner({
                   </div>
 
                   <div className="relative flex-1">
-                    <MapPin className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${mutedText}`} />
-                    <input
-                      type="text"
+                    <AddressAutocomplete
                       value={stop.address}
-                      onChange={(e) => updateStop(stop.id, e.target.value)}
+                      onChange={(value) => updateStop(stop.id, value)}
+                      onSelect={(result) => {
+                        if (result.lat && result.lng) {
+                          updateStop(stop.id, result.displayString);
+                          setStops(stops.map(s => s.id === stop.id ? { ...s, lat: result.lat, lng: result.lng, geocoded: true } : s));
+                        }
+                      }}
                       placeholder={index === 0 ? 'Start address' : index === stops.length - 1 ? 'End address' : `Stop ${index + 1}`}
-                      className={`w-full pl-10 pr-3 py-2 rounded-lg border ${borderColor} ${inputBg} ${textColor} text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
+                      darkMode={darkMode}
+                      inputBg={inputBg}
+                      textColor={textColor}
+                      mutedText={mutedText}
+                      borderColor={borderColor}
+                      className="w-full"
                     />
                     {stop.geocoded && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-green-500" title="Geocoded" />
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-green-500 z-20" title="Geocoded" />
                     )}
                   </div>
 

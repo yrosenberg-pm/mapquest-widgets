@@ -2,9 +2,10 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { MapPin, Loader2, CheckCircle2, XCircle, Navigation } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Navigation } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 interface ServiceAreaCheckerProps {
   accentColor?: string;
@@ -194,18 +195,21 @@ export default function ServiceAreaChecker({
         {/* Left Panel - Form & Results */}
         <div className={`w-72 flex-shrink-0 p-4 border-r ${borderColor} flex flex-col`}>
           <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="relative">
-              <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border ${borderColor} ${inputBg}`}>
-                <MapPin className={`w-4 h-4 flex-shrink-0 ${mutedText}`} />
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Enter address or zip code"
-                  className={`flex-1 bg-transparent outline-none text-sm ${textColor}`}
-                />
-              </div>
-            </div>
+            <AddressAutocomplete
+              value={address}
+              onChange={setAddress}
+              onSelect={(result) => {
+                if (result.lat && result.lng) {
+                  checkServiceArea(result.displayString, result.lat, result.lng);
+                }
+              }}
+              placeholder="Enter address or zip code"
+              darkMode={darkMode}
+              inputBg={inputBg}
+              textColor={textColor}
+              mutedText={mutedText}
+              borderColor={borderColor}
+            />
 
             <button
               type="submit"
