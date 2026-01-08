@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { 
-  MapPin, Navigation, Loader2, ChevronRight, ChevronLeft,
+  MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
   LucideIcon
 } from 'lucide-react';
@@ -98,13 +98,25 @@ function getClosestScore(distance: number, thresholdType: ThresholdType): number
 // Category-specific configurations
 const categoryConfigs: Record<string, CategoryConfig> = {
   grocery: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
-  restaurant: { idealCount: 10, searchRadius: 1, thresholdType: 'standard' },
+  restaurant: { idealCount: 10, searchRadius: 2, thresholdType: 'standard' },
   coffee: { idealCount: 5, searchRadius: 1, thresholdType: 'walkable' },
-  pharmacy: { idealCount: 2, searchRadius: 1.5, thresholdType: 'standard' },
-  banks: { idealCount: 2, searchRadius: 1.5, thresholdType: 'standard' },
+  pharmacy: { idealCount: 2, searchRadius: 2, thresholdType: 'standard' },
+  banks: { idealCount: 2, searchRadius: 2, thresholdType: 'standard' },
   parks: { idealCount: 3, searchRadius: 1, thresholdType: 'walkable' },
   fitness: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
   schools: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+};
+
+// Category colors for map markers
+const categoryColors: Record<string, string> = {
+  grocery: '#8b5cf6',    // Purple
+  restaurant: '#ef4444',  // Red
+  coffee: '#f59e0b',      // Amber
+  pharmacy: '#06b6d4',    // Cyan
+  banks: '#3b82f6',       // Blue
+  parks: '#10b981',       // Green
+  fitness: '#ec4899',     // Pink
+  schools: '#6366f1',     // Indigo
 };
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -176,6 +188,7 @@ export default function NeighborhoodScore({
   const [overallScore, setOverallScore] = useState<number | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<CategoryScore | null>(null);
   const [selectedPlace, setSelectedPlace] = useState<POI | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
@@ -229,7 +242,7 @@ export default function NeighborhoodScore({
               loc!.lng, 
               category.mqCategory, 
               config.searchRadius, 
-              50 // Get more results for better density calculation
+              100 // Increased limit - will filter by radius after
             );
 
             console.log(`[${category.name}] API returned ${places?.length || 0} results`);
@@ -292,6 +305,7 @@ export default function NeighborhoodScore({
                 };
               })
               .filter(p => p.distance > 0) // Filter out places with no valid distance
+              .filter(p => p.distance <= config.searchRadius) // Filter by actual search radius
               .sort((a, b) => a.distance - b.distance); // Sort by distance
 
             const poiCount = pois.length;
@@ -316,7 +330,7 @@ export default function NeighborhoodScore({
               category,
               score,
               description,
-              places: pois.slice(0, 10), // Keep top 10 for display
+              places: pois, // Store ALL POIs within radius (not just top 10)
               poiCount,
               closestDistance,
             };
@@ -499,36 +513,62 @@ export default function NeighborhoodScore({
                   Nearby Places ({selectedCategory.poiCount} found)
                 </div>
                 {selectedCategory.places.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedCategory.places.slice(0, 10).map((place, i) => {
-                      const isSelected = selectedPlace?.name === place.name && selectedPlace?.distance === place.distance;
-                      return (
-                        <button
-                          key={i}
-                          onClick={() => {
-                            setSelectedPlace(place);
-                            // Zoom to this specific place
-                            if (place.lat && place.lng) {
-                              setMapZoomToLocation({ lat: place.lat, lng: place.lng, zoom: 16 });
-                              setMapFitBounds(undefined);
-                            }
-                          }}
-                          className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
-                            isSelected 
-                              ? darkMode ? 'bg-orange-600' : 'bg-orange-100' 
-                              : darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'
-                          }`}
-                        >
-                          <span className={`text-sm ${isSelected ? 'text-white font-medium' : textColor} truncate flex-1 text-left`}>
-                            {place.name}
-                          </span>
-                          <span className={`text-xs ${isSelected ? 'text-orange-100' : mutedText} ml-2`}>
-                            {place.distance.toFixed(2)} mi
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <>
+                    <div className="space-y-2">
+                      {(expandedCategories.has(selectedCategory.category.id) 
+                        ? selectedCategory.places 
+                        : selectedCategory.places.slice(0, 10)
+                      ).map((place, i) => {
+                        const isSelected = selectedPlace?.name === place.name && selectedPlace?.distance === place.distance;
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setSelectedPlace(place);
+                              // Zoom to this specific place
+                              if (place.lat && place.lng) {
+                                setMapZoomToLocation({ lat: place.lat, lng: place.lng, zoom: 16 });
+                                setMapFitBounds(undefined);
+                              }
+                            }}
+                            className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                              isSelected 
+                                ? darkMode ? 'bg-orange-600' : 'bg-orange-100' 
+                                : darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-50 hover:bg-gray-100'
+                            }`}
+                          >
+                            <span className={`text-sm ${isSelected ? 'text-white font-medium' : textColor} truncate flex-1 text-left`}>
+                              {place.name} · {place.distance.toFixed(2)} mi
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {selectedCategory.places.length > 10 && (
+                      <button
+                        onClick={() => {
+                          const newExpanded = new Set(expandedCategories);
+                          if (newExpanded.has(selectedCategory.category.id)) {
+                            newExpanded.delete(selectedCategory.category.id);
+                          } else {
+                            newExpanded.add(selectedCategory.category.id);
+                          }
+                          setExpandedCategories(newExpanded);
+                        }}
+                        className={`w-full mt-2 flex items-center justify-center gap-1 text-xs ${mutedText} hover:${textColor} transition-colors`}
+                      >
+                        {expandedCategories.has(selectedCategory.category.id) ? (
+                          <>
+                            <ChevronUp className="w-3 h-3" /> Show less
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="w-3 h-3" /> Show all {selectedCategory.poiCount} results
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <p className={`text-sm ${mutedText}`}>
                     {selectedCategory.error ? 'Unable to load places' : 'No places found nearby'}
@@ -633,11 +673,12 @@ export default function NeighborhoodScore({
                 markers.push({ lat: location.lat, lng: location.lng, label: 'Home', color: accentColor, type: 'home' });
               }
               
-              // Add POI markers for selected category
+              // Add POI markers for selected category - plot ALL POIs (not just displayed ones)
               if (selectedCategory && selectedCategory.places.length > 0) {
-                const normalPoiColor = '#10b981'; // Green color for normal POIs
-                const highlightedPoiColor = '#f97316'; // Orange color for highlighted POI (different from accent)
+                const categoryColor = categoryColors[selectedCategory.category.id] || '#10b981';
+                const highlightedPoiColor = '#f97316'; // Orange color for highlighted POI
                 
+                // Plot ALL POIs within radius
                 selectedCategory.places.forEach((poi) => {
                   if (poi.lat && poi.lng) {
                     const isHighlighted = selectedPlace?.name === poi.name && selectedPlace?.distance === poi.distance;
@@ -645,7 +686,7 @@ export default function NeighborhoodScore({
                       lat: poi.lat,
                       lng: poi.lng,
                       label: poi.name,
-                      color: isHighlighted ? highlightedPoiColor : normalPoiColor,
+                      color: isHighlighted ? highlightedPoiColor : categoryColor,
                       type: 'poi',
                     });
                   }
