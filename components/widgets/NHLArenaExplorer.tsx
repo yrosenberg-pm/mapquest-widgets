@@ -276,7 +276,7 @@ export default function NHLArenaExplorer({
           const steps: { type: string; instruction: string; duration: string; lineName?: string }[] = [];
           const segments: { type: string; coords: { lat: number; lng: number }[] }[] = [];
           
-          // Mode name mapping
+          // Mode name mapping (public transit only - no taxi/car)
           const modeNameMap: Record<string, string> = {
             'pedestrian': 'Walk',
             'subway': 'Subway',
@@ -289,8 +289,8 @@ export default function NHLArenaExplorer({
             'tram': 'Tram',
             'lightRail': 'Light Rail',
             'monorail': 'Monorail',
-            'taxi': 'Taxi',
-            'car': 'Car',
+            'metro': 'Metro',
+            'rail': 'Rail',
           };
           
           sections.forEach((section: any) => {
@@ -966,15 +966,17 @@ export default function NHLArenaExplorer({
                                 const stepColors: Record<string, string> = {
                                   pedestrian: '#6B7280',
                                   subway: '#8B5CF6',
+                                  metro: '#8B5CF6',
                                   bus: '#F59E0B',
                                   train: '#3B82F6',
+                                  rail: '#3B82F6',
                                   regionalTrain: '#3B82F6',
                                   intercityTrain: '#1D4ED8',
                                   highSpeedTrain: '#1D4ED8',
                                   lightRail: '#10B981',
                                   tram: '#10B981',
                                   ferry: '#0EA5E9',
-                                  taxi: '#EF4444',
+                                  monorail: '#8B5CF6',
                                 };
                                 const color = stepColors[step.type] || 'var(--text-muted)';
                                 const isDotted = step.type === 'pedestrian' || step.type === 'subway';

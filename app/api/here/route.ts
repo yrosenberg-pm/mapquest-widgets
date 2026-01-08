@@ -8,8 +8,8 @@ const ENDPOINTS: Record<string, string> = {
   geocode: 'https://geocode.search.hereapi.com/v1/geocode',
   revgeocode: 'https://revgeocode.search.hereapi.com/v1/revgeocode',
   routes: 'https://router.hereapi.com/v8/routes',
-  // HERE Intermodal Routing API for public transit + walking
-  transit: 'https://intermodal.router.hereapi.com/v8/routes',
+  // HERE Public Transit API - only returns subway, bus, tram, ferry (no taxi/car)
+  transit: 'https://transit.router.hereapi.com/v8/routes',
 };
 
 export async function GET(request: NextRequest) {
@@ -119,11 +119,11 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
         }
 
-        // HERE Intermodal Routing API for public transit
-        // Exclude taxi/car modes to force public transit only
-        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary&alternatives=3&pedestrian[maxDistance]=2000&avoid[features]=taxi,car,carShuttle,carHOV`;
+        // HERE Public Transit API v8 - only returns actual public transit (no taxi/car)
+        // This API specifically handles subway, bus, tram, rail, ferry
+        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary,intermediate&alternatives=3&pedestrian[maxDistance]=2000`;
         
-        console.log('HERE Intermodal Transit API URL:', url.replace(HERE_API_KEY!, '***'));
+        console.log('HERE Public Transit API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
       }
 

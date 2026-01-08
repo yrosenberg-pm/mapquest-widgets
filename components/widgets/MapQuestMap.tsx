@@ -575,19 +575,21 @@ export default function MapQuestMap({
     if (transitSegments && transitSegments.length > 0) {
       const allLatLngs: [number, number][] = [];
       
-      // Define colors for different transit types
+      // Define colors for different transit types (public transit only)
       const segmentColors: Record<string, string> = {
         pedestrian: '#6B7280', // Gray for walking
         subway: '#8B5CF6', // Purple for subway
+        metro: '#8B5CF6', // Purple for metro (same as subway)
         bus: '#F59E0B', // Amber for bus
         train: '#3B82F6', // Blue for train
+        rail: '#3B82F6', // Blue for rail
         regionalTrain: '#3B82F6',
         intercityTrain: '#1D4ED8',
         highSpeedTrain: '#1D4ED8',
         lightRail: '#10B981', // Emerald for light rail
         tram: '#10B981',
         ferry: '#0EA5E9', // Sky blue for ferry
-        taxi: '#EF4444', // Red for taxi
+        monorail: '#8B5CF6', // Purple for monorail
       };
 
       transitSegments.forEach((segment) => {
