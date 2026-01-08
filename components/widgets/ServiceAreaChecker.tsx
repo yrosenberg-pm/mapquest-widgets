@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Loader2, CheckCircle2, XCircle, Navigation, MapPin } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Navigation, MapPin, Eye, EyeOff } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -51,6 +51,7 @@ export default function ServiceAreaChecker({
     lng?: number;
   } | null>(null);
   const [clickedPoint, setClickedPoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [showServiceArea, setShowServiceArea] = useState(true);
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -322,6 +323,18 @@ export default function ServiceAreaChecker({
               Service center
             </div>
             <div>Delivery radius: {serviceRadiusMiles} miles</div>
+            {/* Toggle for service area visibility */}
+            <button
+              onClick={() => setShowServiceArea(!showServiceArea)}
+              className="flex items-center gap-1.5 text-xs mt-1 transition-colors"
+              style={{ 
+                color: showServiceArea ? accentColor : 'var(--text-muted)',
+                opacity: showServiceArea ? 1 : 0.7
+              }}
+            >
+              <span>{showServiceArea ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}</span>
+              {showServiceArea ? 'Hide area' : 'Show area'}
+            </button>
           </div>
         </div>
 
@@ -334,22 +347,15 @@ export default function ServiceAreaChecker({
             darkMode={darkMode}
             accentColor={accentColor}
             markers={markers}
+            circles={showServiceArea ? [{
+              lat: serviceCenter.lat,
+              lng: serviceCenter.lng,
+              radius: serviceRadiusMiles * 1609.34, // Convert miles to meters
+              color: accentColor,
+              fillOpacity: 0.1,
+            }] : []}
             height="100%"
             onClick={handleMapClick}
-          />
-          
-          {/* Service area circle overlay - visual indicator */}
-          <div 
-            className="absolute pointer-events-none rounded-full border-2 border-dashed opacity-30"
-            style={{
-              borderColor: accentColor,
-              backgroundColor: accentColor + '10',
-              width: '60%',
-              height: '60%',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-            }}
           />
         </div>
       </div>

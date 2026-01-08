@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
-  Bus, LucideIcon
+  Bus, Eye, EyeOff, LucideIcon
 } from 'lucide-react';
 import { geocode, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -183,6 +183,7 @@ export default function NeighborhoodScore({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
+  const [showSearchArea, setShowSearchArea] = useState(true);
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
   const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
@@ -764,7 +765,23 @@ export default function NeighborhoodScore({
         </div>
 
         {/* Map */}
-        <div className="flex-1">
+        <div className="flex-1 relative">
+          {/* Search Area Toggle */}
+          {location && (
+            <button
+              onClick={() => setShowSearchArea(!showSearchArea)}
+              className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
+              style={{ 
+                background: darkMode ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+                border: `1px solid ${darkMode ? 'rgba(71, 85, 105, 0.5)' : 'rgba(203, 213, 225, 0.8)'}`,
+                color: showSearchArea ? accentColor : (darkMode ? '#94A3B8' : '#64748B'),
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}
+            >
+              {showSearchArea ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+              {showSearchArea ? 'Hide radius' : 'Show radius'}
+            </button>
+          )}
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
@@ -827,6 +844,21 @@ export default function NeighborhoodScore({
             })()}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
+            circles={showSearchArea && location ? (() => {
+              // Get search radius for current category or use default 2 miles
+              const searchRadius = selectedCategory 
+                ? (categoryConfigs[selectedCategory.category.id]?.searchRadius || 2)
+                : 2;
+              return [{
+                lat: location.lat,
+                lng: location.lng,
+                radius: searchRadius * 1609.34, // Convert miles to meters
+                color: selectedCategory 
+                  ? (categoryColors[selectedCategory.category.id] || accentColor)
+                  : accentColor,
+                fillOpacity: 0.08,
+              }];
+            })() : []}
           />
         </div>
       </div>
