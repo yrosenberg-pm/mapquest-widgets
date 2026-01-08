@@ -59,6 +59,7 @@ interface NHLArenaExplorerProps {
   companyLogo?: string;
   fontFamily?: string;
   borderRadius?: string;
+  searchRadius?: number; // Search radius in miles (default: 5)
 }
 
 export default function NHLArenaExplorer({ 
@@ -70,6 +71,7 @@ export default function NHLArenaExplorer({
   companyLogo,
   fontFamily,
   borderRadius,
+  searchRadius = 5,
 }: NHLArenaExplorerProps) {
   const [selectedStadium, setSelectedStadium] = useState<typeof NHL_STADIUMS[0] | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -203,9 +205,11 @@ export default function NHLArenaExplorer({
     setLoading(true);
     try {
       const MQ_KEY = '78TTOXc0cKtnj1pSD71bHAaFrdU4EvHw';
+      const radiusMeters = searchRadius * 1609.34; // Convert miles to meters
       
       const fetchCategory = async (query: string) => {
-        const url = 'https://www.mapquestapi.com/search/v4/place?key=' + MQ_KEY + '&location=' + stadium.lng + ',' + stadium.lat + '&sort=distance&q=' + encodeURIComponent(query) + '&limit=5';
+        // Use circle filter with configurable radius and fetch more results
+        const url = `https://www.mapquestapi.com/search/v4/place?key=${MQ_KEY}&location=${stadium.lng},${stadium.lat}&sort=distance&q=${encodeURIComponent(query)}&limit=20&circle=${stadium.lng},${stadium.lat},${radiusMeters}`;
         const res = await fetch(url);
         const data = await res.json();
         return data.results || [];
@@ -217,13 +221,23 @@ export default function NHLArenaExplorer({
         fetchCategory('hotel'),
       ]);
       
-      const formatResults = (results: any[]) => results.map(r => ({
-        name: r.name,
-        address: r.place?.properties?.street || r.displayString || 'Nearby',
-        distance: r.distance ? (r.distance * 0.000621371).toFixed(1) + ' mi' : '—',
-        lat: r.place?.geometry?.coordinates?.[1] || stadium.lat,
-        lng: r.place?.geometry?.coordinates?.[0] || stadium.lng,
-      }));
+      const formatResults = (results: any[]) => results
+        .map(r => {
+          const distanceMeters = r.distance || 0;
+          const distanceMiles = distanceMeters * 0.000621371;
+          return {
+            name: r.name,
+            address: r.place?.properties?.street || r.displayString || 'Nearby',
+            distance: distanceMiles > 0 ? distanceMiles.toFixed(1) + ' mi' : '—',
+            distanceNum: distanceMiles,
+            lat: r.place?.geometry?.coordinates?.[1] || stadium.lat,
+            lng: r.place?.geometry?.coordinates?.[0] || stadium.lng,
+          };
+        })
+        // Filter to only include results within the search radius
+        .filter(r => r.distanceNum <= searchRadius)
+        // Sort by distance
+        .sort((a, b) => a.distanceNum - b.distanceNum);
 
       setPlaces({
         parking: formatResults(parkingResults || []),
