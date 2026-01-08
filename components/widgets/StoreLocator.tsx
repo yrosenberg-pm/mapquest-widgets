@@ -272,7 +272,7 @@ export default function StoreLocator({
                 style={{ backgroundColor: accentColor, borderRadius }}
                 onClick={() => {
                   window.open(
-                    `https://www.google.com/maps/dir/?api=1&destination=${selectedStore.lat},${selectedStore.lng}`,
+                    `https://www.mapquest.com/directions/to/${selectedStore.lat},${selectedStore.lng}`,
                     '_blank'
                   );
                 }}
