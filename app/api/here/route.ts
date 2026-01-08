@@ -120,8 +120,8 @@ export async function GET(request: NextRequest) {
         }
 
         // HERE Intermodal Routing API for public transit
-        // Uses pedestrian mode combined with transit
-        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary&modes=highSpeedTrain,intercityTrain,interRegionalTrain,regionalTrain,cityTrain,bus,ferry,subway,lightRail,privateBus,inclined,aerial,busRapid,monorail,flight,walk`;
+        // Let the API determine best transit modes automatically
+        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary`;
         
         console.log('HERE Intermodal Transit API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
