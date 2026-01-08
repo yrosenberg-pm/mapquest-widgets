@@ -8,7 +8,8 @@ const ENDPOINTS: Record<string, string> = {
   geocode: 'https://geocode.search.hereapi.com/v1/geocode',
   revgeocode: 'https://revgeocode.search.hereapi.com/v1/revgeocode',
   routes: 'https://router.hereapi.com/v8/routes',
-  transit: 'https://transit.router.hereapi.com/v8/routes',
+  // HERE Intermodal Routing API for public transit + walking
+  transit: 'https://intermodal.router.hereapi.com/v8/routes',
 };
 
 export async function GET(request: NextRequest) {
@@ -118,10 +119,11 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
         }
 
-        // HERE Public Transit API uses different parameter format
-        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary,intermediate`;
+        // HERE Intermodal Routing API for public transit
+        // Uses pedestrian mode combined with transit
+        url = `${ENDPOINTS.transit}?apiKey=${HERE_API_KEY}&origin=${transitOrigin}&destination=${transitDestination}&departureTime=${encodeURIComponent(departTime)}&return=polyline,travelSummary&modes=highSpeedTrain,intercityTrain,interRegionalTrain,regionalTrain,cityTrain,bus,ferry,subway,lightRail,privateBus,inclined,aerial,busRapid,monorail,flight,walk`;
         
-        console.log('HERE Transit API URL:', url.replace(HERE_API_KEY!, '***'));
+        console.log('HERE Intermodal Transit API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
       }
 
