@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Key, Code } from 'lucide-react';
 import {
   SmartAddressInput,
@@ -68,6 +68,7 @@ export default function Home() {
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState('theme');
   const [copied, setCopied] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // Customization state
   const [darkMode, setDarkMode] = useState(false);
@@ -78,6 +79,49 @@ export default function Home() {
   const [brandingMode, setBrandingMode] = useState<'mapquest' | 'cobranded' | 'whitelabel'>('mapquest');
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
+
+  // Load preferences from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedPrefs = localStorage.getItem('widgetPreferences');
+      if (savedPrefs) {
+        const prefs = JSON.parse(savedPrefs);
+        if (prefs.darkMode !== undefined) setDarkMode(prefs.darkMode);
+        if (prefs.accentColor) setAccentColor(prefs.accentColor);
+        if (prefs.customColor) setCustomColor(prefs.customColor);
+        if (prefs.fontFamily) setFontFamily(prefs.fontFamily);
+        if (prefs.borderRadius) setBorderRadius(prefs.borderRadius);
+        if (prefs.brandingMode) setBrandingMode(prefs.brandingMode);
+        if (prefs.companyName) setCompanyName(prefs.companyName);
+        if (prefs.companyLogo) setCompanyLogo(prefs.companyLogo);
+        if (prefs.activeWidget) setActiveWidget(prefs.activeWidget);
+      }
+    } catch (e) {
+      console.error('Failed to load preferences:', e);
+    }
+    setPrefsLoaded(true);
+  }, []);
+
+  // Save preferences to localStorage when they change
+  useEffect(() => {
+    if (!prefsLoaded) return; // Don't save until initial load is complete
+    try {
+      const prefs = {
+        darkMode,
+        accentColor,
+        customColor,
+        fontFamily,
+        borderRadius,
+        brandingMode,
+        companyName,
+        companyLogo,
+        activeWidget,
+      };
+      localStorage.setItem('widgetPreferences', JSON.stringify(prefs));
+    } catch (e) {
+      console.error('Failed to save preferences:', e);
+    }
+  }, [prefsLoaded, darkMode, accentColor, customColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo, activeWidget]);
 
   const currentWidget = WIDGETS.find(w => w.id === activeWidget);
 
