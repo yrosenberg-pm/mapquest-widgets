@@ -107,9 +107,11 @@ export default function InstacartDeliveryETA({
         if (!destResult) return;
 
         const destCoords = { lat: destResult.lat, lng: destResult.lng };
+        // Generate shopper location ~2-5 miles away, biased to be on land
+        // Use positive lat offset (north) and slight east offset to avoid ocean for coastal cities
         let currentShopperLocation = shopperLocation || {
-          lat: destCoords.lat + (Math.random() - 0.5) * 0.1,
-          lng: destCoords.lng + (Math.random() - 0.5) * 0.1,
+          lat: destCoords.lat + 0.02 + Math.random() * 0.03, // 1.5-3.5 miles north
+          lng: destCoords.lng + (Math.random() * 0.03) - 0.005, // slight east bias
         };
 
         const directions = await getDirections(

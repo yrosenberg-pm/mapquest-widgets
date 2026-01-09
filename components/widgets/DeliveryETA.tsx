@@ -62,9 +62,11 @@ export default function DeliveryETA({
         if (!destResult) return;
 
         const destCoords = { lat: destResult.lat, lng: destResult.lng };
+        // Generate driver location ~3-8 miles away, biased to be on land
+        // Use positive lat offset (north) and slight east offset to avoid ocean for coastal cities
         let currentDriverLocation = driverLocation || {
-          lat: destCoords.lat + (Math.random() - 0.5) * 0.15,
-          lng: destCoords.lng + (Math.random() - 0.5) * 0.15,
+          lat: destCoords.lat + 0.03 + Math.random() * 0.04, // 2-5 miles north
+          lng: destCoords.lng + (Math.random() * 0.04) - 0.01, // slight east bias
         };
 
         const directions = await getDirections(
