@@ -721,7 +721,10 @@ export default function NHLArenaExplorer({
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Map */}
-          <div className="h-[220px]">
+          <div 
+            className="h-[220px] relative"
+            style={{ boxShadow: '0 4px 12px -4px rgba(0, 0, 0, 0.15)' }}
+          >
             <MapQuestMap
               apiKey={apiKey}
               center={mapCenter}
