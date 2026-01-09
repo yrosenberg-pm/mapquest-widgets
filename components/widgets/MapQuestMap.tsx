@@ -349,10 +349,9 @@ export default function MapQuestMap({
       mapDiv.style.height = '100%';
       containerRef.current.appendChild(mapDiv);
 
-      // Use MapQuest tileLayer
+      // Create map without initial tile layer - we'll add it in the darkMode useEffect
       const map = L.mapquest.map(mapIdRef.current, {
         center: [center.lat, center.lng],
-        layers: L.mapquest.tileLayer(darkMode ? 'dark' : 'map'),
         zoom: zoom,
         minZoom: minZoom,
         zoomControl: showZoomControls,
@@ -423,30 +422,33 @@ export default function MapQuestMap({
   // Track tile layer reference
   const tileLayerRef = useRef<any>(null);
 
-  // Update dark mode / tiles
+  // Update dark mode / tiles - also handles initial tile layer
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const L = window.L;
     const mapDiv = document.getElementById(mapIdRef.current);
     
-    // Remove the previous tile layer if it exists
-    if (tileLayerRef.current) {
-      mapRef.current.removeLayer(tileLayerRef.current);
-      tileLayerRef.current = null;
-    }
-    
-    // Also remove any other tile layers that might be lingering
+    // Remove ALL existing layers first (tiles, etc.)
+    const layersToRemove: any[] = [];
     mapRef.current.eachLayer((layer: any) => {
-      if (layer instanceof L.TileLayer) {
-        mapRef.current.removeLayer(layer);
+      // Check if it's a tile layer by looking for _url property or checking constructor
+      if (layer._url || layer._tiles || (layer.options && layer.options.tileSize)) {
+        layersToRemove.push(layer);
       }
     });
+    layersToRemove.forEach((layer: any) => {
+      mapRef.current.removeLayer(layer);
+    });
+    
+    // Clear the ref
+    tileLayerRef.current = null;
 
     // Add new MapQuest tiles and store reference
     const newTileLayer = L.mapquest.tileLayer(darkMode ? 'dark' : 'map');
     newTileLayer.addTo(mapRef.current);
     tileLayerRef.current = newTileLayer;
     
+    // Update dark-map class
     if (darkMode) {
       mapDiv?.classList.add('dark-map');
     } else {
