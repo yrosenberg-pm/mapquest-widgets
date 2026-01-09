@@ -111,16 +111,25 @@ export default function MapQuestMap({
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* Fix Chrome tile rendering gaps */
-      .leaflet-tile-container img {
-        width: 256px !important;
-        height: 256px !important;
+      /* Fix tile gaps during pan/zoom - disable fade animation */
+      .leaflet-fade-anim .leaflet-tile,
+      .leaflet-fade-anim .leaflet-map-pane .leaflet-tile {
+        transition: opacity 0s !important;
+        opacity: 1 !important;
       }
-      .leaflet-tile-pane {
-        -webkit-transform: translate3d(0,0,0);
+      
+      /* Prevent sub-pixel rendering gaps */
+      .leaflet-tile-container {
+        transform: translateZ(0);
       }
-      img.leaflet-tile {
-        box-sizing: content-box !important;
+      .leaflet-tile {
+        transform: translateZ(0);
+        backface-visibility: hidden;
+      }
+      
+      /* Ensure crisp tile edges */
+      .leaflet-container {
+        image-rendering: -webkit-optimize-contrast;
       }
 
       /* Clean zoom controls */
@@ -351,6 +360,9 @@ export default function MapQuestMap({
         preferCanvas: true,
         zoomSnap: 1,
         zoomDelta: 1,
+        fadeAnimation: false,
+        zoomAnimation: true,
+        markerZoomAnimation: true,
       });
 
       if (darkMode) {
