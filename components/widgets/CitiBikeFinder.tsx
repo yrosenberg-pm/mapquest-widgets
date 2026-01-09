@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, Bike, Navigation, Loader2, ChevronRight, X, Clock } from 'lucide-react';
+import { Search, Bike, Navigation, Loader2, ChevronRight, X, Clock, RefreshCw, CreditCard, Zap, MapPin } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -19,6 +19,13 @@ interface BikeStation {
   totalDocks: number;
   status: 'active' | 'maintenance' | 'offline';
   lastUpdated: string;
+  distance?: number;
+  // Additional real data fields
+  hasPaymentTerminal?: boolean;
+  isCharging?: boolean;
+  isInstalled?: boolean;
+  isRenting?: boolean;
+  isReturning?: boolean;
 }
 
 interface CitiBikeFinderProps {
@@ -34,55 +41,77 @@ const CITIBIKE_BLUE = '#0033A0';
 const CITIBIKE_ORANGE = '#FF6B00'; // Orange dot on the 'i'
 const LYFT_PINK = '#FF00BF';
 
-// Generate mock Citi Bike stations around a location
-const generateMockStations = (centerLat: number, centerLng: number, count: number = 30): BikeStation[] => {
-  const stations: BikeStation[] = [];
-  const streetNames = [
-    'Broadway', 'Park Ave', 'Madison Ave', '5th Ave', 'Lexington Ave',
-    'Amsterdam Ave', 'Columbus Ave', 'West End Ave', 'Central Park West',
-    '1st Ave', '2nd Ave', '3rd Ave', 'York Ave', 'East End Ave',
-    'Hudson St', 'Greenwich St', 'Varick St', 'Lafayette St', 'Bowery',
-    'Canal St', 'Houston St', 'Bleecker St', 'Spring St', 'Prince St'
-  ];
-  
-  const crossStreets = [
-    '14th St', '23rd St', '34th St', '42nd St', '50th St', '59th St',
-    '66th St', '72nd St', '79th St', '86th St', '96th St', '110th St',
-    'Grand St', 'Delancey St', 'Rivington St', 'Stanton St', 'Broome St'
-  ];
+// Raw API response types
+interface CityBikesStation {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  free_bikes: number;
+  empty_slots: number;
+  timestamp: string;
+  extra?: {
+    uid?: string;
+    ebikes?: number;
+    has_ebikes?: boolean;
+    payment?: string[];
+    payment_terminal?: boolean;
+    is_charging_station?: boolean;
+    is_installed?: boolean;
+    is_renting?: boolean;
+    is_returning?: boolean;
+    rental_methods?: string[];
+    address?: string;
+  };
+}
 
-  for (let i = 0; i < count; i++) {
-    // Spread stations within ~2 miles of center
-    const latOffset = (Math.random() - 0.5) * 0.04;
-    const lngOffset = (Math.random() - 0.5) * 0.05;
-    
-    const totalDocks = Math.floor(Math.random() * 30) + 15; // 15-45 docks
-    const availableBikes = Math.floor(Math.random() * (totalDocks - 2));
-    const availableEbikes = Math.floor(Math.random() * Math.min(5, availableBikes));
-    const availableDocks = totalDocks - availableBikes;
-    
-    const statusRand = Math.random();
-    const status: BikeStation['status'] = statusRand > 0.95 ? 'offline' : statusRand > 0.9 ? 'maintenance' : 'active';
-    
-    const street = streetNames[Math.floor(Math.random() * streetNames.length)];
-    const cross = crossStreets[Math.floor(Math.random() * crossStreets.length)];
-    
-    stations.push({
-      id: `station-${i + 1}`,
-      name: `${street} & ${cross}`,
-      address: `${street} & ${cross}`,
-      lat: centerLat + latOffset,
-      lng: centerLng + lngOffset,
-      availableBikes: status === 'offline' ? 0 : availableBikes,
-      availableEbikes: status === 'offline' ? 0 : availableEbikes,
-      availableDocks: status === 'offline' ? 0 : availableDocks,
-      totalDocks,
-      status,
-      lastUpdated: new Date(Date.now() - Math.floor(Math.random() * 300000)).toISOString(), // Within last 5 min
-    });
+// Transform API data to our BikeStation format
+const transformStation = (raw: CityBikesStation): BikeStation => {
+  const totalDocks = raw.free_bikes + raw.empty_slots;
+  const ebikes = raw.extra?.ebikes || 0;
+  
+  // Determine status based on operational flags
+  let status: BikeStation['status'] = 'active';
+  if (raw.extra?.is_installed === false) {
+    status = 'offline';
+  } else if (raw.extra?.is_renting === false || raw.extra?.is_returning === false) {
+    status = 'maintenance';
   }
   
-  return stations;
+  return {
+    id: raw.id,
+    name: raw.name,
+    address: raw.extra?.address || raw.name,
+    lat: raw.latitude,
+    lng: raw.longitude,
+    availableBikes: raw.free_bikes,
+    availableEbikes: ebikes,
+    availableDocks: raw.empty_slots,
+    totalDocks,
+    status,
+    lastUpdated: raw.timestamp,
+    hasPaymentTerminal: raw.extra?.payment_terminal,
+    isCharging: raw.extra?.is_charging_station,
+    isInstalled: raw.extra?.is_installed,
+    isRenting: raw.extra?.is_renting,
+    isReturning: raw.extra?.is_returning,
+  };
+};
+
+// Fetch all Citi Bike stations
+const fetchAllStations = async (): Promise<BikeStation[]> => {
+  try {
+    const response = await fetch('/api/citibike');
+    if (!response.ok) throw new Error('Failed to fetch stations');
+    
+    const data = await response.json();
+    const rawStations: CityBikesStation[] = data.network?.stations || [];
+    
+    return rawStations.map(transformStation);
+  } catch (error) {
+    console.error('Error fetching Citi Bike data:', error);
+    throw error;
+  }
 };
 
 // Get status color
@@ -117,10 +146,13 @@ export default function CitiBikeFinder({
 }: CitiBikeFinderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [stations, setStations] = useState<BikeStation[]>([]);
+  const [allStations, setAllStations] = useState<BikeStation[]>([]); // All stations from API
+  const [stations, setStations] = useState<BikeStation[]>([]); // Filtered/sorted stations
   const [selectedStation, setSelectedStation] = useState<BikeStation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [totalStationCount, setTotalStationCount] = useState(0);
 
   // Tailwind classes for AddressAutocomplete
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -143,46 +175,83 @@ export default function CitiBikeFinder({
     return R * c;
   };
 
-  // Load stations at a location
-  const loadStationsAtLocation = (location: { lat: number; lng: number }) => {
-    const newStations = generateMockStations(location.lat, location.lng, 35);
-    
-    // Add distance from user location
-    const stationsWithDistance = newStations.map(station => ({
+  // Filter and sort stations by distance from a location
+  const filterStationsByLocation = (location: { lat: number; lng: number }, stationList: BikeStation[]) => {
+    const stationsWithDistance = stationList.map(station => ({
       ...station,
       distance: calculateDistance(location.lat, location.lng, station.lat, station.lng),
-    })).sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    })).filter(s => s.distance <= 5) // Only stations within 5 miles
+      .sort((a, b) => (a.distance || 0) - (b.distance || 0));
     
-    setStations(stationsWithDistance as BikeStation[]);
+    setStations(stationsWithDistance);
+  };
+
+  // Fetch all stations from API
+  const loadAllStations = async () => {
+    try {
+      const fetchedStations = await fetchAllStations();
+      setAllStations(fetchedStations);
+      setTotalStationCount(fetchedStations.length);
+      setLastRefresh(new Date());
+      return fetchedStations;
+    } catch (err) {
+      console.error('Failed to load stations:', err);
+      setError('Failed to load Citi Bike data. Please try again.');
+      return [];
+    }
   };
 
   // Initial load
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          if (!hasSearchedRef.current) {
-            const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
-            setUserLocation(loc);
-            loadStationsAtLocation(loc);
-          }
-          setLoading(false);
-        },
-        () => {
-          if (!hasSearchedRef.current) {
-            setUserLocation(defaultLocation);
-            loadStationsAtLocation(defaultLocation);
-          }
-          setLoading(false);
-        },
-        { timeout: 5000 }
-      );
-    } else {
-      setUserLocation(defaultLocation);
-      loadStationsAtLocation(defaultLocation);
-      setLoading(false);
-    }
+    const initialize = async () => {
+      setLoading(true);
+      const fetchedStations = await loadAllStations();
+      
+      if (fetchedStations.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            if (!hasSearchedRef.current) {
+              const loc = { lat: position.coords.latitude, lng: position.coords.longitude };
+              setUserLocation(loc);
+              filterStationsByLocation(loc, fetchedStations);
+            }
+            setLoading(false);
+          },
+          () => {
+            if (!hasSearchedRef.current) {
+              setUserLocation(defaultLocation);
+              filterStationsByLocation(defaultLocation, fetchedStations);
+            }
+            setLoading(false);
+          },
+          { timeout: 5000 }
+        );
+      } else {
+        setUserLocation(defaultLocation);
+        filterStationsByLocation(defaultLocation, fetchedStations);
+        setLoading(false);
+      }
+    };
+
+    initialize();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-refresh data every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const refreshedStations = await loadAllStations();
+      if (userLocation && refreshedStations.length > 0) {
+        filterStationsByLocation(userLocation, refreshedStations);
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [userLocation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Search at specific location
   const searchAtLocation = async (location: { lat: number; lng: number }) => {
@@ -192,7 +261,7 @@ export default function CitiBikeFinder({
     
     try {
       setUserLocation(location);
-      loadStationsAtLocation(location);
+      filterStationsByLocation(location, allStations);
       setSelectedStation(null);
     } catch (err) {
       console.error('Search error:', err);
@@ -224,6 +293,16 @@ export default function CitiBikeFinder({
       setError('Error searching for location. Please try again.');
       setLoading(false);
     }
+  };
+
+  // Manual refresh
+  const handleRefresh = async () => {
+    setLoading(true);
+    const refreshedStations = await loadAllStations();
+    if (userLocation && refreshedStations.length > 0) {
+      filterStationsByLocation(userLocation, refreshedStations);
+    }
+    setLoading(false);
   };
 
   const handleStationSelect = (station: BikeStation) => {
@@ -375,10 +454,30 @@ export default function CitiBikeFinder({
             )}
             {stations.length > 0 && (
               <div 
-                className="px-4 py-2 text-xs font-medium"
-                style={{ color: 'var(--text-muted)', background: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)' }}
+                className="px-4 py-2 flex items-center justify-between"
+                style={{ background: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)' }}
               >
-                {stations.length} stations nearby
+                <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  {stations.length} of {totalStationCount} stations nearby
+                </div>
+                <div className="flex items-center gap-2">
+                  {lastRefresh && (
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      Updated {formatTimeAgo(lastRefresh.toISOString())}
+                    </span>
+                  )}
+                  <button
+                    onClick={handleRefresh}
+                    disabled={loading}
+                    className="p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title="Refresh data"
+                  >
+                    <RefreshCw 
+                      className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} 
+                      style={{ color: 'var(--text-muted)' }} 
+                    />
+                  </button>
+                </div>
               </div>
             )}
             {stations.map((station) => {
@@ -435,8 +534,16 @@ export default function CitiBikeFinder({
                           className="text-[11px]"
                           style={{ color: 'var(--text-muted)' }}
                         >
-                          {station.availableDocks} open
+                          {station.availableDocks} docks
                         </span>
+                        {station.distance !== undefined && (
+                          <span 
+                            className="text-[11px]"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            · {station.distance.toFixed(2)} mi
+                          </span>
+                        )}
                       </div>
                       
                       {station.status !== 'active' && (
@@ -515,9 +622,54 @@ export default function CitiBikeFinder({
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                <Clock className="w-3 h-3" />
-                Updated {formatTimeAgo(selectedStation.lastUpdated)}
+              {/* Station Features */}
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {selectedStation.hasPaymentTerminal && (
+                  <span 
+                    className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium"
+                    style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+                  >
+                    <CreditCard className="w-3 h-3" /> Card Payment
+                  </span>
+                )}
+                {selectedStation.isCharging && (
+                  <span 
+                    className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium"
+                    style={{ background: `${LYFT_PINK}15`, color: LYFT_PINK }}
+                  >
+                    <Zap className="w-3 h-3" /> Charging Station
+                  </span>
+                )}
+                {selectedStation.isRenting === false && (
+                  <span 
+                    className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium"
+                    style={{ background: '#F59E0B15', color: '#F59E0B' }}
+                  >
+                    Not Renting
+                  </span>
+                )}
+                {selectedStation.isReturning === false && (
+                  <span 
+                    className="text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-medium"
+                    style={{ background: '#F59E0B15', color: '#F59E0B' }}
+                  >
+                    Not Accepting Returns
+                  </span>
+                )}
+              </div>
+              
+              {/* Distance and Update Info */}
+              <div className="flex items-center justify-between text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                <div className="flex items-center gap-2">
+                  <Clock className="w-3 h-3" />
+                  Updated {formatTimeAgo(selectedStation.lastUpdated)}
+                </div>
+                {selectedStation.distance !== undefined && (
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {selectedStation.distance.toFixed(2)} mi away
+                  </div>
+                )}
               </div>
               
               <button
