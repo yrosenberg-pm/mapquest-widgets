@@ -558,6 +558,7 @@ export default function StarbucksFinder({
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}
             zoom={mapZoom}
+            minZoom={12}
             darkMode={darkMode}
             accentColor={STARBUCKS_GREEN}
             height="520px"

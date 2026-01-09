@@ -37,6 +37,7 @@ interface MapQuestMapProps {
   apiKey: string;
   center: { lat: number; lng: number };
   zoom?: number;
+  minZoom?: number;
   darkMode?: boolean;
   accentColor?: string;
   markers?: MapMarker[];
@@ -70,6 +71,7 @@ export default function MapQuestMap({
   apiKey,
   center,
   zoom = 12,
+  minZoom,
   darkMode = false,
   accentColor = '#2563eb',
   markers = [],
@@ -337,6 +339,7 @@ export default function MapQuestMap({
         center: [center.lat, center.lng],
         layers: L.mapquest.tileLayer(darkMode ? 'dark' : 'map'),
         zoom: zoom,
+        minZoom: minZoom,
         zoomControl: showZoomControls,
         dragging: interactive,
         scrollWheelZoom: interactive,
