@@ -1,7 +1,7 @@
 // components/widgets/StarbucksFinder.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, Phone, Clock, Navigation, Loader2, ChevronRight, X, Coffee } from 'lucide-react';
 import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -79,15 +79,38 @@ export default function StarbucksFinder({
     }
   };
 
-  // Load Starbucks at a specific location
-  const loadStarbucksAtLocation = async (location: { lat: number; lng: number }, calculateDriveTimes = true) => {
+  // Calculate distance between two points in miles
+  const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+    const R = 3959; // Earth's radius in miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Load Starbucks based on map bounds
+  const loadStarbucksInBounds = async (bounds: { north: number; south: number; east: number; west: number }) => {
     try {
+      // Calculate center of bounds
+      const centerLat = (bounds.north + bounds.south) / 2;
+      const centerLng = (bounds.east + bounds.west) / 2;
+      
+      // Calculate radius from center to corner (in miles)
+      const radiusMiles = calculateDistance(centerLat, centerLng, bounds.north, bounds.east);
+      // Use at least 5 miles, cap at 50 miles
+      const searchRadiusMiles = Math.min(Math.max(radiusMiles * 1.2, 5), 50);
+      
+      console.log(`Searching Starbucks at ${centerLat},${centerLng} with radius ${searchRadiusMiles.toFixed(1)} miles`);
+      
       const starbucksResults = await searchPlaces(
-        location.lat,
-        location.lng,
+        centerLat,
+        centerLng,
         'q:starbucks',
-        searchRadius,
-        maxResults
+        searchRadiusMiles,
+        100 // Get up to 100 results
       );
       
       if (starbucksResults.length === 0) {
@@ -99,33 +122,24 @@ export default function StarbucksFinder({
         const coords = item.place?.geometry?.coordinates || [];
         const props = item.place?.properties as Record<string, any> || {};
         
+        // Calculate distance from user location if available
+        let distance = item.distance;
+        if (userLocation && coords[1] && coords[0]) {
+          distance = calculateDistance(userLocation.lat, userLocation.lng, coords[1], coords[0]);
+        }
+        
         return {
-          id: `starbucks-${idx}`,
+          id: `starbucks-${coords[1]?.toFixed(4)}-${coords[0]?.toFixed(4)}-${idx}`,
           name: item.name || 'Starbucks',
           address: props.street || item.displayString || '',
           city: props.city || '',
           state: props.state || props.stateCode || '',
-          lat: coords[1] || item.place?.geometry?.coordinates?.[1] || 0,
-          lng: coords[0] || item.place?.geometry?.coordinates?.[0] || 0,
+          lat: coords[1] || 0,
+          lng: coords[0] || 0,
           phone: props.phone,
-          distance: item.distance,
+          distance: distance,
         };
       }).filter(store => store.lat !== 0 && store.lng !== 0);
-      
-      if (calculateDriveTimes && storesList.length > 0) {
-        // Get drive times for closest stores (limit to first 5 for performance)
-        const storesWithDuration = await Promise.all(
-          storesList.slice(0, 5).map(async (store) => {
-            const duration = await getDriveTime(location.lat, location.lng, store.lat, store.lng);
-            return { ...store, duration: duration ?? undefined };
-          })
-        );
-        
-        return [
-          ...storesWithDuration,
-          ...storesList.slice(5),
-        ];
-      }
       
       return storesList;
     } catch (err) {
@@ -134,46 +148,33 @@ export default function StarbucksFinder({
     }
   };
 
-  // Load initial Starbucks on mount
+  // Load initial Starbucks on mount - just set user location, actual search happens on bounds change
   useEffect(() => {
-    const loadInitialStores = async () => {
-      setLoading(true);
-      
-      // Try to get user's current location
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            const location = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-            };
-            setUserLocation(location);
-            const stores = await loadStarbucksAtLocation(location, false);
-            setStores(stores);
-            setLoading(false);
-            setInitialLoadDone(true);
-          },
-          async () => {
-            // Geolocation denied or failed, use default location
-            setUserLocation(defaultLocation);
-            const stores = await loadStarbucksAtLocation(defaultLocation, false);
-            setStores(stores);
-            setLoading(false);
-            setInitialLoadDone(true);
-          },
-          { timeout: 5000 }
-        );
-      } else {
-        // No geolocation support, use default
-        setUserLocation(defaultLocation);
-        const stores = await loadStarbucksAtLocation(defaultLocation, false);
-        setStores(stores);
-        setLoading(false);
-        setInitialLoadDone(true);
-      }
-    };
-
-    loadInitialStores();
+    // Try to get user's current location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          setLoading(false);
+          setInitialLoadDone(true);
+        },
+        () => {
+          // Geolocation denied or failed, use default location
+          setUserLocation(defaultLocation);
+          setLoading(false);
+          setInitialLoadDone(true);
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      // No geolocation support, use default
+      setUserLocation(defaultLocation);
+      setLoading(false);
+      setInitialLoadDone(true);
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchStarbucks = async () => {
@@ -183,7 +184,7 @@ export default function StarbucksFinder({
     setError(null);
     
     try {
-      // First geocode the user's location
+      // Geocode the search location
       const result = await geocode(searchQuery);
       
       if (!result || !result.lat || !result.lng) {
@@ -194,17 +195,8 @@ export default function StarbucksFinder({
       
       const location = { lat: result.lat, lng: result.lng };
       setUserLocation(location);
-      
-      // Search for Starbucks locations near the user
-      const storesList = await loadStarbucksAtLocation(location, true);
-      
-      if (storesList.length === 0) {
-        setError('No Starbucks locations found nearby. Try a different location.');
-        setLoading(false);
-        return;
-      }
-      
-      setStores(storesList);
+      // Clear stores - map will re-center and trigger new bounds search
+      setStores([]);
       setSelectedStore(null);
     } catch (err) {
       console.error('Search error:', err);
@@ -254,8 +246,34 @@ export default function StarbucksFinder({
     })),
   ];
 
-  const handleBoundsChange = (bounds: { north: number; south: number; east: number; west: number }) => {
+  // Debounce ref to prevent too many API calls
+  const boundsSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const handleBoundsChange = async (bounds: { north: number; south: number; east: number; west: number }) => {
     setMapBounds(bounds);
+    
+    // Debounce the search - wait 500ms after user stops panning/zooming
+    if (boundsSearchTimeoutRef.current) {
+      clearTimeout(boundsSearchTimeoutRef.current);
+    }
+    
+    boundsSearchTimeoutRef.current = setTimeout(async () => {
+      setLoading(true);
+      const newStores = await loadStarbucksInBounds(bounds);
+      
+      // Merge with existing stores, avoiding duplicates
+      setStores(prevStores => {
+        const existingIds = new Set(prevStores.map(s => s.id));
+        const uniqueNew = newStores.filter(s => !existingIds.has(s.id));
+        const merged = [...prevStores, ...uniqueNew];
+        // Sort by distance if we have user location
+        if (userLocation) {
+          merged.sort((a, b) => (a.distance || 999) - (b.distance || 999));
+        }
+        return merged;
+      });
+      setLoading(false);
+    }, 500);
   };
 
   return (
@@ -410,6 +428,14 @@ export default function StarbucksFinder({
                       >
                         {store.name}
                       </div>
+                      {store.address && (
+                        <div 
+                          className="text-xs truncate mt-0.5"
+                          style={{ color: 'var(--text-secondary)' }}
+                        >
+                          {store.address}{store.city ? `, ${store.city}` : ''}
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 mt-0.5">
                         {store.distance !== undefined && (
                           <span 
