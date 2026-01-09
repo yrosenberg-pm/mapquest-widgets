@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, Bike, Navigation, Loader2, ChevronRight, X, Clock, RefreshCw, CreditCard, Zap, MapPin } from 'lucide-react';
+import { Search, Bike, Navigation, Loader2, ChevronRight, X, RefreshCw, CreditCard, Zap, MapPin } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -329,15 +329,6 @@ export default function CitiBikeFinder({
     })),
   ];
 
-  // Format time ago
-  const formatTimeAgo = (isoString: string) => {
-    const diff = Date.now() - new Date(isoString).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins === 1) return '1 min ago';
-    return `${mins} mins ago`;
-  };
-
   return (
     <div 
       className="prism-widget"
@@ -649,19 +640,13 @@ export default function CitiBikeFinder({
                 )}
               </div>
               
-              {/* Distance and Update Info */}
-              <div className="flex items-center justify-between text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-                <div className="flex items-center gap-2">
-                  <Clock className="w-3 h-3" />
-                  Updated {formatTimeAgo(selectedStation.lastUpdated)}
+              {/* Distance Info */}
+              {selectedStation.distance !== undefined && (
+                <div className="flex items-center gap-1 text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                  <MapPin className="w-3 h-3" />
+                  {selectedStation.distance.toFixed(2)} mi away
                 </div>
-                {selectedStation.distance !== undefined && (
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {selectedStation.distance.toFixed(2)} mi away
-                  </div>
-                )}
-              </div>
+              )}
               
               <button
                 className="prism-btn prism-btn-primary w-full"
