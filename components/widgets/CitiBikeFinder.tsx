@@ -415,20 +415,20 @@ export default function CitiBikeFinder({
                       {/* Availability badges - compact */}
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span 
-                          className="text-[11px] px-1.5 py-px rounded font-medium"
+                          className="text-[11px] px-2 py-0.5 rounded font-medium inline-flex items-center gap-1"
                           style={{ 
                             background: station.availableBikes > 0 ? '#22C55E15' : '#EF444415',
                             color: station.availableBikes > 0 ? '#22C55E' : '#EF4444',
                           }}
                         >
-                          {station.availableBikes}🚲
+                          {station.availableBikes} <span>🚲</span>
                         </span>
                         {station.availableEbikes > 0 && (
                           <span 
-                            className="text-[11px] px-1.5 py-px rounded font-medium"
+                            className="text-[11px] px-2 py-0.5 rounded font-medium inline-flex items-center gap-1"
                             style={{ background: `${LYFT_PINK}15`, color: LYFT_PINK }}
                           >
-                            {station.availableEbikes}⚡
+                            {station.availableEbikes} <span>⚡</span>
                           </span>
                         )}
                         <span 
