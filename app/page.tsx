@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Key, Code } from 'lucide-react';
 import {
   SmartAddressInput,
-  StoreLocator,
   StarbucksFinder,
   DirectionsEmbed,
   ServiceAreaChecker,
@@ -18,20 +17,12 @@ import {
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-// Sample store data
-const SAMPLE_STORES = [
-  { id: '1', name: 'Downtown Store', address: '123 Main St', city: 'Seattle', state: 'WA', zip: '98101', lat: 47.6062, lng: -122.3321, phone: '(206) 555-0100', hours: '9am - 9pm' },
-  { id: '2', name: 'Bellevue Location', address: '456 Bellevue Way', city: 'Bellevue', state: 'WA', zip: '98004', lat: 47.6101, lng: -122.2015, phone: '(425) 555-0200', hours: '10am - 8pm' },
-  { id: '3', name: 'Capitol Hill', address: '789 Broadway', city: 'Seattle', state: 'WA', zip: '98102', lat: 47.6205, lng: -122.3212, phone: '(206) 555-0300', hours: '8am - 10pm' },
-];
-
-type WidgetId = 'nhl' | 'address' | 'store' | 'starbucks' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'here-isoline';
+type WidgetId = 'nhl' | 'address' | 'starbucks' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'here-isoline';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
   { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', category: 'Quick Win' },
-  { id: 'store' as WidgetId, name: 'Store Locator', description: 'Find nearest locations with drive times', category: 'Quick Win' },
-  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks with Starbucks branding', category: 'Quick Win' },
+  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', category: 'Quick Win' },
   { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', category: 'Quick Win' },
   { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', category: 'Quick Win' },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', category: 'Bigger Bet' },
@@ -164,8 +155,6 @@ export default function Home() {
         return <NHLArenaExplorer {...commonProps} />;
       case 'address':
         return <SmartAddressInput {...commonProps} onAddressSelect={(a) => console.log('Selected:', a)} />;
-      case 'store':
-        return <StoreLocator {...commonProps} stores={SAMPLE_STORES} />;
       case 'starbucks':
         return <StarbucksFinder {...commonProps} />;
       case 'directions':

@@ -2,7 +2,6 @@
 // Export all widgets for easy importing
 
 export { default as SmartAddressInput } from './SmartAddressInput';
-export { default as StoreLocator } from './StoreLocator';
 export { default as StarbucksFinder } from './StarbucksFinder';
 export { default as DirectionsEmbed } from './DirectionsEmbed';
 export { default as ServiceAreaChecker } from './ServiceAreaChecker';
