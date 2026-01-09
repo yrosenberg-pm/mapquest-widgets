@@ -6,6 +6,7 @@ import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, 
 import {
   SmartAddressInput,
   StarbucksFinder,
+  CitiBikeFinder,
   DirectionsEmbed,
   ServiceAreaChecker,
   NeighborhoodScore,
@@ -17,12 +18,13 @@ import {
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-type WidgetId = 'nhl' | 'address' | 'starbucks' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'here-isoline';
+type WidgetId = 'nhl' | 'address' | 'starbucks' | 'citibike' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'here-isoline';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
   { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', category: 'Quick Win' },
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', category: 'Quick Win' },
+  { id: 'citibike' as WidgetId, name: 'Citi Bike Finder', description: 'Find available bikes and docking stations', category: 'Quick Win' },
   { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', category: 'Quick Win' },
   { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', category: 'Quick Win' },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', category: 'Bigger Bet' },
@@ -157,6 +159,8 @@ export default function Home() {
         return <SmartAddressInput {...commonProps} onAddressSelect={(a) => console.log('Selected:', a)} />;
       case 'starbucks':
         return <StarbucksFinder {...commonProps} />;
+      case 'citibike':
+        return <CitiBikeFinder {...commonProps} />;
       case 'directions':
         return <DirectionsEmbed {...commonProps} />;
       case 'service':
