@@ -177,6 +177,9 @@ export default function StarbucksFinder({
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Track if we're transitioning to a new search location
+  const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number } | null>(null);
+
   const searchStarbucks = async () => {
     if (!searchQuery.trim()) return;
     
@@ -194,10 +197,29 @@ export default function StarbucksFinder({
       }
       
       const location = { lat: result.lat, lng: result.lng };
-      setUserLocation(location);
-      // Clear stores - map will re-center and trigger new bounds search
-      setStores([]);
+      
+      // Calculate bounds for the new location (approximate ~10 mile radius)
+      const latOffset = 0.145; // ~10 miles
+      const lngOffset = 0.18; // ~10 miles (varies by latitude)
+      const newBounds = {
+        north: location.lat + latOffset,
+        south: location.lat - latOffset,
+        east: location.lng + lngOffset,
+        west: location.lng - lngOffset,
+      };
+      
+      // Load stores at new location BEFORE updating the map
+      const newStores = await loadStarbucksInBounds(newBounds);
+      
+      // Now update everything at once for a smooth transition
       setSelectedStore(null);
+      setUserLocation(location);
+      setStores(newStores);
+      setPendingLocation(location);
+      
+      // Clear pending location after transition
+      setTimeout(() => setPendingLocation(null), 500);
+      
     } catch (err) {
       console.error('Search error:', err);
       setError('Error searching for Starbucks locations. Please try again.');
@@ -223,9 +245,13 @@ export default function StarbucksFinder({
       )
     : stores;
 
+  // Use pending location for smooth transition to new search area
   const mapCenter = selectedStore 
     ? { lat: selectedStore.lat, lng: selectedStore.lng }
-    : userLocation || { lat: 39.8283, lng: -98.5795 };
+    : pendingLocation || userLocation || { lat: 39.8283, lng: -98.5795 };
+
+  // Don't zoom out while loading or if we're transitioning to a new location
+  const mapZoom = (stores.length > 0 || pendingLocation || loading) ? 13 : 4;
 
   const starbucksIconUrl = logoUrl || DEFAULT_LOGO;
 
@@ -531,7 +557,7 @@ export default function StarbucksFinder({
           <MapQuestMap
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}
-            zoom={stores.length > 0 ? 13 : 4}
+            zoom={mapZoom}
             darkMode={darkMode}
             accentColor={STARBUCKS_GREEN}
             height="520px"
