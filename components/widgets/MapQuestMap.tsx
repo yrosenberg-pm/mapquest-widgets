@@ -111,44 +111,29 @@ export default function MapQuestMap({
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* Fix tile gap/seam issues */
+      /* Prevent tile seams/gaps - use matching background colors */
       .leaflet-container {
-        background: #e5e3df !important;
+        background: #f0ede8 !important;
       }
-      .dark-map.leaflet-container {
-        background: #1a1a2e !important;
+      .dark-map.leaflet-container,
+      .dark-map .leaflet-container {
+        background: #242f3e !important;
       }
-      .leaflet-tile {
-        will-change: transform;
-        transform: translateZ(0);
-      }
+      
+      /* Disable all transforms and filters that can cause rendering artifacts */
       .leaflet-tile-pane {
-        will-change: transform;
+        /* No filters - they can cause tile edge issues */
       }
-      .leaflet-tile-container {
-        backface-visibility: hidden;
+      
+      /* Ensure tiles render cleanly */
+      .leaflet-tile {
         -webkit-backface-visibility: hidden;
-        transform: translateZ(0);
-        -webkit-transform: translateZ(0);
+        backface-visibility: hidden;
       }
+      
+      /* Disable fade animation which can cause flicker */
       .leaflet-fade-anim .leaflet-tile {
-        will-change: opacity;
-      }
-      
-      /* Remove any tile borders/outlines */
-      .leaflet-tile {
-        outline: none !important;
-        border: none !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-      
-      /* Adjust map tile colors for a more modern muted look - but not in dark mode to avoid issues */
-      .leaflet-tile-pane {
-        filter: saturate(0.85) brightness(1.02) contrast(1.02);
-      }
-      .dark-map .leaflet-tile-pane {
-        filter: none;
+        transition: none !important;
       }
 
       /* Clean zoom controls */
@@ -460,17 +445,24 @@ export default function MapQuestMap({
     // Clear the ref
     tileLayerRef.current = null;
 
-    // Add new MapQuest tiles and store reference
-    const newTileLayer = L.mapquest.tileLayer(darkMode ? 'dark' : 'map');
-    newTileLayer.addTo(mapRef.current);
-    tileLayerRef.current = newTileLayer;
-    
-    // Update dark-map class
+    // Update dark-map class BEFORE adding tiles
     if (darkMode) {
       mapDiv?.classList.add('dark-map');
     } else {
       mapDiv?.classList.remove('dark-map');
     }
+
+    // Add new MapQuest tiles and store reference
+    const newTileLayer = L.mapquest.tileLayer(darkMode ? 'dark' : 'map');
+    newTileLayer.addTo(mapRef.current);
+    tileLayerRef.current = newTileLayer;
+    
+    // Force map to recalculate and redraw after tile change
+    setTimeout(() => {
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
+    }, 100);
   }, [darkMode, mapReady]);
 
   // Update center and zoom
