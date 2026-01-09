@@ -6,6 +6,7 @@ import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, 
 import {
   SmartAddressInput,
   StoreLocator,
+  StarbucksFinder,
   DirectionsEmbed,
   ServiceAreaChecker,
   NeighborhoodScore,
@@ -24,12 +25,13 @@ const SAMPLE_STORES = [
   { id: '3', name: 'Capitol Hill', address: '789 Broadway', city: 'Seattle', state: 'WA', zip: '98102', lat: 47.6205, lng: -122.3212, phone: '(206) 555-0300', hours: '8am - 10pm' },
 ];
 
-type WidgetId = 'nhl' | 'address' | 'store' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'here-isoline';
+type WidgetId = 'nhl' | 'address' | 'store' | 'starbucks' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'here-isoline';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
   { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', category: 'Quick Win' },
   { id: 'store' as WidgetId, name: 'Store Locator', description: 'Find nearest locations with drive times', category: 'Quick Win' },
+  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks with Starbucks branding', category: 'Quick Win' },
   { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', category: 'Quick Win' },
   { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', category: 'Quick Win' },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', category: 'Bigger Bet' },
@@ -164,6 +166,8 @@ export default function Home() {
         return <SmartAddressInput {...commonProps} onAddressSelect={(a) => console.log('Selected:', a)} />;
       case 'store':
         return <StoreLocator {...commonProps} stores={SAMPLE_STORES} />;
+      case 'starbucks':
+        return <StarbucksFinder {...commonProps} />;
       case 'directions':
         return <DirectionsEmbed {...commonProps} />;
       case 'service':
