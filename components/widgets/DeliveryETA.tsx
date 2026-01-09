@@ -133,12 +133,25 @@ export default function DeliveryETA({
   const currentIndex = steps.indexOf(status.status);
   const progressPercent = (currentIndex / (steps.length - 1)) * 100;
 
-  const markers: Array<{ lat: number; lng: number; label: string; color: string; icon?: string }> = [];
-  if (status.currentLocation && status.status !== 'delivered') {
-    markers.push({ lat: status.currentLocation.lat, lng: status.currentLocation.lng, label: `${status.driverName} - Driver`, color: accentColor, icon: 'pulse' as const });
+  const markers: Array<{ lat: number; lng: number; label: string; color: string; type?: 'home' | 'poi' | 'default' }> = [];
+  // Always show driver marker at route start
+  if (status.currentLocation) {
+    markers.push({ 
+      lat: status.currentLocation.lat, 
+      lng: status.currentLocation.lng, 
+      label: status.status === 'delivered' ? 'Delivered' : `${status.driverName} - Driver`, 
+      color: accentColor,
+      type: 'home'
+    });
   }
+  // Always show destination marker at route end
   if (status.destinationLocation) {
-    markers.push({ lat: status.destinationLocation.lat, lng: status.destinationLocation.lng, label: 'Delivery Address', color: '#22c55e', icon: 'pin' as const });
+    markers.push({ 
+      lat: status.destinationLocation.lat, 
+      lng: status.destinationLocation.lng, 
+      label: 'Delivery Address', 
+      color: '#22c55e'
+    });
   }
 
   const mapCenter = status.currentLocation || status.destinationLocation || { lat: 39.7392, lng: -104.9903 };
