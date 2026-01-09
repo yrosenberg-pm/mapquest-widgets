@@ -289,7 +289,12 @@ export default function DirectionsEmbed({
         }
       } else {
         // Use MapQuest for other route types
-        const directions = await getDirections(`${fromLoc.lat},${fromLoc.lng}`, `${toLoc.lat},${toLoc.lng}`, routeType);
+        const directions = await getDirections(
+          `${fromLoc.lat},${fromLoc.lng}`, 
+          `${toLoc.lat},${toLoc.lng}`, 
+          routeType,
+          departureTime
+        );
 
         if (!directions) {
           throw new Error('Could not calculate route');

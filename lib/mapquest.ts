@@ -317,7 +317,8 @@ interface DirectionsResult {
 export async function getDirections(
   from: string,
   to: string,
-  routeType: 'fastest' | 'shortest' | 'pedestrian' | 'bicycle' = 'fastest'
+  routeType: 'fastest' | 'shortest' | 'pedestrian' | 'bicycle' = 'fastest',
+  departureTime?: Date | 'now'
 ): Promise<DirectionsResult | null> {
   try {
     const params = new URLSearchParams({
@@ -325,7 +326,17 @@ export async function getDirections(
       from,
       to,
       routeType,
+      useTraffic: 'true', // Enable real-time traffic
     });
+    
+    // Add departure time for traffic predictions
+    if (departureTime && departureTime !== 'now') {
+      params.set('timeType', '1'); // 1 = departure time
+      // Format: MM/DD/YYYY HH:MM:SS
+      const dt = departureTime;
+      const dateStr = `${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getDate().toString().padStart(2, '0')}/${dt.getFullYear()} ${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}:00`;
+      params.set('dateTime', dateStr);
+    }
     
     const res = await fetch(`${API_BASE}?${params}`);
     if (!res.ok) {

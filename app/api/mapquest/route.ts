@@ -84,6 +84,9 @@ export async function GET(request: NextRequest) {
         const allToParams = searchParams.getAll('to');
         const routeType = searchParams.get('routeType') || 'fastest';
         const avoids = searchParams.get('avoids');
+        const useTraffic = searchParams.get('useTraffic');
+        const timeType = searchParams.get('timeType');
+        const dateTime = searchParams.get('dateTime');
         
         let directionsUrl = `${ENDPOINTS.directions}?key=${MAPQUEST_KEY}&from=${from}&routeType=${routeType}&narrativeType=text&unit=m&fullShape=true`;
         
@@ -93,6 +96,18 @@ export async function GET(request: NextRequest) {
         });
         
         if (avoids) directionsUrl += `&avoids=${encodeURIComponent(avoids)}`;
+        
+        // Traffic and time-based routing
+        if (useTraffic === 'true') {
+          directionsUrl += '&doReverseGeocode=false&useTraffic=true';
+        }
+        if (timeType) {
+          directionsUrl += `&timeType=${timeType}`;
+        }
+        if (dateTime) {
+          directionsUrl += `&dateTime=${encodeURIComponent(dateTime)}`;
+        }
+        
         url = directionsUrl;
         break;
       }
