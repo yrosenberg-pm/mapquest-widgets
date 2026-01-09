@@ -454,18 +454,13 @@ export default function CitiBikeFinder({
             )}
             {stations.length > 0 && (
               <div 
-                className="px-4 py-2 flex items-center justify-between"
+                className="px-4 py-2"
                 style={{ background: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)' }}
               >
-                <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                  {stations.length} of {totalStationCount} stations nearby
-                </div>
-                <div className="flex items-center gap-2">
-                  {lastRefresh && (
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      Updated {formatTimeAgo(lastRefresh.toISOString())}
-                    </span>
-                  )}
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                    {stations.length} of {totalStationCount} stations nearby
+                  </div>
                   <button
                     onClick={handleRefresh}
                     disabled={loading}
@@ -478,6 +473,11 @@ export default function CitiBikeFinder({
                     />
                   </button>
                 </div>
+                {lastRefresh && (
+                  <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                    Updated {formatTimeAgo(lastRefresh.toISOString())}
+                  </div>
+                )}
               </div>
             )}
             {stations.map((station) => {
