@@ -111,39 +111,13 @@ export default function MapQuestMap({
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* Fix tile seams/gaps with matching background */
+      /* Simple background colors - no fancy fixes */
       .leaflet-container {
-        background: #e8e4dc !important;
+        background: #e5e3df !important;
       }
       .dark-map.leaflet-container,
       .dark-map .leaflet-container {
-        background: #263238 !important;
-      }
-      
-      /* Scale tiles slightly to eliminate gaps */
-      .leaflet-tile {
-        width: 256.5px !important;
-        height: 256.5px !important;
-      }
-      
-      /* Dark mode specific: add dark outline to cover any remaining gaps */
-      .dark-map .leaflet-tile {
-        outline: 1px solid #263238 !important;
-        outline-offset: -1px !important;
-      }
-      
-      /* Prevent tile rendering issues */
-      .leaflet-tile-pane {
-        opacity: 1 !important;
-      }
-      .leaflet-tile-container {
-        opacity: 1 !important;
-      }
-      
-      /* Disable animations that can cause rendering artifacts */
-      .leaflet-fade-anim .leaflet-tile,
-      .leaflet-fade-anim .leaflet-popup {
-        transition: none !important;
+        background: #1d2c3a !important;
       }
 
       /* Clean zoom controls */
