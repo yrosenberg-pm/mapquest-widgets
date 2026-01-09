@@ -111,12 +111,27 @@ export default function MapQuestMap({
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
+      /* Fix tile gap/seam issues */
+      .leaflet-tile {
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+      }
+      .leaflet-tile-container {
+        backface-visibility: hidden;
+      }
+      
       /* Adjust map tile colors for a more modern muted look */
       .leaflet-tile-pane {
         filter: saturate(0.85) brightness(1.02) contrast(1.02);
       }
       .dark-map .leaflet-tile-pane {
         filter: saturate(0.9) brightness(0.95) contrast(1.05);
+      }
+      
+      /* Hide tile borders in dark mode */
+      .dark-map .leaflet-tile {
+        outline: none !important;
+        border: none !important;
       }
 
       /* Clean zoom controls */
