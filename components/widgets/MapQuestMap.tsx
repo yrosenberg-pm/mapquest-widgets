@@ -111,6 +111,17 @@ export default function MapQuestMap({
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
+      /* Fix Chrome tile rendering gaps */
+      .leaflet-tile-container img {
+        width: 256px !important;
+        height: 256px !important;
+      }
+      .leaflet-tile-pane {
+        -webkit-transform: translate3d(0,0,0);
+      }
+      img.leaflet-tile {
+        box-sizing: content-box !important;
+      }
 
       /* Clean zoom controls */
       .leaflet-control-zoom {
@@ -337,6 +348,9 @@ export default function MapQuestMap({
         scrollWheelZoom: interactive,
         doubleClickZoom: interactive,
         touchZoom: interactive,
+        preferCanvas: true,
+        zoomSnap: 1,
+        zoomDelta: 1,
       });
 
       if (darkMode) {
