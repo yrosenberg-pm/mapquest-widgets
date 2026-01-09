@@ -196,25 +196,18 @@ export default function NeighborhoodScore({
       }
 
       try {
-        // Use Nominatim reverse geocoding to get the place boundary
+        // Use our backend API to avoid CORS issues
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?` +
-          `lat=${location.lat}&lon=${location.lng}` +
-          `&format=json&polygon_geojson=1&zoom=14`,
-          {
-            headers: {
-              'User-Agent': 'MapQuestWidgets/1.0'
-            }
-          }
+          `/api/boundary?lat=${location.lat}&lng=${location.lng}&zoom=14`
         );
         
         if (!response.ok) {
-          console.error('Nominatim API error:', response.status);
+          console.error('Boundary API error:', response.status);
           return;
         }
 
         const data = await response.json();
-        console.log('Nominatim response:', data);
+        console.log('Boundary response:', data);
 
         if (data.geojson && data.geojson.type === 'Polygon') {
           // Convert GeoJSON coordinates [lng, lat] to our format { lat, lng }
