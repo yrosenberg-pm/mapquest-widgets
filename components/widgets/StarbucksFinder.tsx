@@ -1,7 +1,7 @@
 // components/widgets/StarbucksFinder.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Phone, Clock, Navigation, Loader2, ChevronRight, X, Coffee } from 'lucide-react';
 import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -27,26 +27,34 @@ interface StarbucksFinderProps {
   borderRadius?: string;
   maxResults?: number;
   searchRadius?: number;
+  logoUrl?: string;
+  defaultLocation?: { lat: number; lng: number };
   onStoreSelect?: (store: StarbucksLocation) => void;
 }
 
 // Starbucks brand color
 const STARBUCKS_GREEN = '#00704A';
 
+// Default Starbucks logo (official siren logo from their CDN)
+const DEFAULT_LOGO = 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png';
+
 export default function StarbucksFinder({
   darkMode = false,
   showBranding = true,
   fontFamily,
-  maxResults = 10,
-  searchRadius = 10,
+  maxResults = 15,
+  searchRadius = 15,
+  logoUrl,
+  defaultLocation = { lat: 47.6062, lng: -122.3321 }, // Seattle (Starbucks HQ)
   onStoreSelect,
 }: StarbucksFinderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [stores, setStores] = useState<StarbucksLocation[]>([]);
   const [selectedStore, setSelectedStore] = useState<StarbucksLocation | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -71,27 +79,9 @@ export default function StarbucksFinder({
     }
   };
 
-  const searchStarbucks = async () => {
-    if (!searchQuery.trim()) return;
-    
-    setLoading(true);
-    setError(null);
-    setStores([]);
-    
+  // Load Starbucks at a specific location
+  const loadStarbucksAtLocation = async (location: { lat: number; lng: number }, calculateDriveTimes = true) => {
     try {
-      // First geocode the user's location
-      const result = await geocode(searchQuery);
-      
-      if (!result || !result.lat || !result.lng) {
-        setError('Location not found. Please try a different address, city, or zip code.');
-        setLoading(false);
-        return;
-      }
-      
-      const location = { lat: result.lat, lng: result.lng };
-      setUserLocation(location);
-      
-      // Search for Starbucks locations near the user
       const starbucksResults = await searchPlaces(
         location.lat,
         location.lng,
@@ -101,9 +91,7 @@ export default function StarbucksFinder({
       );
       
       if (starbucksResults.length === 0) {
-        setError('No Starbucks locations found nearby. Try a different location.');
-        setLoading(false);
-        return;
+        return [];
       }
       
       // Map results to our store format
@@ -124,21 +112,99 @@ export default function StarbucksFinder({
         };
       }).filter(store => store.lat !== 0 && store.lng !== 0);
       
-      // Get drive times for closest stores (limit to first 5 for performance)
-      const storesWithDuration = await Promise.all(
-        storesList.slice(0, 5).map(async (store) => {
-          const duration = await getDriveTime(location.lat, location.lng, store.lat, store.lng);
-          return { ...store, duration: duration ?? undefined };
-        })
-      );
+      if (calculateDriveTimes && storesList.length > 0) {
+        // Get drive times for closest stores (limit to first 5 for performance)
+        const storesWithDuration = await Promise.all(
+          storesList.slice(0, 5).map(async (store) => {
+            const duration = await getDriveTime(location.lat, location.lng, store.lat, store.lng);
+            return { ...store, duration: duration ?? undefined };
+          })
+        );
+        
+        return [
+          ...storesWithDuration,
+          ...storesList.slice(5),
+        ];
+      }
       
-      // Combine with remaining stores (without duration)
-      const allStores = [
-        ...storesWithDuration,
-        ...storesList.slice(5),
-      ];
+      return storesList;
+    } catch (err) {
+      console.error('Error loading Starbucks:', err);
+      return [];
+    }
+  };
+
+  // Load initial Starbucks on mount
+  useEffect(() => {
+    const loadInitialStores = async () => {
+      setLoading(true);
       
-      setStores(allStores);
+      // Try to get user's current location
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const location = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
+            setUserLocation(location);
+            const stores = await loadStarbucksAtLocation(location, false);
+            setStores(stores);
+            setLoading(false);
+            setInitialLoadDone(true);
+          },
+          async () => {
+            // Geolocation denied or failed, use default location
+            setUserLocation(defaultLocation);
+            const stores = await loadStarbucksAtLocation(defaultLocation, false);
+            setStores(stores);
+            setLoading(false);
+            setInitialLoadDone(true);
+          },
+          { timeout: 5000 }
+        );
+      } else {
+        // No geolocation support, use default
+        setUserLocation(defaultLocation);
+        const stores = await loadStarbucksAtLocation(defaultLocation, false);
+        setStores(stores);
+        setLoading(false);
+        setInitialLoadDone(true);
+      }
+    };
+
+    loadInitialStores();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const searchStarbucks = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // First geocode the user's location
+      const result = await geocode(searchQuery);
+      
+      if (!result || !result.lat || !result.lng) {
+        setError('Location not found. Please try a different address, city, or zip code.');
+        setLoading(false);
+        return;
+      }
+      
+      const location = { lat: result.lat, lng: result.lng };
+      setUserLocation(location);
+      
+      // Search for Starbucks locations near the user
+      const storesList = await loadStarbucksAtLocation(location, true);
+      
+      if (storesList.length === 0) {
+        setError('No Starbucks locations found nearby. Try a different location.');
+        setLoading(false);
+        return;
+      }
+      
+      setStores(storesList);
       setSelectedStore(null);
     } catch (err) {
       console.error('Search error:', err);
@@ -199,10 +265,23 @@ export default function StarbucksFinder({
           >
             <div className="flex items-center gap-3 mb-4">
               <div 
-                className="w-10 h-10 rounded-full flex items-center justify-center"
+                className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden"
                 style={{ background: STARBUCKS_GREEN }}
               >
-                <Coffee className="w-5 h-5 text-white" />
+                {logoUrl || DEFAULT_LOGO ? (
+                  <img 
+                    src={logoUrl || DEFAULT_LOGO} 
+                    alt="Starbucks" 
+                    className="w-10 h-10 object-contain"
+                    onError={(e) => {
+                      // Fallback to coffee icon if logo fails to load
+                      (e.target as HTMLImageElement).style.display = 'none';
+                      (e.target as HTMLImageElement).parentElement!.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>';
+                    }}
+                  />
+                ) : (
+                  <Coffee className="w-5 h-5 text-white" />
+                )}
               </div>
               <div>
                 <h3 
@@ -435,11 +514,19 @@ export default function StarbucksFinder({
       {/* Footer / Branding */}
       {showBranding && (
         <div className="prism-footer">
-          <span>
-            <span style={{ fontWeight: 600, color: STARBUCKS_GREEN }}>Starbucks Finder</span>
-            <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
-            <strong>MapQuest</strong>
-          </span>
+          <div className="flex items-center gap-2">
+            <img 
+              src={logoUrl || DEFAULT_LOGO} 
+              alt="Starbucks" 
+              className="w-5 h-5 object-contain"
+              onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+            />
+            <span>
+              <span style={{ fontWeight: 600, color: STARBUCKS_GREEN }}>Starbucks Finder</span>
+              <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
+              <strong>MapQuest</strong>
+            </span>
+          </div>
         </div>
       )}
     </div>
