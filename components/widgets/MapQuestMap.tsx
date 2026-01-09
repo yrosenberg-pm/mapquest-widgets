@@ -111,14 +111,6 @@ export default function MapQuestMap({
     const style = document.createElement('style');
     style.id = styleId;
     style.textContent = `
-      /* Simple background colors - no fancy fixes */
-      .leaflet-container {
-        background: #e5e3df !important;
-      }
-      .dark-map.leaflet-container,
-      .dark-map .leaflet-container {
-        background: #1d2c3a !important;
-      }
 
       /* Clean zoom controls */
       .leaflet-control-zoom {
@@ -436,7 +428,7 @@ export default function MapQuestMap({
       mapDiv?.classList.remove('dark-map');
     }
 
-    // Add new MapQuest tiles and store reference
+    // Add MapQuest tile layer
     const newTileLayer = L.mapquest.tileLayer(darkMode ? 'dark' : 'map');
     newTileLayer.addTo(mapRef.current);
     tileLayerRef.current = newTileLayer;
