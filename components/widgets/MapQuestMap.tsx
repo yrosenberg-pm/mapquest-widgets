@@ -210,10 +210,16 @@ export default function MapQuestMap({
       
       /* Marker styling */
       .modern-marker {
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-        transition: filter 0.15s ease !important;
+        transition: transform 0.15s ease !important;
       }
       .modern-marker:hover {
+        transform: scale(1.05);
+      }
+      /* Only add shadow to non-custom-icon markers */
+      .modern-marker-with-shadow {
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+      }
+      .modern-marker-with-shadow:hover {
         filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
       }
       
@@ -524,9 +530,16 @@ export default function MapQuestMap({
       // Higher zIndexOffset for home markers to always be on top
       const zIndexOffset = type === 'home' ? 1000 : marker.iconUrl ? 500 : type === 'poi' ? 0 : 500;
       
+      // Custom icon markers don't get shadow, others do
+      const markerClassName = marker.iconUrl 
+        ? 'modern-marker' 
+        : type === 'home' 
+          ? 'modern-marker modern-marker-with-shadow pulse-marker' 
+          : 'modern-marker modern-marker-with-shadow';
+      
       const icon = L.divIcon({
         html: markerHtml,
-        className: type === 'home' ? 'modern-marker pulse-marker' : 'modern-marker',
+        className: markerClassName,
         iconSize: iconSize,
         iconAnchor: iconAnchor,
         popupAnchor: popupAnchor,
