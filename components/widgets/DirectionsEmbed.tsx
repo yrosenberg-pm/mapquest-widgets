@@ -381,8 +381,8 @@ export default function DirectionsEmbed({
       <div className="flex" style={{ height: '600px' }}>
         {/* Sidebar */}
         <div 
-          className="w-80 flex flex-col"
-          style={{ borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}
+          className="w-80 flex flex-col overflow-y-auto prism-scrollbar"
+          style={{ borderRight: '1px solid var(--border-subtle)' }}
         >
           {/* Header */}
           <div 
