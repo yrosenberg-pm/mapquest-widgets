@@ -175,13 +175,13 @@ export default function InstacartDeliveryETA({
         icon: ShoppingBag, 
         text: `${status.shopperName} is shopping at ${status.storeName}`, 
         subtext: `${status.itemsFound}/${status.totalItems} items found`,
-        color: INSTACART_ORANGE 
+        color: INSTACART_CARROT_ORANGE 
       };
       case 'checkout': return { 
         icon: ShoppingBag, 
         text: `${status.shopperName} is checking out`, 
         subtext: 'Almost ready!',
-        color: INSTACART_ORANGE 
+        color: INSTACART_CARROT_ORANGE 
       };
       case 'on_the_way': return { 
         icon: Car, 
