@@ -29,8 +29,9 @@ interface CitiBikeFinderProps {
   onStationSelect?: (station: BikeStation) => void;
 }
 
-// Citi Bike blue + Lyft pink for co-branding
+// Citi Bike brand colors (from official logo)
 const CITIBIKE_BLUE = '#0033A0';
+const CITIBIKE_ORANGE = '#FF6B00'; // Orange dot on the 'i'
 const LYFT_PINK = '#FF00BF';
 
 // Generate mock Citi Bike stations around a location
@@ -287,23 +288,37 @@ export default function CitiBikeFinder({
             <div className="flex items-center gap-3 mb-4">
               <div 
                 className="w-12 h-12 rounded-xl flex items-center justify-center"
-                style={{ 
-                  background: `linear-gradient(135deg, ${CITIBIKE_BLUE} 0%, ${LYFT_PINK} 100%)`,
-                }}
+                style={{ background: CITIBIKE_BLUE }}
               >
                 <Bike className="w-6 h-6 text-white" />
               </div>
               <div>
+                {/* Citi Bike logo text matching official branding */}
                 <h3 
-                  className="text-lg font-bold flex items-center gap-2"
-                  style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
+                  className="text-xl font-bold flex items-baseline"
+                  style={{ letterSpacing: '-0.02em' }}
                 >
-                  <span style={{ color: CITIBIKE_BLUE }}>Citi Bike</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '14px' }}>×</span>
-                  <span style={{ color: LYFT_PINK }}>Lyft</span>
+                  <span style={{ color: CITIBIKE_BLUE }}>cit</span>
+                  <span style={{ color: CITIBIKE_BLUE, position: 'relative' }}>
+                    i
+                    <span 
+                      style={{ 
+                        position: 'absolute', 
+                        top: '-2px', 
+                        left: '50%', 
+                        transform: 'translateX(-50%)',
+                        width: '6px', 
+                        height: '6px', 
+                        borderRadius: '50%', 
+                        background: CITIBIKE_ORANGE 
+                      }} 
+                    />
+                  </span>
+                  <span style={{ color: CITIBIKE_BLUE, marginLeft: '1px' }}>b</span>
+                  <span style={{ color: CITIBIKE_BLUE }}>ike</span>
                 </h3>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Find available bikes near you
+                <p className="text-xs flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
+                  powered by <span style={{ color: LYFT_PINK, fontWeight: 600, fontStyle: 'italic' }}>lyft</span>
                 </p>
               </div>
             </div>
@@ -543,19 +558,30 @@ export default function CitiBikeFinder({
       {showBranding && (
         <div className="prism-footer">
           <div className="flex items-center gap-2">
-            <div 
-              className="w-5 h-5 rounded flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${CITIBIKE_BLUE} 0%, ${LYFT_PINK} 100%)` }}
-            >
-              <Bike className="w-3 h-3 text-white" />
-            </div>
-            <span>
-              <span style={{ fontWeight: 600, color: CITIBIKE_BLUE }}>Citi Bike</span>
-              <span style={{ color: 'var(--text-muted)' }}> × </span>
-              <span style={{ fontWeight: 600, color: LYFT_PINK }}>Lyft</span>
-              <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
-              <strong>MapQuest</strong>
+            <span className="flex items-baseline font-bold text-sm">
+              <span style={{ color: CITIBIKE_BLUE }}>cit</span>
+              <span style={{ color: CITIBIKE_BLUE, position: 'relative' }}>
+                i
+                <span 
+                  style={{ 
+                    position: 'absolute', 
+                    top: '-1px', 
+                    left: '50%', 
+                    transform: 'translateX(-50%)',
+                    width: '4px', 
+                    height: '4px', 
+                    borderRadius: '50%', 
+                    background: CITIBIKE_ORANGE 
+                  }} 
+                />
+              </span>
+              <span style={{ color: CITIBIKE_BLUE }}>bike</span>
             </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+              powered by <span style={{ color: LYFT_PINK, fontWeight: 600, fontStyle: 'italic' }}>lyft</span>
+            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}> · Powered by </span>
+            <strong style={{ fontSize: '12px' }}>MapQuest</strong>
           </div>
         </div>
       )}
