@@ -558,11 +558,14 @@ export default function MapQuestMap({
     });
   }, [polygons, accentColor, mapReady]);
 
-  // Update route
+  // Update route (MapQuest directions - NOT for transit)
   useEffect(() => {
     if (!routeLayerRef.current || !mapReady) return;
+    
+    // Don't run if we have transit segments - that's handled by the other useEffect
+    if (transitSegments && transitSegments.length > 0) return;
+    
     const L = window.L;
-
     routeLayerRef.current.clearLayers();
 
     if (!showRoute || !routeStart || !routeEnd) return;
@@ -620,7 +623,7 @@ export default function MapQuestMap({
     };
 
     fetchRoute();
-  }, [showRoute, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady]);
+  }, [showRoute, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady, transitSegments]);
 
   // Draw pre-calculated route polyline (e.g., from HERE transit API)
   useEffect(() => {
@@ -631,6 +634,7 @@ export default function MapQuestMap({
 
     // If we have transit segments, draw them with different styles
     if (transitSegments && transitSegments.length > 0) {
+      console.log('Drawing transit segments:', transitSegments.length, 'segments');
       const allLatLngs: [number, number][] = [];
       
       // Define colors for different transit types (public transit only)
@@ -690,8 +694,12 @@ export default function MapQuestMap({
 
       // Fit bounds to all segments
       if (mapRef.current && allLatLngs.length > 1) {
+        console.log('Fitting bounds to', allLatLngs.length, 'points');
         const bounds = L.latLngBounds(allLatLngs);
+        console.log('Bounds:', bounds.getNorth(), bounds.getSouth(), bounds.getEast(), bounds.getWest());
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      } else {
+        console.log('Cannot fit bounds: mapRef=', !!mapRef.current, 'points=', allLatLngs.length);
       }
       return;
     }
