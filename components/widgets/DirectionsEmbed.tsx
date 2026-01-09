@@ -275,6 +275,7 @@ export default function DirectionsEmbed({
             }
           }
           
+          console.log('Transit segments:', segments.length, 'segments with coords:', segments.map(s => ({ type: s.type, points: s.coords.length })));
           setTransitSegments(segments);
           setTransitSteps(steps);
           setTransitRouteInfo({
@@ -329,26 +330,6 @@ export default function DirectionsEmbed({
   if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: '#64748B' });
   if (toCoords) markers.push({ ...toCoords, label: 'B', color: '#64748B' });
 
-  // Calculate bounds for transit route
-  const transitBounds = (() => {
-    if (routeType !== 'transit' || transitSegments.length === 0) return undefined;
-    
-    const allCoords: { lat: number; lng: number }[] = [];
-    transitSegments.forEach(seg => allCoords.push(...seg.coords));
-    
-    if (allCoords.length === 0) return undefined;
-    
-    let north = -90, south = 90, east = -180, west = 180;
-    allCoords.forEach(c => {
-      if (c.lat > north) north = c.lat;
-      if (c.lat < south) south = c.lat;
-      if (c.lng > east) east = c.lng;
-      if (c.lng < west) west = c.lng;
-    });
-    
-    return { north, south, east, west };
-  })();
-
   // Track if we've calculated a route before (to know if we should auto-recalculate)
   const hasCalculatedRef = useRef(false);
   
@@ -378,11 +359,11 @@ export default function DirectionsEmbed({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex" style={{ height: '600px' }}>
+      <div className="flex" style={{ height: '700px' }}>
         {/* Sidebar */}
         <div 
-          className="w-80 flex flex-col overflow-y-auto prism-scrollbar"
-          style={{ borderRight: '1px solid var(--border-subtle)' }}
+          className="w-80 flex flex-col"
+          style={{ borderRight: '1px solid var(--border-subtle)', overflowY: 'auto' }}
         >
           {/* Header */}
           <div 
@@ -934,10 +915,10 @@ export default function DirectionsEmbed({
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
-            zoom={transitBounds ? undefined : (fromCoords && toCoords ? 10 : 4)}
+            zoom={fromCoords && toCoords ? 10 : 4}
             darkMode={darkMode}
             accentColor={accentColor}
-            height="600px"
+            height="700px"
             markers={markers}
             showRoute={!!(fromCoords && toCoords) && routeType !== 'transit'}
             routeStart={fromCoords || undefined}
@@ -945,7 +926,6 @@ export default function DirectionsEmbed({
             routeType={routeType === 'transit' || routeType === 'shortest' ? undefined : routeType}
             transitSegments={routeType === 'transit' && transitSegments.length > 0 ? transitSegments : undefined}
             routePolyline={routeType === 'transit' && transitSegments.length === 0 ? transitPolyline : undefined}
-            fitBounds={transitBounds}
           />
         </div>
       </div>
