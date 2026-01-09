@@ -42,8 +42,8 @@ export default function StarbucksFinder({
   darkMode = false,
   showBranding = true,
   fontFamily,
-  maxResults = 15,
-  searchRadius = 15,
+  maxResults = 50,
+  searchRadius = 25,
   logoUrl,
   defaultLocation = { lat: 47.6062, lng: -122.3321 }, // Seattle (Starbucks HQ)
   onStoreSelect,
@@ -505,7 +505,7 @@ export default function StarbucksFinder({
           <MapQuestMap
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}
-            zoom={stores.length > 0 ? 12 : 4}
+            zoom={stores.length > 0 ? 11 : 4}
             darkMode={darkMode}
             accentColor={STARBUCKS_GREEN}
             height="520px"
