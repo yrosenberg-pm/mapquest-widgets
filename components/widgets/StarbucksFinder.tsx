@@ -266,7 +266,7 @@ export default function StarbucksFinder({
     ...stores.map((store) => ({
       lat: store.lat,
       lng: store.lng,
-      label: store.name,
+      label: store.address ? `${store.address}${store.city ? `, ${store.city}` : ''}` : store.name,
       iconUrl: starbucksIconUrl,
       iconSize: [28, 28] as [number, number],
     })),
