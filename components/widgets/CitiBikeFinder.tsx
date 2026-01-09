@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, Bike, Navigation, Loader2, ChevronRight, X, Battery, Clock } from 'lucide-react';
+import { Search, Bike, Navigation, Loader2, ChevronRight, X, Clock } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -397,31 +397,30 @@ export default function CitiBikeFinder({
                         {station.name}
                       </div>
                       
-                      {/* Availability badges */}
-                      <div className="flex items-center gap-2 mt-1">
+                      {/* Availability badges - compact */}
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span 
-                          className="text-xs px-2 py-0.5 rounded-full font-medium"
+                          className="text-[11px] px-1.5 py-px rounded font-medium"
                           style={{ 
                             background: station.availableBikes > 0 ? '#22C55E15' : '#EF444415',
                             color: station.availableBikes > 0 ? '#22C55E' : '#EF4444',
                           }}
                         >
-                          {station.availableBikes} bikes
+                          {station.availableBikes}🚲
                         </span>
                         {station.availableEbikes > 0 && (
                           <span 
-                            className="text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1"
+                            className="text-[11px] px-1.5 py-px rounded font-medium"
                             style={{ background: `${LYFT_PINK}15`, color: LYFT_PINK }}
                           >
-                            <Battery className="w-3 h-3" />
-                            {station.availableEbikes} e-bikes
+                            {station.availableEbikes}⚡
                           </span>
                         )}
                         <span 
-                          className="text-xs"
+                          className="text-[11px]"
                           style={{ color: 'var(--text-muted)' }}
                         >
-                          {station.availableDocks} docks
+                          {station.availableDocks} open
                         </span>
                       </div>
                       

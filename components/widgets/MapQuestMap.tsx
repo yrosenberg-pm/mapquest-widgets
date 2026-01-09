@@ -112,26 +112,43 @@ export default function MapQuestMap({
     style.id = styleId;
     style.textContent = `
       /* Fix tile gap/seam issues */
+      .leaflet-container {
+        background: #e5e3df !important;
+      }
+      .dark-map.leaflet-container {
+        background: #1a1a2e !important;
+      }
       .leaflet-tile {
-        image-rendering: -webkit-optimize-contrast;
-        image-rendering: crisp-edges;
+        will-change: transform;
+        transform: translateZ(0);
+      }
+      .leaflet-tile-pane {
+        will-change: transform;
       }
       .leaflet-tile-container {
         backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+      }
+      .leaflet-fade-anim .leaflet-tile {
+        will-change: opacity;
       }
       
-      /* Adjust map tile colors for a more modern muted look */
+      /* Remove any tile borders/outlines */
+      .leaflet-tile {
+        outline: none !important;
+        border: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      
+      /* Adjust map tile colors for a more modern muted look - but not in dark mode to avoid issues */
       .leaflet-tile-pane {
         filter: saturate(0.85) brightness(1.02) contrast(1.02);
       }
       .dark-map .leaflet-tile-pane {
-        filter: saturate(0.9) brightness(0.95) contrast(1.05);
-      }
-      
-      /* Hide tile borders in dark mode */
-      .dark-map .leaflet-tile {
-        outline: none !important;
-        border: none !important;
+        filter: none;
       }
 
       /* Clean zoom controls */
