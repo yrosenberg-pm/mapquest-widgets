@@ -228,7 +228,7 @@ export default function StarbucksFinder({
       lat: userLocation.lat,
       lng: userLocation.lng,
       label: 'Your Location',
-      color: '#EF4444',
+      color: '#3B82F6',
       type: 'home' as const,
     }] : []),
     ...stores.map((store, idx) => ({
