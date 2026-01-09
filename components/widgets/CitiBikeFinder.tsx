@@ -151,7 +151,6 @@ export default function CitiBikeFinder({
   const [selectedStation, setSelectedStation] = useState<BikeStation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [totalStationCount, setTotalStationCount] = useState(0);
 
   // Tailwind classes for AddressAutocomplete
@@ -192,7 +191,6 @@ export default function CitiBikeFinder({
       const fetchedStations = await fetchAllStations();
       setAllStations(fetchedStations);
       setTotalStationCount(fetchedStations.length);
-      setLastRefresh(new Date());
       return fetchedStations;
     } catch (err) {
       console.error('Failed to load stations:', err);
@@ -454,30 +452,23 @@ export default function CitiBikeFinder({
             )}
             {stations.length > 0 && (
               <div 
-                className="px-4 py-2"
+                className="px-4 py-2 flex items-center justify-between"
                 style={{ background: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)' }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                    {stations.length} of {totalStationCount} stations nearby
-                  </div>
-                  <button
-                    onClick={handleRefresh}
-                    disabled={loading}
-                    className="p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
-                    title="Refresh data"
-                  >
-                    <RefreshCw 
-                      className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} 
-                      style={{ color: 'var(--text-muted)' }} 
-                    />
-                  </button>
+                <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                  {stations.length} of {totalStationCount} stations nearby
                 </div>
-                {lastRefresh && (
-                  <div className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                    Updated {formatTimeAgo(lastRefresh.toISOString())}
-                  </div>
-                )}
+                <button
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  className="p-1 rounded transition-colors hover:bg-gray-100 dark:hover:bg-gray-700"
+                  title="Refresh data"
+                >
+                  <RefreshCw 
+                    className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} 
+                    style={{ color: 'var(--text-muted)' }} 
+                  />
+                </button>
               </div>
             )}
             {stations.map((station) => {
