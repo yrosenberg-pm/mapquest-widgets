@@ -190,9 +190,8 @@ export default function StarbucksFinder({
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const searchStarbucks = async () => {
-    if (!searchQuery.trim()) return;
-    
+  // Core search function that takes coordinates directly
+  const searchAtLocation = async (location: { lat: number; lng: number }) => {
     // Mark that user has searched - prevents geolocation from overriding
     hasSearchedRef.current = true;
     
@@ -200,17 +199,6 @@ export default function StarbucksFinder({
     setError(null);
     
     try {
-      // Geocode the search location
-      const result = await geocode(searchQuery);
-      
-      if (!result || !result.lat || !result.lng) {
-        setError('Location not found. Please try a different address, city, or zip code.');
-        setLoading(false);
-        return;
-      }
-      
-      const location = { lat: result.lat, lng: result.lng };
-      
       // Calculate bounds for the new location (approximate ~10 mile radius)
       const latOffset = 0.145; // ~10 miles
       const lngOffset = 0.18; // ~10 miles (varies by latitude)
@@ -243,6 +231,32 @@ export default function StarbucksFinder({
       console.error('Search error:', err);
       setError('Error searching for Starbucks locations. Please try again.');
     } finally {
+      setLoading(false);
+    }
+  };
+
+  // Search by text query (geocodes first)
+  const searchStarbucks = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Geocode the search location
+      const result = await geocode(searchQuery);
+      
+      if (!result || !result.lat || !result.lng) {
+        setError('Location not found. Please try a different address, city, or zip code.');
+        setLoading(false);
+        return;
+      }
+      
+      await searchAtLocation({ lat: result.lat, lng: result.lng });
+      
+    } catch (err) {
+      console.error('Search error:', err);
+      setError('Error searching for Starbucks locations. Please try again.');
       setLoading(false);
     }
   };
@@ -390,11 +404,11 @@ export default function StarbucksFinder({
             <AddressAutocomplete
               value={searchQuery}
               onChange={setSearchQuery}
-              onSelect={(result) => {
+              onSelect={async (result) => {
                 if (result.lat && result.lng) {
                   setSearchQuery(result.displayString);
-                  setUserLocation({ lat: result.lat, lng: result.lng });
-                  searchStarbucks();
+                  // Use the coordinates from autocomplete directly instead of re-geocoding
+                  await searchAtLocation({ lat: result.lat, lng: result.lng });
                 }
               }}
               placeholder="Enter address, city, or zip..."
