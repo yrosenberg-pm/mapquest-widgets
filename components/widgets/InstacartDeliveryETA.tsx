@@ -151,7 +151,7 @@ export default function InstacartDeliveryETA({
         const newEta = Math.max(0, (prev.etaMinutes || 0) - 1);
         const newDistance = Math.max(0, (prev.distanceMiles || 0) * 0.94);
 
-        let newStatus = prev.status;
+        let newStatus: DeliveryStatus = prev.status;
         if (newDistance < 0.1) newStatus = 'delivered';
         else if (newDistance < 0.3) newStatus = 'arriving';
 
