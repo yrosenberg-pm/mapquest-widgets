@@ -531,7 +531,7 @@ export default function StarbucksFinder({
           <MapQuestMap
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}
-            zoom={stores.length > 0 ? 11 : 4}
+            zoom={stores.length > 0 ? 13 : 4}
             darkMode={darkMode}
             accentColor={STARBUCKS_GREEN}
             height="520px"
