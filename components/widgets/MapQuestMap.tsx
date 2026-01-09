@@ -420,21 +420,32 @@ export default function MapQuestMap({
     };
   }, [apiKey]); // Only depend on apiKey - map should initialize once
 
+  // Track tile layer reference
+  const tileLayerRef = useRef<any>(null);
+
   // Update dark mode / tiles
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const L = window.L;
     const mapDiv = document.getElementById(mapIdRef.current);
     
-    // Remove old tile layers
+    // Remove the previous tile layer if it exists
+    if (tileLayerRef.current) {
+      mapRef.current.removeLayer(tileLayerRef.current);
+      tileLayerRef.current = null;
+    }
+    
+    // Also remove any other tile layers that might be lingering
     mapRef.current.eachLayer((layer: any) => {
-      if (layer._url && (layer._url.includes('mapquest') || layer._url.includes('tile'))) {
+      if (layer instanceof L.TileLayer) {
         mapRef.current.removeLayer(layer);
       }
     });
 
-    // Add MapQuest tiles
-    L.mapquest.tileLayer(darkMode ? 'dark' : 'map').addTo(mapRef.current);
+    // Add new MapQuest tiles and store reference
+    const newTileLayer = L.mapquest.tileLayer(darkMode ? 'dark' : 'map');
+    newTileLayer.addTo(mapRef.current);
+    tileLayerRef.current = newTileLayer;
     
     if (darkMode) {
       mapDiv?.classList.add('dark-map');
