@@ -344,11 +344,11 @@ export default function InstacartDeliveryETA({
                   return (
                     <div key={step} className="relative z-10 flex flex-col items-center">
                       <div 
-                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${isCurrent ? 'ring-4' : ''}`}
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all"
                         style={{ 
                           background: isComplete ? INSTACART_GREEN : 'var(--bg-input)',
                           color: isComplete ? 'white' : 'var(--text-muted)',
-                          ringColor: isCurrent ? `${INSTACART_GREEN}30` : 'transparent',
+                          boxShadow: isCurrent ? `0 0 0 4px ${INSTACART_GREEN}30` : 'none',
                         }}
                       >
                         {isComplete ? '✓' : index + 1}
