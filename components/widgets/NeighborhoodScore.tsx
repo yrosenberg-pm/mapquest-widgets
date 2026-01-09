@@ -239,6 +239,7 @@ export default function NeighborhoodScore({
 
   // Fetch isoline when boundary mode changes to isoline or when location changes
   useEffect(() => {
+    console.log('Boundary mode useEffect triggered:', { boundaryMode, hasLocation: !!location });
     const doFetch = async () => {
       if (boundaryMode === 'isoline' && location) {
         // Use walking time based on selected category's search radius, or default 20 min walk
@@ -889,7 +890,11 @@ export default function NeighborhoodScore({
               {/* Toggle boundary mode */}
               {showSearchArea && (
                 <button
-                  onClick={() => setBoundaryMode(boundaryMode === 'radius' ? 'isoline' : 'radius')}
+                  onClick={() => {
+                    const newMode = boundaryMode === 'radius' ? 'isoline' : 'radius';
+                    console.log('Boundary toggle clicked, switching from', boundaryMode, 'to', newMode);
+                    setBoundaryMode(newMode);
+                  }}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
                   style={{ 
                     background: darkMode ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.95)',
@@ -901,9 +906,9 @@ export default function NeighborhoodScore({
                   {isolineLoading ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : boundaryMode === 'isoline' ? (
-                    '🚶 Walk time'
+                    '📍 Use radius'
                   ) : (
-                    '📍 Radius'
+                    '🚶 Use walk time'
                   )}
                 </button>
               )}
