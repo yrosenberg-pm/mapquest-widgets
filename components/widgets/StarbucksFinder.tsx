@@ -219,9 +219,23 @@ export default function StarbucksFinder({
     onStoreSelect?.(store);
   };
 
+  const [mapBounds, setMapBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
+
+  // Filter stores to only those visible in the map viewport
+  const visibleStores = mapBounds 
+    ? stores.filter(store => 
+        store.lat >= mapBounds.south && 
+        store.lat <= mapBounds.north && 
+        store.lng >= mapBounds.west && 
+        store.lng <= mapBounds.east
+      )
+    : stores;
+
   const mapCenter = selectedStore 
     ? { lat: selectedStore.lat, lng: selectedStore.lng }
     : userLocation || { lat: 39.8283, lng: -98.5795 };
+
+  const starbucksIconUrl = logoUrl || DEFAULT_LOGO;
 
   const markers = [
     ...(userLocation ? [{
@@ -231,13 +245,18 @@ export default function StarbucksFinder({
       color: '#3B82F6',
       type: 'home' as const,
     }] : []),
-    ...stores.map((store, idx) => ({
+    ...stores.map((store) => ({
       lat: store.lat,
       lng: store.lng,
       label: store.name,
-      color: selectedStore?.id === store.id ? STARBUCKS_GREEN : '#1E3932',
+      iconUrl: starbucksIconUrl,
+      iconSize: [28, 28] as [number, number],
     })),
   ];
+
+  const handleBoundsChange = (bounds: { north: number; south: number; east: number; west: number }) => {
+    setMapBounds(bounds);
+  };
 
   return (
     <div 
@@ -354,7 +373,15 @@ export default function StarbucksFinder({
                 Enter your location to find nearby Starbucks
               </div>
             )}
-            {stores.map((store, idx) => {
+            {visibleStores.length > 0 && (
+              <div 
+                className="px-4 py-2 text-xs font-medium"
+                style={{ color: 'var(--text-muted)', background: 'var(--bg-panel)', borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                {visibleStores.length} location{visibleStores.length !== 1 ? 's' : ''} in view
+              </div>
+            )}
+            {visibleStores.map((store, idx) => {
               const isSelected = selectedStore?.id === store.id;
               return (
                 <button
@@ -362,72 +389,48 @@ export default function StarbucksFinder({
                   onClick={() => handleStoreSelect(store)}
                   className={`prism-list-item w-full text-left ${isSelected ? 'prism-list-item-selected' : ''}`}
                   style={{
-                    padding: '16px 20px',
+                    padding: '10px 16px',
                     borderBottom: '1px solid var(--border-subtle)',
                   }}
                 >
-                  <div className="flex items-start gap-3">
-                    <div 
-                      className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold"
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={logoUrl || DEFAULT_LOGO} 
+                      alt="" 
+                      className="w-8 h-8 rounded-full flex-shrink-0"
                       style={{ 
-                        background: isSelected ? STARBUCKS_GREEN : 'var(--bg-panel)',
-                        color: isSelected ? 'white' : 'var(--text-secondary)',
-                        border: isSelected ? 'none' : '1px solid var(--border-subtle)',
                         boxShadow: isSelected ? `0 2px 8px ${STARBUCKS_GREEN}40` : 'none',
+                        border: isSelected ? `2px solid ${STARBUCKS_GREEN}` : '2px solid transparent',
                       }}
-                    >
-                      {idx + 1}
-                    </div>
+                    />
                     <div className="flex-1 min-w-0">
                       <div 
-                        className="font-semibold"
+                        className="font-semibold text-sm truncate"
                         style={{ color: 'var(--text-main)' }}
                       >
                         {store.name}
                       </div>
-                      {store.address && (
-                        <div 
-                          className="text-sm mt-0.5"
-                          style={{ color: 'var(--text-secondary)' }}
-                        >
-                          {store.address}
-                        </div>
-                      )}
-                      {store.city && (
-                        <div 
-                          className="text-sm"
-                          style={{ color: 'var(--text-muted)' }}
-                        >
-                          {store.city}{store.state ? `, ${store.state}` : ''}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-3 mt-2">
+                      <div className="flex items-center gap-2 mt-0.5">
                         {store.distance !== undefined && (
                           <span 
-                            className="text-xs font-medium px-2 py-1 rounded-full"
-                            style={{ 
-                              color: 'var(--text-secondary)',
-                              background: 'var(--bg-panel)',
-                            }}
+                            className="text-xs"
+                            style={{ color: 'var(--text-muted)' }}
                           >
                             {store.distance.toFixed(1)} mi
                           </span>
                         )}
                         {store.duration !== undefined && store.duration !== null && (
                           <span 
-                            className="text-xs font-semibold px-2 py-1 rounded-full"
-                            style={{ 
-                              color: STARBUCKS_GREEN,
-                              background: `${STARBUCKS_GREEN}15`,
-                            }}
+                            className="text-xs font-medium"
+                            style={{ color: STARBUCKS_GREEN }}
                           >
-                            {store.duration} min drive
+                            · {store.duration} min
                           </span>
                         )}
                       </div>
                     </div>
                     <ChevronRight 
-                      className="w-5 h-5 flex-shrink-0 mt-1"
+                      className="w-4 h-4 flex-shrink-0"
                       style={{ color: isSelected ? STARBUCKS_GREEN : 'var(--text-muted)' }}
                     />
                   </div>
@@ -507,6 +510,7 @@ export default function StarbucksFinder({
             accentColor={STARBUCKS_GREEN}
             height="520px"
             markers={markers}
+            onBoundsChange={handleBoundsChange}
           />
         </div>
       </div>

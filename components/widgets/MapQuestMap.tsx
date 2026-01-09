@@ -8,6 +8,8 @@ interface MapMarker {
   label?: string;
   color?: string;
   type?: 'home' | 'poi' | 'default';
+  iconUrl?: string;
+  iconSize?: [number, number];
   onClick?: () => void;
 }
 
@@ -50,6 +52,7 @@ interface MapQuestMapProps {
   routePolyline?: { lat: number; lng: number }[]; // Pre-calculated route coordinates
   transitSegments?: TransitSegment[]; // For multi-segment transit routes with different line styles
   onClick?: (lat: number, lng: number) => void;
+  onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
   showZoomControls?: boolean;
   interactive?: boolean;
   className?: string;
@@ -82,6 +85,7 @@ export default function MapQuestMap({
   routePolyline,
   transitSegments,
   onClick,
+  onBoundsChange,
   showZoomControls = true,
   interactive = true,
   className = '',
@@ -350,6 +354,23 @@ export default function MapQuestMap({
         });
       }
 
+      // Notify parent of bounds changes (for viewport-based filtering)
+      if (onBoundsChange) {
+        const notifyBounds = () => {
+          const bounds = map.getBounds();
+          onBoundsChange({
+            north: bounds.getNorth(),
+            south: bounds.getSouth(),
+            east: bounds.getEast(),
+            west: bounds.getWest(),
+          });
+        };
+        map.on('moveend', notifyBounds);
+        map.on('zoomend', notifyBounds);
+        // Initial bounds notification
+        setTimeout(notifyBounds, 100);
+      }
+
       setMapReady(true);
     };
 
@@ -444,10 +465,30 @@ export default function MapQuestMap({
       const type = marker.type || 'default';
       
       let markerHtml: string;
+      let iconSize: [number, number];
+      let iconAnchor: [number, number];
+      let popupAnchor: [number, number];
       
-      if (type === 'home') {
+      // Custom icon URL takes precedence
+      if (marker.iconUrl) {
+        const size = marker.iconSize || [28, 28];
+        iconSize = size as [number, number];
+        iconAnchor = [size[0] / 2, size[1] / 2] as [number, number];
+        popupAnchor = [0, -size[1] / 2] as [number, number];
+        markerHtml = `
+          <img src="${marker.iconUrl}" 
+               width="${size[0]}" 
+               height="${size[1]}" 
+               style="filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); border-radius: 50%;"
+               alt=""
+          />
+        `;
+      } else if (type === 'home') {
         // Home icon - larger circle with house shape, with pulsing ring
         // Made larger (40x40) to stand out from POI markers
+        iconSize = [40, 40];
+        iconAnchor = [20, 20];
+        popupAnchor = [0, -20];
         markerHtml = `
           <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
             <div class="pulse-ring" style="width: 48px; height: 48px;"></div>
@@ -460,6 +501,9 @@ export default function MapQuestMap({
         `;
       } else if (type === 'poi') {
         // POI icon - smaller pin for parking/food/hotels
+        iconSize = [22, 28];
+        iconAnchor = [11, 28];
+        popupAnchor = [0, -28];
         markerHtml = `
           <svg width="22" height="28" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));">
             <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2"/>
@@ -467,25 +511,25 @@ export default function MapQuestMap({
         `;
       } else {
         // Default icon - standard pin (for stadiums, etc)
+        iconSize = [28, 36];
+        iconAnchor = [14, 36];
+        popupAnchor = [0, -36];
         markerHtml = `
           <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));">
             <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2.5"/>
           </svg>
         `;
       }
-
-      const iconSize = type === 'home' ? [40, 40] : type === 'poi' ? [22, 28] : [28, 36];
-      const iconAnchor = type === 'home' ? [20, 20] : type === 'poi' ? [11, 28] : [14, 36];
       
       // Higher zIndexOffset for home markers to always be on top
-      const zIndexOffset = type === 'home' ? 1000 : type === 'poi' ? 0 : 500;
+      const zIndexOffset = type === 'home' ? 1000 : marker.iconUrl ? 500 : type === 'poi' ? 0 : 500;
       
       const icon = L.divIcon({
         html: markerHtml,
         className: type === 'home' ? 'modern-marker pulse-marker' : 'modern-marker',
-        iconSize: iconSize as [number, number],
-        iconAnchor: iconAnchor as [number, number],
-        popupAnchor: type === 'home' ? [0, -20] : type === 'poi' ? [0, -28] : [0, -36],
+        iconSize: iconSize,
+        iconAnchor: iconAnchor,
+        popupAnchor: popupAnchor,
       });
 
       const m = L.marker([marker.lat, marker.lng], { icon, zIndexOffset }).addTo(markersLayerRef.current);
