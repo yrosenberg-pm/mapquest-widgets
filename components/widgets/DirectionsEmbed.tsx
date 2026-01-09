@@ -1,7 +1,7 @@
 // components/widgets/DirectionsEmbed.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Navigation, Car, Bike, PersonStanding, Train, Loader2, ChevronDown, ChevronUp, MapPin, Clock } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -349,6 +349,23 @@ export default function DirectionsEmbed({
     return { north, south, east, west };
   })();
 
+  // Track if we've calculated a route before (to know if we should auto-recalculate)
+  const hasCalculatedRef = useRef(false);
+  
+  // Auto-recalculate when route type changes (only if we have both addresses and have calculated before)
+  useEffect(() => {
+    if (hasCalculatedRef.current && from.trim() && to.trim()) {
+      calculateRoute();
+    }
+  }, [routeType]);
+
+  // Mark that we've calculated when route or transitRouteInfo is set
+  useEffect(() => {
+    if (route || transitRouteInfo) {
+      hasCalculatedRef.current = true;
+    }
+  }, [route, transitRouteInfo]);
+
   // === END FUNCTIONAL LOGIC ===
 
   return (
@@ -364,8 +381,8 @@ export default function DirectionsEmbed({
       <div className="flex" style={{ height: '600px' }}>
         {/* Sidebar */}
         <div 
-          className="w-80 flex flex-col overflow-hidden"
-          style={{ borderRight: '1px solid var(--border-subtle)' }}
+          className="w-80 flex flex-col"
+          style={{ borderRight: '1px solid var(--border-subtle)', overflow: 'hidden' }}
         >
           {/* Header */}
           <div 
@@ -749,7 +766,7 @@ export default function DirectionsEmbed({
 
           {/* Transit Steps */}
           {transitSteps.length > 0 && (
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0">
               <button
                 onClick={() => setStepsExpanded(!stepsExpanded)}
                 className="flex items-center justify-between px-5 py-4 flex-shrink-0 transition-colors"
@@ -839,7 +856,7 @@ export default function DirectionsEmbed({
 
           {/* Turn-by-Turn */}
           {route && route.steps.length > 0 && (
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0">
               <button
                 onClick={() => setStepsExpanded(!stepsExpanded)}
                 className="flex items-center justify-between px-5 py-4 flex-shrink-0 transition-colors"
