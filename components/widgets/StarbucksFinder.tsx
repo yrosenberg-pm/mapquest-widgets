@@ -148,22 +148,33 @@ export default function StarbucksFinder({
     }
   };
 
+  // Track if user has manually searched (to prevent geolocation from overriding)
+  const hasSearchedRef = useRef(false);
+  
+  // Track if we're transitioning to a new search location
+  const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number } | null>(null);
+
   // Load initial Starbucks on mount - just set user location, actual search happens on bounds change
   useEffect(() => {
     // Try to get user's current location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
+          // Only set location if user hasn't searched yet
+          if (!hasSearchedRef.current) {
+            setUserLocation({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            });
+          }
           setLoading(false);
           setInitialLoadDone(true);
         },
         () => {
           // Geolocation denied or failed, use default location
-          setUserLocation(defaultLocation);
+          if (!hasSearchedRef.current) {
+            setUserLocation(defaultLocation);
+          }
           setLoading(false);
           setInitialLoadDone(true);
         },
@@ -171,17 +182,19 @@ export default function StarbucksFinder({
       );
     } else {
       // No geolocation support, use default
-      setUserLocation(defaultLocation);
+      if (!hasSearchedRef.current) {
+        setUserLocation(defaultLocation);
+      }
       setLoading(false);
       setInitialLoadDone(true);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Track if we're transitioning to a new search location
-  const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number } | null>(null);
-
   const searchStarbucks = async () => {
     if (!searchQuery.trim()) return;
+    
+    // Mark that user has searched - prevents geolocation from overriding
+    hasSearchedRef.current = true;
     
     setLoading(true);
     setError(null);
@@ -211,14 +224,20 @@ export default function StarbucksFinder({
       // Load stores at new location BEFORE updating the map
       const newStores = await loadStarbucksInBounds(newBounds);
       
+      // Skip bounds searches during transition
+      skipBoundsSearchRef.current = true;
+      
       // Now update everything at once for a smooth transition
       setSelectedStore(null);
       setUserLocation(location);
       setStores(newStores);
       setPendingLocation(location);
       
-      // Clear pending location after transition
-      setTimeout(() => setPendingLocation(null), 500);
+      // Clear pending location and re-enable bounds search after transition settles
+      setTimeout(() => {
+        setPendingLocation(null);
+        skipBoundsSearchRef.current = false;
+      }, 1000);
       
     } catch (err) {
       console.error('Search error:', err);
@@ -274,9 +293,16 @@ export default function StarbucksFinder({
 
   // Debounce ref to prevent too many API calls
   const boundsSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Skip bounds search during manual search transition
+  const skipBoundsSearchRef = useRef(false);
   
   const handleBoundsChange = async (bounds: { north: number; south: number; east: number; west: number }) => {
     setMapBounds(bounds);
+    
+    // Skip bounds-based search if we just did a manual search
+    if (skipBoundsSearchRef.current) {
+      return;
+    }
     
     // Debounce the search - wait 500ms after user stops panning/zooming
     if (boundsSearchTimeoutRef.current) {
@@ -284,6 +310,9 @@ export default function StarbucksFinder({
     }
     
     boundsSearchTimeoutRef.current = setTimeout(async () => {
+      // Double-check we shouldn't skip
+      if (skipBoundsSearchRef.current) return;
+      
       setLoading(true);
       const newStores = await loadStarbucksInBounds(bounds);
       
