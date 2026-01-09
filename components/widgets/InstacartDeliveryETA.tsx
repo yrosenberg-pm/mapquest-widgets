@@ -41,15 +41,24 @@ interface InstacartDeliveryETAProps {
   simulateMovement?: boolean;
 }
 
-// Instacart brand colors
+// Instacart brand colors (from official logo)
 const INSTACART_GREEN = '#43B02A';
-const INSTACART_DARK_GREEN = '#0AAD0A';
-const INSTACART_ORANGE = '#FF7009';
+const INSTACART_DARK_GREEN = '#3A9D23';
+const INSTACART_CARROT_ORANGE = '#F6A11A';
+const INSTACART_LEAF_GREEN = '#43B02A';
 
-// Carrot icon for Instacart branding
-const CarrotIcon = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-  <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M16.5 5.5c-.7-.7-1.8-.7-2.5 0l-1 1-1-1c-.7-.7-1.8-.7-2.5 0s-.7 1.8 0 2.5l1 1-4 4c-2.3 2.3-2.3 6 0 8.3s6 2.3 8.3 0l4-4 1 1c.7.7 1.8.7 2.5 0s.7-1.8 0-2.5l-1-1 1-1c.7-.7.7-1.8 0-2.5s-1.8-.7-2.5 0l-1 1-1-1 1-1c.7-.7.7-1.8 0-2.5l-2.3 2.3z"/>
+// Carrot icon matching Instacart logo (orange carrot with green leaves)
+const CarrotIcon = ({ className, size = 24 }: { className?: string; size?: number }) => (
+  <svg className={className} width={size} height={size} viewBox="0 0 32 32" fill="none">
+    {/* Green leaves */}
+    <ellipse cx="16" cy="6" rx="3" ry="5" fill={INSTACART_LEAF_GREEN} transform="rotate(-20 16 6)"/>
+    <ellipse cx="20" cy="7" rx="2.5" ry="4" fill={INSTACART_LEAF_GREEN} transform="rotate(20 20 7)"/>
+    <ellipse cx="12" cy="7" rx="2.5" ry="4" fill={INSTACART_LEAF_GREEN} transform="rotate(-40 12 7)"/>
+    {/* Orange carrot body */}
+    <path 
+      d="M16 10 C20 10 23 14 22 22 C21 28 17 30 16 30 C15 30 11 28 10 22 C9 14 12 10 16 10Z" 
+      fill={INSTACART_CARROT_ORANGE}
+    />
   </svg>
 );
 
@@ -251,8 +260,8 @@ export default function InstacartDeliveryETA({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-              <CarrotIcon className="w-6 h-6" style={{ color: 'white' }} />
+            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center">
+              <CarrotIcon size={28} />
             </div>
             <div>
               <h3 className="font-bold text-lg">Your order is {status.status === 'delivered' ? 'here!' : 'on the way'}</h3>
@@ -446,12 +455,19 @@ export default function InstacartDeliveryETA({
       {showBranding && (
         <div className="prism-footer">
           <div className="flex items-center gap-2">
-            <CarrotIcon className="w-4 h-4" style={{ color: INSTACART_GREEN }} />
-            <span>
-              <span style={{ fontWeight: 600, color: INSTACART_GREEN }}>Instacart</span>
-              <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
-              <strong>MapQuest</strong>
+            <CarrotIcon size={20} />
+            <span 
+              style={{ 
+                fontWeight: 700, 
+                color: INSTACART_GREEN,
+                fontSize: '15px',
+                letterSpacing: '-0.02em',
+              }}
+            >
+              instacart
             </span>
+            <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
+            <strong>MapQuest</strong>
           </div>
         </div>
       )}
