@@ -113,7 +113,7 @@ export default function DeliveryETA({
           lastUpdate: new Date(),
         };
       });
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [simulateMovement, status.currentLocation, status.destinationLocation, status.status]);

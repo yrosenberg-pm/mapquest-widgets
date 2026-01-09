@@ -277,8 +277,8 @@ export default function MultiStopPlanner({
           </div>
 
           {/* Stops List */}
-          <div className="flex-1 overflow-y-auto prism-scrollbar p-3 min-h-0">
-            <div className="space-y-1.5">
+          <div className="flex-1 overflow-y-auto prism-scrollbar p-4 min-h-0">
+            <div className="space-y-1">
               {stops.map((stop, index) => (
                 <div
                   key={stop.id}
@@ -289,7 +289,7 @@ export default function MultiStopPlanner({
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, index)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-1.5 p-2 rounded-lg transition-all ${
+                  className={`flex items-center gap-3 py-1.5 rounded-lg transition-all ${
                     draggedIndex === index ? 'opacity-50' : ''
                   }`}
                   style={{
@@ -303,10 +303,10 @@ export default function MultiStopPlanner({
                   />
                   
                   <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                     style={{ 
                       background: 'var(--bg-panel)',
-                      border: '1px solid var(--border-subtle)',
+                      border: '2px solid var(--border-default)',
                       color: 'var(--text-secondary)',
                     }}
                   >
