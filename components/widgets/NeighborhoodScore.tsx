@@ -185,58 +185,6 @@ export default function NeighborhoodScore({
   const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
   const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
-  const [boundaryPolygon, setBoundaryPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
-
-  // Fetch administrative boundary when location changes
-  useEffect(() => {
-    const fetchBoundary = async () => {
-      if (!location) {
-        setBoundaryPolygon(null);
-        return;
-      }
-
-      try {
-        // Use our backend API to avoid CORS issues
-        const response = await fetch(
-          `/api/boundary?lat=${location.lat}&lng=${location.lng}&zoom=14`
-        );
-        
-        if (!response.ok) {
-          console.error('Boundary API error:', response.status);
-          return;
-        }
-
-        const data = await response.json();
-        console.log('Boundary response:', data);
-
-        if (data.geojson && data.geojson.type === 'Polygon') {
-          // Convert GeoJSON coordinates [lng, lat] to our format { lat, lng }
-          const coords = data.geojson.coordinates[0].map((coord: number[]) => ({
-            lat: coord[1],
-            lng: coord[0]
-          }));
-          console.log('Boundary polygon found with', coords.length, 'points');
-          setBoundaryPolygon(coords);
-        } else if (data.geojson && data.geojson.type === 'MultiPolygon') {
-          // Use the first polygon for MultiPolygon
-          const coords = data.geojson.coordinates[0][0].map((coord: number[]) => ({
-            lat: coord[1],
-            lng: coord[0]
-          }));
-          console.log('MultiPolygon boundary found with', coords.length, 'points');
-          setBoundaryPolygon(coords);
-        } else {
-          console.log('No polygon boundary available for this location');
-          setBoundaryPolygon(null);
-        }
-      } catch (err) {
-        console.error('Failed to fetch boundary:', err);
-        setBoundaryPolygon(null);
-      }
-    };
-
-    fetchBoundary();
-  }, [location]);
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -879,11 +827,6 @@ export default function NeighborhoodScore({
             })()}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
-            polygons={boundaryPolygon ? [{
-              coordinates: boundaryPolygon,
-              color: accentColor,
-              fillOpacity: 0.1,
-            }] : []}
           />
         </div>
       </div>

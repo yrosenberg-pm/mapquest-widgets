@@ -333,12 +333,12 @@ export default function DirectionsEmbed({
   // Track if we've calculated a route before (to know if we should auto-recalculate)
   const hasCalculatedRef = useRef(false);
   
-  // Auto-recalculate when route type changes (only if we have both addresses and have calculated before)
+  // Auto-recalculate when route type or departure time changes (only if we have both addresses and have calculated before)
   useEffect(() => {
     if (hasCalculatedRef.current && from.trim() && to.trim()) {
       calculateRoute();
     }
-  }, [routeType]);
+  }, [routeType, departureTime]);
 
   // Mark that we've calculated when route or transitRouteInfo is set
   useEffect(() => {

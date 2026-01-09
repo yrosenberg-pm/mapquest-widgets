@@ -626,9 +626,6 @@ export default function MapQuestMap({
   useEffect(() => {
     if (!routeLayerRef.current || !mapReady) return;
     
-    // Don't draw if we're already showing a calculated route
-    if (showRoute && routeStart && routeEnd) return;
-    
     const L = window.L;
     routeLayerRef.current.clearLayers();
 
