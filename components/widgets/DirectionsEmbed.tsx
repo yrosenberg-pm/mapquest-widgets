@@ -849,7 +849,7 @@ export default function DirectionsEmbed({
               {stepsExpanded && (
                 <div 
                   className="flex-1 overflow-y-auto prism-scrollbar"
-                  style={{ borderTop: '1px solid var(--border-subtle)' }}
+                  style={{ borderTop: '1px solid var(--border-subtle)', maxHeight: '200px' }}
                 >
                   {route.steps.map((step, index) => (
                     <div 

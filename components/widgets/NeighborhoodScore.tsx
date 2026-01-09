@@ -237,58 +237,57 @@ export default function NeighborhoodScore({
     return result;
   };
 
-  // Fetch isoline when location changes or mode switches to isoline
-  const fetchIsoline = async (loc: { lat: number; lng: number }, walkMinutes: number) => {
-    setIsolineLoading(true);
-    setIsolinePolygon(null);
-    try {
-      const rangeSeconds = walkMinutes * 60;
-      console.log('Fetching isoline:', { loc, walkMinutes, rangeSeconds });
-      const res = await fetch('/api/here?' + new URLSearchParams({
-        endpoint: 'isoline',
-        origin: `${loc.lat},${loc.lng}`,
-        rangeType: 'time',
-        rangeValues: String(rangeSeconds),
-        transportMode: 'pedestrian',
-      }));
-      const data = await res.json();
-      console.log('Isoline response:', data);
-      
-      if (data.isolines && data.isolines.length > 0) {
-        const isolineData = data.isolines[0];
-        if (isolineData.polygons && isolineData.polygons.length > 0) {
-          const polygonData = isolineData.polygons[0];
-          if (polygonData.outer) {
-            const coordinates = decodeFlexiblePolyline(polygonData.outer);
-            console.log('Decoded isoline coordinates:', coordinates.length, 'points');
-            if (coordinates.length > 0) {
-              setIsolinePolygon(coordinates);
-            }
-          }
-        }
-      } else if (data.error) {
-        console.error('HERE API Error:', data.error, data.details);
-      }
-    } catch (err) {
-      console.error('Failed to fetch isoline:', err);
-      setIsolinePolygon(null);
-    }
-    setIsolineLoading(false);
-  };
-
   // Fetch isoline when boundary mode changes to isoline or when location changes
   useEffect(() => {
-    if (boundaryMode === 'isoline' && location) {
-      // Use walking time based on selected category's search radius, or default 20 min walk
-      const searchRadius = selectedCategory 
-        ? (categoryConfigs[selectedCategory.category.id]?.searchRadius || 2)
-        : 2;
-      // Roughly 20 min per mile walking
-      const walkMinutes = Math.round(searchRadius * 20);
-      fetchIsoline(location, walkMinutes);
-    } else {
-      setIsolinePolygon(null);
-    }
+    const doFetch = async () => {
+      if (boundaryMode === 'isoline' && location) {
+        // Use walking time based on selected category's search radius, or default 20 min walk
+        const searchRadius = selectedCategory 
+          ? (categoryConfigs[selectedCategory.category.id]?.searchRadius || 2)
+          : 2;
+        // Roughly 20 min per mile walking
+        const walkMinutes = Math.round(searchRadius * 20);
+        
+        setIsolineLoading(true);
+        setIsolinePolygon(null);
+        try {
+          const rangeSeconds = walkMinutes * 60;
+          console.log('Fetching isoline:', { location, walkMinutes, rangeSeconds });
+          const res = await fetch('/api/here?' + new URLSearchParams({
+            endpoint: 'isoline',
+            origin: `${location.lat},${location.lng}`,
+            rangeType: 'time',
+            rangeValues: String(rangeSeconds),
+            transportMode: 'pedestrian',
+          }));
+          const data = await res.json();
+          console.log('Isoline response:', data);
+          
+          if (data.isolines && data.isolines.length > 0) {
+            const isolineData = data.isolines[0];
+            if (isolineData.polygons && isolineData.polygons.length > 0) {
+              const polygonData = isolineData.polygons[0];
+              if (polygonData.outer) {
+                const coordinates = decodeFlexiblePolyline(polygonData.outer);
+                console.log('Decoded isoline coordinates:', coordinates.length, 'points');
+                if (coordinates.length > 0) {
+                  setIsolinePolygon(coordinates);
+                }
+              }
+            }
+          } else if (data.error) {
+            console.error('HERE API Error:', data.error, data.details);
+          }
+        } catch (err) {
+          console.error('Failed to fetch isoline:', err);
+        }
+        setIsolineLoading(false);
+      } else {
+        setIsolinePolygon(null);
+      }
+    };
+    
+    doFetch();
   }, [boundaryMode, location, selectedCategory]);
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
