@@ -4,6 +4,7 @@
 export { default as SmartAddressInput } from './SmartAddressInput';
 export { default as StarbucksFinder } from './StarbucksFinder';
 export { default as CitiBikeFinder } from './CitiBikeFinder';
+export { default as InstacartDeliveryETA } from './InstacartDeliveryETA';
 export { default as DirectionsEmbed } from './DirectionsEmbed';
 export { default as ServiceAreaChecker } from './ServiceAreaChecker';
 export { default as NeighborhoodScore } from './NeighborhoodScore';

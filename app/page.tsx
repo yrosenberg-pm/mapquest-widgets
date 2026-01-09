@@ -12,13 +12,14 @@ import {
   NeighborhoodScore,
   MultiStopPlanner,
   DeliveryETA,
+  InstacartDeliveryETA,
   NHLArenaExplorer,
   HereIsolineWidget,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-type WidgetId = 'nhl' | 'address' | 'starbucks' | 'citibike' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'here-isoline';
+type WidgetId = 'nhl' | 'address' | 'starbucks' | 'citibike' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'instacart' | 'here-isoline';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
@@ -30,6 +31,7 @@ const WIDGETS = [
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', category: 'Bigger Bet' },
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', category: 'Bigger Bet' },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', category: 'Bigger Bet' },
+  { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', category: 'Bigger Bet' },
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time (HERE API)', category: 'Bigger Bet' },
 ];
 
@@ -171,6 +173,8 @@ export default function Home() {
         return <MultiStopPlanner {...commonProps} />;
       case 'delivery':
         return <DeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
+      case 'instacart':
+        return <InstacartDeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
       case 'here-isoline':
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
       default:
