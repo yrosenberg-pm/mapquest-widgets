@@ -401,8 +401,12 @@ export default function MapQuestMap({
   // Update center and zoom
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
+    // Don't setView if fitBounds is provided (fitBounds takes precedence)
+    if (fitBounds) return;
+    // Don't setView if transit segments are present (they handle their own bounds)
+    if (transitSegments && transitSegments.length > 0) return;
     mapRef.current.setView([center.lat, center.lng], zoom);
-  }, [center.lat, center.lng, zoom, mapReady]);
+  }, [center.lat, center.lng, zoom, mapReady, fitBounds, transitSegments]);
 
   // Fit bounds (for showing all markers)
   useEffect(() => {
