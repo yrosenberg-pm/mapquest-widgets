@@ -2,7 +2,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Key, Code, ChevronDown, Grid3X3 } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Key, Code, ChevronDown, Grid3X3, Link2, ExternalLink } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -61,10 +62,18 @@ const RADIUS_OPTIONS = [
 ];
 
 export default function Home() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  // Check for embed mode and widget from URL
+  const embedMode = searchParams.get('embed') === 'true';
+  const urlWidget = searchParams.get('widget') as WidgetId | null;
+  
   const [activeWidget, setActiveWidget] = useState<WidgetId>('nhl');
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState('theme');
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -93,13 +102,21 @@ export default function Home() {
         if (prefs.brandingMode) setBrandingMode(prefs.brandingMode);
         if (prefs.companyName) setCompanyName(prefs.companyName);
         if (prefs.companyLogo) setCompanyLogo(prefs.companyLogo);
-        if (prefs.activeWidget) setActiveWidget(prefs.activeWidget);
+        // Only use saved widget if no URL parameter
+        if (!urlWidget && prefs.activeWidget) setActiveWidget(prefs.activeWidget);
       }
     } catch (e) {
       console.error('Failed to load preferences:', e);
     }
     setPrefsLoaded(true);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Set widget from URL parameter (takes priority)
+  useEffect(() => {
+    if (urlWidget && WIDGETS.some(w => w.id === urlWidget)) {
+      setActiveWidget(urlWidget);
+    }
+  }, [urlWidget]);
 
   // Save preferences to localStorage when they change
   useEffect(() => {
@@ -160,6 +177,18 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Generate permalink for current widget
+  const getWidgetPermalink = (embed: boolean = true) => {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${baseUrl}/?widget=${activeWidget}${embed ? '&embed=true' : ''}`;
+  };
+
+  const copyPermalink = () => {
+    navigator.clipboard.writeText(getWidgetPermalink(true));
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   const renderWidget = () => {
     const commonProps = {
       apiKey: API_KEY,
@@ -199,6 +228,17 @@ export default function Home() {
         return null;
     }
   };
+
+  // Embed mode: show only the widget without header/menu
+  if (embedMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+        <div className="shadow-2xl shadow-gray-400/30 rounded-xl">
+          {renderWidget()}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ minHeight: '100vh' }}>
@@ -260,6 +300,15 @@ export default function Home() {
 
           {/* Right Controls - Always Visible */}
           <div className="flex items-center gap-2">
+            {/* Share/Permalink Button */}
+            <button
+              onClick={copyPermalink}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
+              title="Copy shareable link (embed mode)"
+            >
+              {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
+              <span className="hidden sm:inline text-sm">{copiedLink ? 'Copied!' : 'Share'}</span>
+            </button>
             <button
               onClick={() => setDarkMode(!darkMode)}
               className="p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
@@ -276,7 +325,6 @@ export default function Home() {
             </button>
           </div>
         </div>
-
 
         {/* Widget Display */}
         <div className="flex flex-col items-center">
