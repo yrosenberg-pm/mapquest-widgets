@@ -1,9 +1,9 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Key, Code, ChevronDown, Grid3X3, Link2, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, ChevronDown, Grid3X3, Link2, Loader2 } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -61,9 +61,8 @@ const RADIUS_OPTIONS = [
   { name: 'XL', value: '1rem' },
 ];
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   
   // Check for embed mode and widget from URL
   const embedMode = searchParams.get('embed') === 'true';
@@ -670,5 +669,26 @@ export default function Home() {
         </div>
       )}
     </div>
+  );
+}
+
+// Loading fallback for Suspense
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <p className="text-gray-500 text-sm">Loading widgets...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main export wrapped in Suspense for useSearchParams
+export default function Home() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <HomeContent />
+    </Suspense>
   );
 }
