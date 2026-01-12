@@ -1,8 +1,8 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Key, Code } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Key, Code, ChevronDown, Grid3X3 } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -66,6 +66,8 @@ export default function Home() {
   const [settingsTab, setSettingsTab] = useState('theme');
   const [copied, setCopied] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Customization state
   const [darkMode, setDarkMode] = useState(false);
@@ -121,6 +123,22 @@ export default function Home() {
   }, [prefsLoaded, darkMode, accentColor, customColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo, activeWidget]);
 
   const currentWidget = WIDGETS.find(w => w.id === activeWidget);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleWidgetSelect = (widgetId: WidgetId) => {
+    setActiveWidget(widgetId);
+    setMenuOpen(false);
+  };
 
   const generateEmbedCode = () => {
     const props = [
@@ -183,73 +201,94 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-white" style={{ minHeight: '100vh' }}>
-      <div className="p-8">
+    <div className="min-h-screen bg-gray-50" style={{ minHeight: '100vh' }}>
+      <div className="p-6">
         <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-start mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              MapQuest White-Label Widgets
-            </h1>
-            <p className="mt-1 text-gray-500">
-              Embeddable components for B2B customers
-            </p>
+        {/* Compact Header with Widget Selector */}
+        <div className="flex items-center justify-between mb-6">
+          {/* Widget Selector Dropdown */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white shadow-lg shadow-gray-200/80 hover:shadow-xl transition-all"
+            >
+              <Grid3X3 className="w-5 h-5 text-gray-500" />
+              <div className="text-left">
+                <div className="text-sm font-semibold text-gray-900">{currentWidget?.name}</div>
+                <div className="text-xs text-gray-500">{currentWidget?.description}</div>
+              </div>
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {menuOpen && (
+              <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-xl shadow-2xl shadow-gray-300/50 border border-gray-100 overflow-hidden z-50">
+                <div className="p-2 border-b border-gray-100">
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider px-2">Select Widget</p>
+                </div>
+                <div className="max-h-[400px] overflow-y-auto p-2">
+                  {WIDGETS.map((widget) => {
+                    const isActive = activeWidget === widget.id;
+                    return (
+                      <button
+                        key={widget.id}
+                        onClick={() => handleWidgetSelect(widget.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
+                          isActive 
+                            ? 'bg-blue-50 border border-blue-200' 
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div 
+                          className={`w-2 h-2 rounded-full flex-shrink-0`}
+                          style={{ backgroundColor: isActive ? (widget.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
+                            {widget.name}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">{widget.description}</div>
+                        </div>
+                        {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-3 relative z-[100]">
+          {/* Right Controls - Always Visible */}
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className="p-2 rounded-lg bg-white text-gray-700 shadow-lg shadow-gray-300/60 hover:bg-gray-50 hover:shadow-xl hover:shadow-gray-400/70 transition-all"
+              className="p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
               title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium relative z-[100] bg-white text-gray-700 shadow-lg shadow-gray-300/60 hover:bg-gray-50 hover:shadow-xl hover:shadow-gray-400/70 transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
             >
               <Settings className="w-4 h-4" />
-              Customize
+              <span className="hidden sm:inline">Customize</span>
             </button>
           </div>
-        </div>
-
-        {/* Widget Tabs */}
-        <div className="flex flex-wrap gap-2 mb-8">
-          {WIDGETS.map((widget) => (
-            <button
-              key={widget.id}
-              onClick={() => setActiveWidget(widget.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeWidget === widget.id
-                  ? 'text-white shadow-xl shadow-gray-500/50'
-                  : 'bg-white text-gray-600 hover:bg-gray-50 shadow-lg shadow-gray-300/60 hover:shadow-xl hover:shadow-gray-400/70'
-              }`}
-              style={activeWidget === widget.id ? { backgroundColor: widget.isCustom ? '#f97316' : accentColor } : undefined}
-            >
-              {widget.name}
-            </button>
-          ))}
         </div>
 
 
         {/* Widget Display */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="shadow-2xl shadow-gray-500/40 rounded-xl">
+        <div className="flex flex-col items-center">
+          <div className="shadow-2xl shadow-gray-400/30 rounded-xl">
             {renderWidget()}
           </div>
           {activeWidget === 'address' && (
-            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-2`}>
+            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-3`}>
               Powered by <strong>MapQuest</strong>
             </div>
           )}
         </div>
-
-        {/* Console hint */}
-        <p className={`mt-8 text-center text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
-          💡 Open browser console to see callback data from widget interactions
-        </p>
         </div>
       </div>
 
