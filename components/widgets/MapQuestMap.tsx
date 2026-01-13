@@ -62,6 +62,7 @@ interface MapQuestMapProps {
   showTraffic?: boolean;
   highlightedSegment?: number | null; // Index of segment to highlight
   stops?: { lat: number; lng: number }[]; // All stops for segment-by-segment routing
+  driverPosition?: { lat: number; lng: number }; // Live driver position for tracking
 }
 
 declare global {
@@ -99,6 +100,7 @@ export default function MapQuestMap({
   showTraffic = false,
   highlightedSegment = null,
   stops = [],
+  driverPosition,
 }: MapQuestMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -108,6 +110,7 @@ export default function MapQuestMap({
   const polygonsLayerRef = useRef<any>(null);
   const trafficLayerRef = useRef<any>(null);
   const highlightLayerRef = useRef<any>(null);
+  const driverLayerRef = useRef<any>(null);
   const mapIdRef = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
   const [mapReady, setMapReady] = useState(false);
 
@@ -363,6 +366,7 @@ export default function MapQuestMap({
       circlesLayerRef.current = L.layerGroup().addTo(map);
       polygonsLayerRef.current = L.layerGroup().addTo(map);
       highlightLayerRef.current = L.layerGroup().addTo(map);
+      driverLayerRef.current = L.layerGroup().addTo(map);
 
       if (onClick) {
         map.on('click', (e: any) => {
@@ -599,6 +603,85 @@ export default function MapQuestMap({
       }
     });
   }, [markers, accentColor, mapReady]);
+
+  // Update driver position marker
+  useEffect(() => {
+    if (!driverLayerRef.current || !mapReady) return;
+    const L = window.L;
+    
+    driverLayerRef.current.clearLayers();
+    
+    if (!driverPosition) return;
+    
+    // Create animated driver marker
+    const driverMarkerHtml = `
+      <div style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+        <!-- Pulsing ring -->
+        <div style="
+          position: absolute;
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background: ${accentColor}30;
+          animation: driver-pulse 2s ease-in-out infinite;
+        "></div>
+        <!-- Shadow -->
+        <div style="
+          position: absolute;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: rgba(0,0,0,0.2);
+          filter: blur(4px);
+          transform: translateY(2px);
+        "></div>
+        <!-- Car icon background -->
+        <div style="
+          position: relative;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, ${accentColor} 0%, #1e40af 100%);
+          border: 3px solid white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          z-index: 2;
+        ">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
+            <circle cx="7" cy="17" r="2"/>
+            <circle cx="17" cy="17" r="2"/>
+          </svg>
+        </div>
+      </div>
+      <style>
+        @keyframes driver-pulse {
+          0%, 100% { transform: scale(0.8); opacity: 0.8; }
+          50% { transform: scale(1.2); opacity: 0.3; }
+        }
+      </style>
+    `;
+    
+    const driverIcon = L.divIcon({
+      html: driverMarkerHtml,
+      className: 'driver-marker',
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
+    });
+    
+    const driverMarker = L.marker([driverPosition.lat, driverPosition.lng], { 
+      icon: driverIcon,
+      zIndexOffset: 2000, // Always on top
+    }).addTo(driverLayerRef.current);
+    
+    driverMarker.bindTooltip('Driver Location (Simulated)', {
+      direction: 'top',
+      offset: [0, -24],
+      className: 'marker-tooltip',
+    });
+  }, [driverPosition, accentColor, mapReady]);
 
   // Update circles
   useEffect(() => {

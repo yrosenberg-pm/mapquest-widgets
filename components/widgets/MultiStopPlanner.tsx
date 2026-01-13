@@ -513,7 +513,11 @@ export default function MultiStopPlanner({
       departureTime: departureTime.toISOString(),
       companyName: companyName,
     };
-    const data = btoa(JSON.stringify(shareData));
+    // Use URL-safe base64 encoding (replace +/= with URL-safe chars)
+    const data = btoa(JSON.stringify(shareData))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
     const url = `${window.location.origin}/share/${data}`;
     try {
       await navigator.clipboard.writeText(url);
