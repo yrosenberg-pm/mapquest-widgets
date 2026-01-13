@@ -36,6 +36,91 @@ body {
   display: none;  /* Chrome, Safari and Opera */
 }
 
+/* ========================================
+   Global Scrollbar Styling
+   ======================================== */
+
+/* Light mode scrollbar */
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 #F1F5F9;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: #F1F5F9;
+}
+
+/* Dark mode scrollbar - applies to data-theme and prefers-color-scheme */
+[data-theme='dark'],
+.dark-theme {
+  scrollbar-color: #475569 #1E293B;
+}
+
+[data-theme='dark'] *::-webkit-scrollbar-track,
+.dark-theme *::-webkit-scrollbar-track {
+  background: #1E293B;
+}
+
+[data-theme='dark'] *::-webkit-scrollbar-thumb,
+.dark-theme *::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+[data-theme='dark'] *::-webkit-scrollbar-thumb:hover,
+.dark-theme *::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
+}
+
+[data-theme='dark'] *::-webkit-scrollbar-corner,
+.dark-theme *::-webkit-scrollbar-corner {
+  background: #1E293B;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    scrollbar-color: #475569 #1E293B;
+  }
+  
+  :root:not([data-theme='light']) *::-webkit-scrollbar-track {
+    background: #1E293B;
+  }
+  
+  :root:not([data-theme='light']) *::-webkit-scrollbar-thumb {
+    background: #475569;
+  }
+  
+  :root:not([data-theme='light']) *::-webkit-scrollbar-thumb:hover {
+    background: #64748B;
+  }
+  
+  :root:not([data-theme='light']) *::-webkit-scrollbar-corner {
+    background: #1E293B;
+  }
+}
+
 /* Highlighted segment pulsing animation */
 @keyframes segment-pulse {
   0%, 100% {

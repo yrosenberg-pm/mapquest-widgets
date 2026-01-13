@@ -267,29 +267,62 @@
 }
 
 /* ========================================
-   Scrollbar Styling - Minimal
+   Scrollbar Styling - Matches theme
    ======================================== */
 .prism-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: var(--border-default) transparent;
+  scrollbar-color: var(--border-default) var(--bg-panel);
 }
 
 .prism-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 .prism-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--bg-panel);
+  border-radius: 4px;
 }
 
 .prism-scrollbar::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: 3px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .prism-scrollbar::-webkit-scrollbar-thumb:hover {
   background: var(--border-strong);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.prism-scrollbar::-webkit-scrollbar-corner {
+  background: var(--bg-panel);
+}
+
+/* Subtle variant - more minimal */
+.prism-scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle) transparent;
+}
+
+.prism-scrollbar-subtle::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.prism-scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.prism-scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+
+.prism-scrollbar-subtle::-webkit-scrollbar-thumb:hover {
+  background: var(--border-default);
 }
 
 /* ========================================
