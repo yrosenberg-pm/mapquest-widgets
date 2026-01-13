@@ -315,19 +315,18 @@ export default function HereIsolineWidget({
 
   return (
     <div 
-      className="prism-widget"
+      className="prism-widget w-full lg:max-w-[900px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '900px', 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex" style={{ height: '560px' }}>
+      <div className="flex flex-col-reverse lg:flex-row min-h-[500px] lg:h-[560px]">
         {/* Controls Panel */}
         <div 
-          className="w-80 flex-shrink-0 flex flex-col h-full overflow-hidden"
-          style={{ borderRight: '1px solid var(--border-subtle)' }}
+          className="w-full lg:w-80 flex-shrink-0 flex flex-col overflow-hidden border-t lg:border-t-0 lg:border-r"
+          style={{ borderColor: 'var(--border-subtle)' }}
         >
           <div className="flex-1 overflow-y-auto prism-scrollbar p-4">
             {/* Header */}
@@ -509,7 +508,7 @@ export default function HereIsolineWidget({
         </div>
 
         {/* Map */}
-        <div className="flex-1 h-full">
+        <div className="flex-1 min-h-[300px] lg:min-h-0">
           <MapQuestMap
             apiKey={mapQuestApiKey}
             center={mapCenter}

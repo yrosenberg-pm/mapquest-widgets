@@ -331,19 +331,18 @@ export default function CitiBikeFinder({
 
   return (
     <div 
-      className="prism-widget"
+      className="prism-widget w-full lg:max-w-[900px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '900px', 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': CITIBIKE_BLUE,
       } as React.CSSProperties}
     >
-      <div className="flex" style={{ height: '520px' }}>
+      <div className="flex flex-col-reverse lg:flex-row min-h-[500px] lg:h-[520px]">
         {/* Left Panel */}
         <div 
-          className="w-80 flex flex-col"
-          style={{ borderRight: '1px solid var(--border-subtle)' }}
+          className="w-full lg:w-80 flex flex-col border-t lg:border-t-0 lg:border-r"
+          style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header with Citi Bike + Lyft Branding */}
           <div 
@@ -668,7 +667,7 @@ export default function CitiBikeFinder({
         </div>
 
         {/* Map */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 min-h-[300px] lg:min-h-0">
           <MapQuestMap
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}
@@ -676,7 +675,7 @@ export default function CitiBikeFinder({
             minZoom={13}
             darkMode={darkMode}
             accentColor={CITIBIKE_BLUE}
-            height="520px"
+            height="100%"
             markers={markers}
           />
         </div>

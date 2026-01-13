@@ -637,22 +637,20 @@ export default function NHLArenaExplorer({
 
   return (
     <div 
-      className="prism-widget"
+      className="prism-widget w-full lg:max-w-[900px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '900px', 
-        height: 675,
         '--brand-primary': accentColor,
         fontFamily: fontFamily || undefined,
         borderRadius: borderRadius || undefined,
       } as React.CSSProperties}
     >
-      <div className="flex h-full">
+      <div className="flex flex-col-reverse lg:flex-row min-h-[550px] lg:h-[675px]">
         {/* Sidebar */}
         <div 
-          className="w-64 flex flex-col"
+          className="w-full lg:w-64 flex flex-col border-t lg:border-t-0 lg:border-r"
           style={{ 
-            borderRight: '1px solid var(--border-subtle)',
+            borderColor: 'var(--border-subtle)',
             background: 'var(--bg-panel)',
           }}
         >
@@ -719,16 +717,16 @@ export default function NHLArenaExplorer({
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-[300px] lg:min-h-0">
           {/* Map */}
-          <div className="h-[220px]">
+          <div className="h-[180px] lg:h-[220px]">
             <MapQuestMap
               apiKey={apiKey}
               center={mapCenter}
               zoom={selectedStadium ? 14 : 4}
               darkMode={darkMode}
               markers={mapMarkers}
-              height="220px"
+              height="100%"
               showRoute={!!routeStart && !!selectedStadium && routeType !== 'transit'}
               routeStart={routeStart || undefined}
               routeEnd={selectedStadium ? { lat: selectedStadium.lat, lng: selectedStadium.lng } : undefined}

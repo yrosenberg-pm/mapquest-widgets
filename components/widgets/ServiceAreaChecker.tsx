@@ -182,10 +182,9 @@ export default function ServiceAreaChecker({
 
   return (
     <div 
-      className="prism-widget"
+      className="prism-widget w-full lg:max-w-[700px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '700px', 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
@@ -223,11 +222,11 @@ export default function ServiceAreaChecker({
       </div>
 
       {/* Content - Side by Side Layout */}
-      <div className="flex" style={{ minHeight: '400px' }}>
+      <div className="flex flex-col-reverse lg:flex-row" style={{ minHeight: '400px' }}>
         {/* Left Panel - Form & Results */}
         <div 
-          className="w-72 flex-shrink-0 p-4 flex flex-col"
-          style={{ borderRight: '1px solid var(--border-subtle)' }}
+          className="w-full lg:w-72 flex-shrink-0 p-4 flex flex-col border-t lg:border-t-0 lg:border-r"
+          style={{ borderColor: 'var(--border-subtle)' }}
         >
           <form onSubmit={handleSubmit} className="space-y-2">
             <AddressAutocomplete
@@ -339,7 +338,7 @@ export default function ServiceAreaChecker({
         </div>
 
         {/* Right Panel - Map */}
-        <div className="flex-1 relative" style={{ minHeight: '400px' }}>
+        <div className="flex-1 relative min-h-[250px] lg:min-h-[400px]">
           <MapQuestMap
             apiKey={apiKey}
             center={serviceCenter}

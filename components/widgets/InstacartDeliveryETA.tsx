@@ -243,11 +243,9 @@ export default function InstacartDeliveryETA({
 
   return (
     <div 
-      className="prism-widget"
+      className="prism-widget w-full max-w-[480px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '420px',
-        maxWidth: '480px',
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': INSTACART_GREEN,
       } as React.CSSProperties}

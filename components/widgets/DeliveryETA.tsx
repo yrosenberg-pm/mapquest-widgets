@@ -160,10 +160,9 @@ export default function DeliveryETA({
 
   return (
     <div 
-      className="prism-widget"
+      className="prism-widget w-full max-w-[550px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '550px', 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}

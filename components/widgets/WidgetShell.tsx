@@ -71,7 +71,7 @@ export default function WidgetShell({
   defaultTheme = 'light',
   className = '',
   style = {},
-  minWidth = '900px',
+  minWidth,
   height,
 }: WidgetShellProps) {
   const [theme, setTheme] = useState<'light' | 'dark'>(defaultTheme);
@@ -90,14 +90,14 @@ export default function WidgetShell({
     ...style,
     ...(brandPrimary && { '--brand-primary': brandPrimary } as React.CSSProperties),
     ...(brandFont && { '--brand-font': brandFont } as React.CSSProperties),
-    minWidth,
+    ...(minWidth && { minWidth }),
     ...(height && { height }),
   };
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       <div
-        className={`prism-widget ${className}`}
+        className={`prism-widget w-full ${className}`}
         data-theme={theme}
         style={brandStyles}
       >

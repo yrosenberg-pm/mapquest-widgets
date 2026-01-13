@@ -413,11 +413,11 @@ export default function ShareRoutePage() {
               </div>
             </div>
             
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               {/* Simulation Toggle */}
               <button
                 onClick={() => setIsSimulating(!isSimulating)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl transition-all"
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-xl transition-all"
                 style={{ 
                   background: isSimulating ? '#22c55e15' : '#f3f4f6',
                   color: isSimulating ? '#22c55e' : '#6b7280',
@@ -426,36 +426,36 @@ export default function ShareRoutePage() {
                 title={isSimulating ? 'Pause simulation' : 'Resume simulation'}
               >
                 {isSimulating ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                <span className="text-xs font-medium">
+                <span className="text-xs font-medium hidden sm:inline">
                   {isSimulating ? 'Live' : 'Paused'}
                 </span>
               </button>
               
               {/* Auto-refresh indicator */}
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100">
+              <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 rounded-xl bg-gray-100">
                 <RefreshCw className={`w-4 h-4 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
                 <div className="text-xs text-gray-600">
-                  <span>Updates in </span>
+                  <span className="hidden sm:inline">Updates in </span>
                   <span className="font-mono font-semibold">{formatCountdown(nextUpdate)}</span>
                 </div>
               </div>
               
               <button
                 onClick={copyShareLink}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all"
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 rounded-xl transition-all"
                 style={{ 
                   background: copied ? '#22c55e15' : `${accentColor}15`,
                   color: copied ? '#22c55e' : accentColor,
                 }}
               >
                 {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                <span className="text-sm font-medium">{copied ? 'Copied!' : 'Copy Link'}</span>
+                <span className="text-sm font-medium hidden sm:inline">{copied ? 'Copied!' : 'Copy Link'}</span>
               </button>
               
               <button
                 onClick={calculateRoute}
                 disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-white font-medium transition-all"
+                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 rounded-xl text-white font-medium transition-all"
                 style={{ background: accentColor }}
               >
                 {loading ? (
@@ -463,7 +463,7 @@ export default function ShareRoutePage() {
                 ) : (
                   <RefreshCw className="w-4 h-4" />
                 )}
-                <span className="text-sm">Refresh</span>
+                <span className="text-sm hidden sm:inline">Refresh</span>
               </button>
             </div>
           </div>
@@ -721,15 +721,15 @@ export default function ShareRoutePage() {
           </div>
 
           {/* Right Column - Map */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden sticky top-24">
+          <div className="lg:col-span-2 order-first lg:order-last">
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden lg:sticky lg:top-24 h-[300px] sm:h-[400px] lg:h-[700px]">
               <MapQuestMap
                 apiKey={API_KEY}
                 center={mapCenter}
                 zoom={stops.length > 0 ? 11 : 4}
                 darkMode={darkMode}
                 accentColor={accentColor}
-                height="700px"
+                height="100%"
                 markers={markers}
                 showRoute={!!routeResult && stops.length >= 2}
                 routeStart={stops.length >= 2 ? { lat: stops[0].lat, lng: stops[0].lng } : undefined}

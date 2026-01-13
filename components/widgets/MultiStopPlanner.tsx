@@ -572,17 +572,19 @@ export default function MultiStopPlanner({
 
   return (
     <div 
-      className="prism-widget"
+      className="prism-widget w-full lg:max-w-[1100px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '1100px', 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex" style={{ height: '700px' }}>
-        {/* Sidebar - wider */}
-        <div className="w-[420px] flex flex-col" style={{ borderRight: '1px solid var(--border-subtle)' }}>
+      <div className="flex flex-col-reverse lg:flex-row min-h-[600px] lg:h-[700px]">
+        {/* Sidebar */}
+        <div 
+          className="w-full lg:w-[420px] flex flex-col flex-shrink-0 border-t lg:border-t-0 lg:border-r"
+          style={{ borderColor: 'var(--border-subtle)' }}
+        >
           
           {/* Header */}
           <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -1364,14 +1366,14 @@ export default function MultiStopPlanner({
         </div>
 
         {/* Map */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative min-h-[300px] lg:min-h-0">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
             zoom={validStops.length > 0 ? 10 : 4}
             darkMode={darkMode}
             accentColor={accentColor}
-            height="700px"
+            height="100%"
             markers={markers}
             showRoute={!!routeResult && validStops.length >= 2}
             routeStart={routeResult && validStops.length >= 2 ? { lat: validStops[0].lat!, lng: validStops[0].lng! } : undefined}
