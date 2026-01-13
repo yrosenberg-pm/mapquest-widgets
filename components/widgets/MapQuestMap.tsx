@@ -59,6 +59,7 @@ interface MapQuestMapProps {
   className?: string;
   fitBounds?: { north: number; south: number; east: number; west: number };
   zoomToLocation?: { lat: number; lng: number; zoom?: number };
+  showTraffic?: boolean;
 }
 
 declare global {
@@ -93,6 +94,7 @@ export default function MapQuestMap({
   className = '',
   fitBounds,
   zoomToLocation,
+  showTraffic = false,
 }: MapQuestMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -100,6 +102,7 @@ export default function MapQuestMap({
   const routeLayerRef = useRef<any>(null);
   const circlesLayerRef = useRef<any>(null);
   const polygonsLayerRef = useRef<any>(null);
+  const trafficLayerRef = useRef<any>(null);
   const mapIdRef = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
   const [mapReady, setMapReady] = useState(false);
 
@@ -636,6 +639,32 @@ export default function MapQuestMap({
       }
     });
   }, [polygons, accentColor, mapReady]);
+
+  // Traffic layer
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    const L = window.L;
+    const map = mapRef.current;
+
+    // Remove existing traffic layer if any
+    if (trafficLayerRef.current) {
+      map.removeLayer(trafficLayerRef.current);
+      trafficLayerRef.current = null;
+    }
+
+    if (showTraffic && apiKey) {
+      // Add MapQuest traffic flow layer
+      const trafficLayer = L.tileLayer(
+        `https://api.mapquest.com/traffic/v2/flow/tile/{z}/{x}/{y}.png?key=${apiKey}`,
+        {
+          maxZoom: 20,
+          opacity: 0.7,
+        }
+      );
+      trafficLayer.addTo(map);
+      trafficLayerRef.current = trafficLayer;
+    }
+  }, [showTraffic, apiKey, mapReady]);
 
   // Update route (MapQuest directions - NOT for transit)
   useEffect(() => {

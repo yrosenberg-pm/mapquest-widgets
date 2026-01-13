@@ -5,7 +5,7 @@ import { useState, useRef } from 'react';
 import { 
   Plus, Trash2, GripVertical, Loader2, RotateCcw, Route, 
   Sparkles, Clock, Check, AlertTriangle, XCircle, ChevronDown,
-  Download, Share2, Shuffle, Navigation, MoreHorizontal, Car, Ban, CircleDollarSign
+  Download, Share2, Shuffle, Navigation, MoreHorizontal
 } from 'lucide-react';
 import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -36,15 +36,6 @@ interface RouteResult {
   legs: LegInfo[];
 }
 
-interface RouteOption {
-  type: 'fastest' | 'avoidHighways' | 'avoidTolls';
-  label: string;
-  description: string;
-  icon: typeof Car;
-  distance: number;
-  time: number;
-  stops: Stop[];
-}
 
 interface MultiStopPlannerProps {
   accentColor?: string;
@@ -83,11 +74,7 @@ export default function MultiStopPlanner({
 
   // UI State
   const [expandedStopId, setExpandedStopId] = useState<string | null>(null);
-  const [showRouteOptions, setShowRouteOptions] = useState(false);
-  const [routeOptions, setRouteOptions] = useState<RouteOption[]>([]);
-  const [selectedRouteType, setSelectedRouteType] = useState<'fastest' | 'avoidHighways' | 'avoidTolls'>('fastest');
   const [originalRoute, setOriginalRoute] = useState<{ distance: number; time: number } | null>(null);
-  const [optimizedStopsOrder, setOptimizedStopsOrder] = useState<Stop[]>([]);
   const [departureTime, setDepartureTime] = useState<Date>(new Date());
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -328,76 +315,22 @@ export default function MultiStopPlanner({
       console.log(`📊 Original route: ${originalDistance.toFixed(1)} mi, ${Math.round(originalTime)} min`);
       setOriginalRoute({ distance: originalDistance, time: originalTime });
 
-      // Step 1: Optimize stop ORDER using nearest neighbor algorithm
-      console.log('🔄 Step 1: Optimizing stop order...');
+      // Optimize stop ORDER using nearest neighbor algorithm
+      console.log('🔄 Optimizing stop order...');
       const optimizedStops = nearestNeighborOptimize(validStops);
-      setOptimizedStopsOrder(optimizedStops);
       
       console.log('📍 Optimized stop order:');
       optimizedStops.forEach((s, i) => console.log(`   ${i + 1}. ${s.address}`));
       
-      // Step 2: Calculate route OPTIONS for the optimized order
-      console.log('🛣️ Step 2: Calculating route options...');
+      // IMMEDIATELY apply the new order
+      const reorderedStops = optimizedStops.map((s, i) => ({ ...s, id: (i + 1).toString() }));
+      setStops(reorderedStops);
       
-      // Option 1: Fastest route
-      let fastestDistance = 0, fastestTime = 0;
-      for (let i = 0; i < optimizedStops.length - 1; i++) {
-        const from = `${optimizedStops[i].lat},${optimizedStops[i].lng}`;
-        const to = `${optimizedStops[i + 1].lat},${optimizedStops[i + 1].lng}`;
-        const d = await getDirections(from, to, 'fastest');
-        if (d) { fastestDistance += d.distance; fastestTime += d.time; }
-      }
-      console.log(`⚡ Fastest: ${fastestDistance.toFixed(1)} mi, ${Math.round(fastestTime)} min`);
-
-      // Option 2: Avoid highways (uses shortest which prefers local roads)
-      let noHwyDistance = 0, noHwyTime = 0;
-      for (let i = 0; i < optimizedStops.length - 1; i++) {
-        const from = `${optimizedStops[i].lat},${optimizedStops[i].lng}`;
-        const to = `${optimizedStops[i + 1].lat},${optimizedStops[i + 1].lng}`;
-        const d = await getDirections(from, to, 'shortest');
-        if (d) { noHwyDistance += d.distance; noHwyTime += d.time; }
-      }
-      console.log(`🚗 Avoid Highways: ${noHwyDistance.toFixed(1)} mi, ${Math.round(noHwyTime)} min`);
-
-      // Option 3: Avoid tolls (estimated as slightly longer than fastest)
-      const noTollDistance = fastestDistance * 1.1;
-      const noTollTime = fastestTime * 1.15;
-      console.log(`💰 Avoid Tolls: ${noTollDistance.toFixed(1)} mi, ${Math.round(noTollTime)} min`);
-
-      const options: RouteOption[] = [
-        { 
-          type: 'fastest', 
-          label: 'Fastest Route', 
-          description: 'Quickest path using all roads',
-          icon: Car,
-          distance: fastestDistance, 
-          time: fastestTime, 
-          stops: optimizedStops,
-        },
-        { 
-          type: 'avoidHighways', 
-          label: 'Avoid Highways', 
-          description: 'Scenic route on local roads',
-          icon: Ban,
-          distance: noHwyDistance, 
-          time: noHwyTime, 
-          stops: optimizedStops,
-        },
-        { 
-          type: 'avoidTolls', 
-          label: 'Avoid Tolls', 
-          description: 'Skip toll roads and bridges',
-          icon: CircleDollarSign,
-          distance: noTollDistance, 
-          time: noTollTime, 
-          stops: optimizedStops,
-        },
-      ];
-
+      // Calculate the new route with optimized order
+      await calculateRouteForStops(reorderedStops, 'fastest');
+      
+      console.log('✅ Stops reordered and route calculated');
       console.log('═══════════════════════════════════════════');
-
-      setRouteOptions(options);
-      setShowRouteOptions(true);
 
     } catch (err) {
       console.error('❌ Optimization error:', err);
@@ -407,17 +340,6 @@ export default function MultiStopPlanner({
     }
   };
 
-  const selectRouteOption = async (type: 'fastest' | 'avoidHighways' | 'avoidTolls') => {
-    const opt = routeOptions.find(o => o.type === type);
-    if (!opt) return;
-    
-    setSelectedRouteType(type);
-    const updatedStops = opt.stops.map((s, i) => ({ ...s, id: (i + 1).toString() }));
-    setStops(updatedStops);
-    setShowRouteOptions(false);
-    // Use 'shortest' for avoid highways, 'fastest' otherwise
-    await calculateRouteForStops(updatedStops, type === 'avoidHighways' ? 'shortest' : 'fastest');
-  };
 
   const addRandomStops = async () => {
     setLoading(true);
@@ -590,15 +512,14 @@ export default function MultiStopPlanner({
 
           {/* Stops List */}
           <div className="flex-1 overflow-y-auto px-3 py-2">
-            <div>
+            <div className="space-y-1">
               {stops.map((stop, index) => {
                 const isExpanded = expandedStopId === stop.id;
                 const timeStatus = getTimeStatus(stop);
                 const leg = routeResult?.legs[index];
-                const showConnector = index < stops.length - 1;
                 
                 return (
-                  <div key={stop.id} className="relative">
+                  <div key={stop.id}>
                     {/* Stop Card */}
                     <div
                       draggable
@@ -607,7 +528,7 @@ export default function MultiStopPlanner({
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => handleDrop(e, index)}
                       onDragEnd={resetDragState}
-                      className={`rounded-lg transition-all relative z-10 ${draggedIndex === index ? 'opacity-50' : ''}`}
+                      className={`rounded-lg transition-all ${draggedIndex === index ? 'opacity-50' : ''}`}
                       style={{
                         background: dragOverIndex === index ? 'var(--bg-hover)' : isExpanded ? 'var(--bg-panel)' : 'var(--bg-input)',
                         border: dragOverIndex === index ? '2px dashed var(--border-default)' : '1px solid var(--border-subtle)',
@@ -681,6 +602,15 @@ export default function MultiStopPlanner({
                       {/* Expanded Options */}
                       {isExpanded && (
                         <div className="mt-2 pt-2 space-y-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                          {/* Leg info to next stop */}
+                          {leg && (
+                            <div className="flex items-center gap-2 text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'var(--bg-panel)' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>To next stop:</span>
+                              <span className="font-medium" style={{ color: 'var(--text-main)' }}>{leg.distance.toFixed(1)} mi</span>
+                              <span style={{ color: 'var(--text-muted)' }}>·</span>
+                              <span className="font-medium" style={{ color: 'var(--text-main)' }}>{formatTime(leg.time)}</span>
+                            </div>
+                          )}
                           <div className="grid grid-cols-2 gap-2">
                             <div>
                               <label className="text-[10px] font-medium block mb-0.5" style={{ color: 'var(--text-muted)' }}>Arrive by</label>
@@ -713,33 +643,6 @@ export default function MultiStopPlanner({
                         </div>
                       )}
                     </div>
-                    
-                    {/* Connector Line with Distance/Time Pill */}
-                    {showConnector && (
-                      <div className="relative flex items-center justify-center" style={{ height: '28px' }}>
-                        {/* Vertical connector line */}
-                        <div 
-                          className="absolute left-[29px] top-0 bottom-0 w-[2px]"
-                          style={{ background: leg ? `${accentColor}40` : 'var(--border-subtle)' }}
-                        />
-                        {/* Distance/Time pill */}
-                        {leg && (
-                          <div 
-                            className="relative z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium"
-                            style={{ 
-                              background: 'var(--bg-widget)', 
-                              border: '1px solid var(--border-subtle)',
-                              color: 'var(--text-secondary)',
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
-                            }}
-                          >
-                            <span>{leg.distance.toFixed(1)} mi</span>
-                            <span style={{ color: 'var(--text-muted)' }}>·</span>
-                            <span>{formatTime(leg.time)}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -756,65 +659,8 @@ export default function MultiStopPlanner({
             )}
           </div>
 
-          {/* Route Options Panel */}
-          {showRouteOptions && routeOptions.length > 0 && (
-            <div className="p-4" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-sm font-bold" style={{ color: 'var(--text-main)' }}>Route Optimized!</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Choose how to drive the optimized route</p>
-                </div>
-                {originalRoute && (
-                  <p className="text-[10px] px-2 py-1 rounded-full" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
-                    vs. {formatTime(originalRoute.time)} original
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                {routeOptions.map(opt => {
-                  const IconComponent = opt.icon;
-                  return (
-                    <button
-                      key={opt.type}
-                      onClick={() => selectRouteOption(opt.type)}
-                      className="w-full p-3 rounded-xl text-left transition-all hover:ring-2 group"
-                      style={{ 
-                        background: 'var(--bg-widget)', 
-                        border: '1px solid var(--border-subtle)',
-                        ['--tw-ring-color' as string]: accentColor,
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                          style={{ background: `${accentColor}15` }}
-                        >
-                          <IconComponent className="w-4 h-4" style={{ color: accentColor }} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{opt.label}</span>
-                            <span className="text-sm font-medium" style={{ color: accentColor }}>
-                              {formatTime(opt.time)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between mt-0.5">
-                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{opt.description}</span>
-                            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                              {opt.distance.toFixed(1)} mi
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Route Summary */}
-          {routeResult && !showRouteOptions && (
+          {routeResult && (
             <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}>
               <div className="flex items-center justify-between">
                 <div>
@@ -829,7 +675,7 @@ export default function MultiStopPlanner({
                     )}
                   </div>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    {validStops.length} stops · {selectedRouteType === 'avoidHighways' ? 'Avoiding highways' : selectedRouteType === 'avoidTolls' ? 'Avoiding tolls' : 'Fastest route'}
+                    {validStops.length} stops · {routeResult.legs.length} legs
                   </p>
                 </div>
                 {originalRoute && routeResult.totalTime < originalRoute.time && (
@@ -925,6 +771,7 @@ export default function MultiStopPlanner({
             routeStart={validStops.length >= 2 ? { lat: validStops[0].lat!, lng: validStops[0].lng! } : undefined}
             routeEnd={validStops.length >= 2 ? { lat: validStops[validStops.length - 1].lat!, lng: validStops[validStops.length - 1].lng! } : undefined}
             waypoints={routeWaypoints}
+            showTraffic={showTraffic}
           />
           
           {/* Optimizing Map Overlay */}
