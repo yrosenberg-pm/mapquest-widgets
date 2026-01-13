@@ -156,22 +156,29 @@ export async function GET(request: NextRequest) {
       }
 
       case 'optimizedroute': {
-        const locations = searchParams.get('locations')?.split('|') || [];
+        const locationsParam = searchParams.get('locations') || '';
+        const locations = locationsParam.split('|').filter(Boolean);
+        
+        console.log('[optimizedroute] Received locations:', locations.length);
+        
+        const requestBody = {
+          locations: locations.map(loc => {
+            const [lat, lng] = loc.split(',');
+            return { latLng: { lat: parseFloat(lat), lng: parseFloat(lng) } };
+          }),
+          options: {
+            routeType: 'fastest',
+            unit: 'm',
+          },
+        };
+        
+        console.log('[optimizedroute] Request body:', JSON.stringify(requestBody, null, 2));
         
         url = `${ENDPOINTS.optimizedroute}?key=${MAPQUEST_KEY}`;
         options = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            locations: locations.map(loc => {
-              const [lat, lng] = loc.split(',');
-              return { latLng: { lat: parseFloat(lat), lng: parseFloat(lng) } };
-            }),
-            options: {
-              routeType: 'fastest',
-              unit: 'm',
-            },
-          }),
+          body: JSON.stringify(requestBody),
         };
         break;
       }
@@ -208,6 +215,17 @@ export async function GET(request: NextRequest) {
         isArray: Array.isArray(data),
         keys: Object.keys(data),
         resultCount: data.results?.length || data.searchResults?.results?.length || (Array.isArray(data) ? data.length : 0)
+      });
+    }
+    
+    // Log optimizedroute responses for debugging
+    if (endpoint === 'optimizedroute') {
+      console.log('[API] Optimizedroute response:', {
+        hasRoute: !!data.route,
+        locationSequence: data.route?.locationSequence,
+        distance: data.route?.distance,
+        time: data.route?.time,
+        info: data.info,
       });
     }
     

@@ -420,12 +420,29 @@ export async function optimizeRoute(locations: Location[]): Promise<OptimizeRout
       locations: locations.map(l => `${l.lat},${l.lng}`).join('|'),
     });
     
+    console.log('[optimizeRoute] Calling API with', locations.length, 'locations');
     const res = await fetch(`${API_BASE}?${params}`);
-    if (!res.ok) return null;
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[optimizeRoute] API error:', res.status, errorText);
+      return null;
+    }
+    
     const data = await res.json();
+    console.log('[optimizeRoute] Full API response:', JSON.stringify(data, null, 2));
     
     const route = data.route;
-    if (!route) return null;
+    if (!route) {
+      console.error('[optimizeRoute] No route in response:', data);
+      return null;
+    }
+    
+    console.log('[optimizeRoute] Route found:', {
+      locationSequence: route.locationSequence,
+      distance: route.distance,
+      time: route.time,
+    });
     
     return {
       locationSequence: route.locationSequence || [],
@@ -433,7 +450,7 @@ export async function optimizeRoute(locations: Location[]): Promise<OptimizeRout
       time: route.time || 0,
     };
   } catch (err) {
-    console.error('Route optimization failed:', err);
+    console.error('[optimizeRoute] Exception:', err);
     return null;
   }
 }

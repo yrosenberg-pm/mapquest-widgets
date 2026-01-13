@@ -550,8 +550,8 @@ export default function MultiStopPlanner({
           )}
 
           {/* Stops List */}
-          <div className="flex-1 overflow-y-auto px-4 py-3">
-            <div className="space-y-2">
+          <div className="flex-1 overflow-y-auto px-3 py-2">
+            <div className="space-y-1">
               {stops.map((stop, index) => {
                 const isExpanded = expandedStopId === stop.id;
                 const timeStatus = getTimeStatus(stop);
@@ -566,19 +566,19 @@ export default function MultiStopPlanner({
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => handleDrop(e, index)}
                       onDragEnd={resetDragState}
-                      className={`rounded-xl transition-all ${draggedIndex === index ? 'opacity-50' : ''}`}
+                      className={`rounded-lg transition-all ${draggedIndex === index ? 'opacity-50' : ''}`}
                       style={{
                         background: dragOverIndex === index ? 'var(--bg-hover)' : isExpanded ? 'var(--bg-panel)' : 'var(--bg-input)',
                         border: dragOverIndex === index ? '2px dashed var(--border-default)' : '1px solid var(--border-subtle)',
-                        padding: '12px',
+                        padding: '8px 10px',
                       }}
                     >
                       {/* Main Row */}
-                      <div className="flex items-center gap-3">
-                        <GripVertical className="w-4 h-4 cursor-grab flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="w-3.5 h-3.5 cursor-grab flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
                         
                         <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
                           style={{ background: accentColor, color: 'white' }}
                         >
                           {index + 1}
@@ -606,32 +606,32 @@ export default function MultiStopPlanner({
                         </div>
 
                         {/* Status & Actions */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
                           {stop.geocoded && (
-                            <div className="w-2 h-2 rounded-full" style={{ background: 'var(--color-success)' }} title="Geocoded" />
+                            <div className="w-1.5 h-1.5 rounded-full mr-1" style={{ background: 'var(--color-success)' }} title="Geocoded" />
                           )}
                           
                           {timeStatus && (
-                            <div className="w-5 h-5 flex items-center justify-center">
-                              {timeStatus === 'ontime' && <Check className="w-4 h-4" style={{ color: 'var(--color-success)' }} />}
-                              {timeStatus === 'close' && <AlertTriangle className="w-4 h-4" style={{ color: 'var(--color-warning)' }} />}
-                              {timeStatus === 'late' && <XCircle className="w-4 h-4" style={{ color: 'var(--color-error)' }} />}
+                            <div className="w-4 h-4 flex items-center justify-center">
+                              {timeStatus === 'ontime' && <Check className="w-3 h-3" style={{ color: 'var(--color-success)' }} />}
+                              {timeStatus === 'close' && <AlertTriangle className="w-3 h-3" style={{ color: 'var(--color-warning)' }} />}
+                              {timeStatus === 'late' && <XCircle className="w-3 h-3" style={{ color: 'var(--color-error)' }} />}
                             </div>
                           )}
                           
                           {stop.geocoded && (
                             <button
                               onClick={() => setExpandedStopId(isExpanded ? null : stop.id)}
-                              className="p-1 rounded transition-colors hover:bg-black/10"
+                              className="p-0.5 rounded transition-colors hover:bg-black/10"
                               style={{ color: 'var(--text-muted)' }}
                             >
-                              <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                             </button>
                           )}
                           
                           {stops.length > 2 && (
-                            <button onClick={() => removeStop(stop.id)} className="p-1 rounded transition-colors hover:bg-black/10" style={{ color: 'var(--text-muted)' }}>
-                              <Trash2 className="w-4 h-4" />
+                            <button onClick={() => removeStop(stop.id)} className="p-0.5 rounded transition-colors hover:bg-black/10" style={{ color: 'var(--text-muted)' }}>
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
@@ -639,24 +639,24 @@ export default function MultiStopPlanner({
                       
                       {/* Expanded Options */}
                       {isExpanded && (
-                        <div className="mt-3 pt-3 space-y-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                          <div className="grid grid-cols-2 gap-3">
+                        <div className="mt-2 pt-2 space-y-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                          <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Arrive by</label>
+                              <label className="text-[10px] font-medium block mb-0.5" style={{ color: 'var(--text-muted)' }}>Arrive by</label>
                               <input
                                 type="time"
                                 value={stop.arriveBy || ''}
                                 onChange={(e) => updateStopDetails(stop.id, { arriveBy: e.target.value })}
-                                className="w-full px-3 py-2 rounded-lg text-sm"
+                                className="w-full px-2 py-1 rounded text-xs"
                                 style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
                               />
                             </div>
                             <div>
-                              <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>Time at stop</label>
+                              <label className="text-[10px] font-medium block mb-0.5" style={{ color: 'var(--text-muted)' }}>Time at stop</label>
                               <select
                                 value={stop.duration}
                                 onChange={(e) => updateStopDetails(stop.id, { duration: parseInt(e.target.value) })}
-                                className="w-full px-3 py-2 rounded-lg text-sm"
+                                className="w-full px-2 py-1 rounded text-xs"
                                 style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
                               >
                                 {DURATION_OPTIONS.map(d => <option key={d} value={d}>{d === 0 ? 'None' : `${d} min`}</option>)}
@@ -664,7 +664,7 @@ export default function MultiStopPlanner({
                             </div>
                           </div>
                           {stop.eta && (
-                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                               ETA: {stop.eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               {stop.duration > 0 && ` · ${stop.duration} min stop`}
                             </p>
@@ -673,20 +673,20 @@ export default function MultiStopPlanner({
                       )}
                     </div>
                     
-                    {/* Leg Info between stops */}
+                    {/* Leg Info between stops - compact */}
                     {index < stops.length - 1 && stops[index + 1].geocoded && leg && (
-                      <div className="flex items-center justify-center gap-3 py-2">
-                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'var(--bg-panel)' }}>
-                          <ArrowDown className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
-                          <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      <div className="flex items-center justify-center py-0.5">
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          <ArrowDown className="w-2.5 h-2.5" />
+                          <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>
                             {leg.distance.toFixed(1)} mi
                           </span>
-                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>·</span>
-                          <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                          <span>·</span>
+                          <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>
                             {formatTime(leg.time)}
                           </span>
                           <span 
-                            className="text-[10px] px-2 py-0.5 rounded-full ml-1"
+                            className="px-1.5 py-0.5 rounded-full"
                             style={{ 
                               background: leg.trafficCondition === 'heavy' ? 'var(--color-error-bg)' :
                                          leg.trafficCondition === 'moderate' ? 'var(--color-warning-bg)' : 'var(--color-success-bg)',
@@ -707,10 +707,10 @@ export default function MultiStopPlanner({
             {stops.length < maxStops && (
               <button
                 onClick={addStop}
-                className="w-full mt-3 py-3 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors hover:bg-black/5"
-                style={{ border: '2px dashed var(--border-default)', color: 'var(--text-muted)' }}
+                className="w-full mt-2 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors hover:bg-black/5"
+                style={{ border: '1px dashed var(--border-default)', color: 'var(--text-muted)' }}
               >
-                <Plus className="w-4 h-4" /> Add Stop
+                <Plus className="w-3.5 h-3.5" /> Add Stop
               </button>
             )}
           </div>
