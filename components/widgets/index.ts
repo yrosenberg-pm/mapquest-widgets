@@ -13,6 +13,7 @@ export { default as DeliveryETA } from './DeliveryETA';
 export { default as CommuteTimeCalculator } from './CommuteTimeCalculator';
 export { default as NHLArenaExplorer } from './NHLArenaExplorer';
 export { default as HereIsolineWidget } from './HereIsolineWidget';
+export { default as TruckRouting } from './TruckRouting';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

@@ -87,6 +87,14 @@ export async function GET(request: NextRequest) {
         const useTraffic = searchParams.get('useTraffic');
         const timeType = searchParams.get('timeType');
         const dateTime = searchParams.get('dateTime');
+        const type = searchParams.get('type'); // truck, etc.
+        
+        // Truck-specific parameters
+        const vehicleHeight = searchParams.get('vehicleHeight');
+        const vehicleWeight = searchParams.get('vehicleWeight');
+        const vehicleLength = searchParams.get('vehicleLength');
+        const vehicleWidth = searchParams.get('vehicleWidth');
+        const vehicleAxles = searchParams.get('vehicleAxles');
         
         let directionsUrl = `${ENDPOINTS.directions}?key=${MAPQUEST_KEY}&from=${from}&routeType=${routeType}&narrativeType=text&unit=m&fullShape=true`;
         
@@ -106,6 +114,16 @@ export async function GET(request: NextRequest) {
         }
         if (dateTime) {
           directionsUrl += `&dateTime=${encodeURIComponent(dateTime)}`;
+        }
+        
+        // Truck routing options
+        if (type === 'truck') {
+          directionsUrl += '&drivingStyle=2'; // Truck driving style
+          if (vehicleHeight) directionsUrl += `&vehicleHeight=${vehicleHeight}`;
+          if (vehicleWeight) directionsUrl += `&vehicleWeight=${vehicleWeight}`;
+          if (vehicleLength) directionsUrl += `&vehicleLength=${vehicleLength}`;
+          if (vehicleWidth) directionsUrl += `&vehicleWidth=${vehicleWidth}`;
+          if (vehicleAxles) directionsUrl += `&vehicleAxles=${vehicleAxles}`;
         }
         
         url = directionsUrl;

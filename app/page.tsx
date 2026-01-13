@@ -16,11 +16,12 @@ import {
   InstacartDeliveryETA,
   NHLArenaExplorer,
   HereIsolineWidget,
+  TruckRouting,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-type WidgetId = 'nhl' | 'address' | 'starbucks' | 'citibike' | 'directions' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'instacart' | 'here-isoline';
+type WidgetId = 'nhl' | 'address' | 'starbucks' | 'citibike' | 'directions' | 'truck' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'instacart' | 'here-isoline';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
@@ -28,6 +29,7 @@ const WIDGETS = [
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', category: 'Quick Win' },
   { id: 'citibike' as WidgetId, name: 'Citi Bike Finder', description: 'Find available bikes and docking stations', category: 'Quick Win' },
   { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', category: 'Quick Win' },
+  { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', category: 'Quick Win' },
   { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', category: 'Quick Win' },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', category: 'Bigger Bet' },
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', category: 'Bigger Bet' },
@@ -211,6 +213,8 @@ function HomeContent() {
         return <CitiBikeFinder {...commonProps} />;
       case 'directions':
         return <DirectionsEmbed {...commonProps} />;
+      case 'truck':
+        return <TruckRouting {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':

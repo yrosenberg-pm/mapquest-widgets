@@ -9,6 +9,7 @@ import {
   StarbucksFinder,
   CitiBikeFinder,
   DirectionsEmbed,
+  TruckRouting,
   ServiceAreaChecker,
   NeighborhoodScore,
   MultiStopPlanner,
@@ -27,6 +28,7 @@ const VALID_WIDGETS = [
   'starbucks',
   'citibike',
   'directions',
+  'truck',
   'service',
   'neighborhood',
   'multistop',
@@ -101,6 +103,8 @@ export default function WidgetPage() {
         return <CitiBikeFinder {...commonProps} />;
       case 'directions':
         return <DirectionsEmbed {...commonProps} />;
+      case 'truck':
+        return <TruckRouting {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':
