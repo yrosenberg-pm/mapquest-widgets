@@ -236,7 +236,7 @@ function HomeContent() {
   if (embedMode) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
-        <div className="w-full md:w-auto shadow-2xl shadow-gray-400/30 rounded-xl overflow-hidden">
+        <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl overflow-hidden">
           {renderWidget()}
         </div>
       </div>
@@ -328,7 +328,7 @@ function HomeContent() {
 
         {/* Widget Display */}
         <div className="flex flex-col items-center w-full relative z-10">
-          <div className="w-full md:w-auto shadow-2xl shadow-gray-400/30 rounded-xl overflow-hidden">
+          <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl overflow-hidden">
             {renderWidget()}
           </div>
           {activeWidget === 'address' && (
