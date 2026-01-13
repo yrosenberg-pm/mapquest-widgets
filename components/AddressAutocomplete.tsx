@@ -19,6 +19,7 @@ interface AddressAutocompleteProps {
   style?: React.CSSProperties;
   iconClassName?: string;
   hideIcon?: boolean;
+  readOnly?: boolean; // When true, disables autocomplete functionality
 }
 
 export default function AddressAutocomplete({
@@ -35,6 +36,7 @@ export default function AddressAutocomplete({
   style,
   iconClassName = '',
   hideIcon = false,
+  readOnly = false,
 }: AddressAutocompleteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const {
@@ -45,7 +47,7 @@ export default function AddressAutocomplete({
     handleSelect,
     handleKeyDown,
     closeDropdown,
-  } = useAddressAutocomplete(value, onChange, { onSelect });
+  } = useAddressAutocomplete(value, onChange, { onSelect, disabled: readOnly });
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

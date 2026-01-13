@@ -19,6 +19,7 @@ interface UseAddressAutocompleteOptions {
   onSelect?: (address: AddressResult) => void;
   minChars?: number;
   maxSuggestions?: number;
+  disabled?: boolean;
 }
 
 export function useAddressAutocomplete(
@@ -26,7 +27,7 @@ export function useAddressAutocomplete(
   onChange: (value: string) => void,
   options: UseAddressAutocompleteOptions = {}
 ) {
-  const { onSelect, minChars = 3, maxSuggestions = 6 } = options;
+  const { onSelect, minChars = 3, maxSuggestions = 6, disabled = false } = options;
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -36,6 +37,13 @@ export function useAddressAutocomplete(
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    
+    // Skip search if disabled
+    if (disabled) {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
     
     // Skip search if user just selected an item
     if (justSelectedRef.current) {
@@ -74,7 +82,7 @@ export function useAddressAutocomplete(
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [value, minChars, maxSuggestions]);
+  }, [value, minChars, maxSuggestions, disabled]);
 
   const handleSelect = (suggestion: any) => {
     const addressResult: AddressResult = {
