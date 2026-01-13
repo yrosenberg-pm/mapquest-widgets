@@ -7,7 +7,7 @@ import {
   Sparkles, Clock, Check, AlertTriangle, XCircle, ChevronDown,
   Download, Share2, Shuffle, Navigation, MoreHorizontal
 } from 'lucide-react';
-import { geocode, getDirections, optimizeRoute, searchPlaces } from '@/lib/mapquest';
+import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 
@@ -255,6 +255,47 @@ export default function MultiStopPlanner({
 
   const calculateRoute = () => calculateRouteForStops(stops, selectedRouteType === 'balanced' ? 'fastest' : selectedRouteType);
 
+  // Nearest neighbor algorithm for route optimization
+  const nearestNeighborOptimize = (stopsToOptimize: Stop[]): Stop[] => {
+    if (stopsToOptimize.length <= 2) return stopsToOptimize;
+    
+    // Keep first and last fixed, optimize middle stops
+    const first = stopsToOptimize[0];
+    const last = stopsToOptimize[stopsToOptimize.length - 1];
+    const middle = stopsToOptimize.slice(1, -1);
+    
+    const haversineDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+      const R = 3959; // Earth's radius in miles
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+    
+    const optimizedMiddle: Stop[] = [];
+    const remaining = [...middle];
+    let current = first;
+    
+    while (remaining.length > 0) {
+      let nearestIdx = 0;
+      let nearestDist = Infinity;
+      
+      for (let i = 0; i < remaining.length; i++) {
+        const dist = haversineDistance(current.lat!, current.lng!, remaining[i].lat!, remaining[i].lng!);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestIdx = i;
+        }
+      }
+      
+      current = remaining[nearestIdx];
+      optimizedMiddle.push(current);
+      remaining.splice(nearestIdx, 1);
+    }
+    
+    return [first, ...optimizedMiddle, last];
+  };
+
   const handleOptimizeRoute = async () => {
     const validStops = stops.filter(s => s.lat && s.lng);
     if (validStops.length < 3) { 
@@ -272,7 +313,7 @@ export default function MultiStopPlanner({
     validStops.forEach((s, i) => console.log(`   ${i + 1}. ${s.address}`));
     
     try {
-      // Get original metrics
+      // Get original route metrics
       let originalDistance = 0, originalTime = 0;
       for (let i = 0; i < validStops.length - 1; i++) {
         const from = `${validStops[i].lat},${validStops[i].lng}`;
@@ -284,20 +325,9 @@ export default function MultiStopPlanner({
       console.log(`📊 Original route: ${originalDistance.toFixed(1)} mi, ${Math.round(originalTime)} min`);
       setOriginalRoute({ distance: originalDistance, time: originalTime });
 
-      // Call MapQuest Optimize API
-      const locations = validStops.map(s => ({ lat: s.lat!, lng: s.lng! }));
-      console.log('🔄 Calling MapQuest Optimize API...');
-      const optimized = await optimizeRoute(locations);
-      
-      if (!optimized) {
-        console.error('❌ Optimization API returned null');
-        throw new Error('Optimization failed - API returned no result');
-      }
-      
-      console.log('✅ API Response:', optimized);
-      console.log('📋 Location sequence:', optimized.locationSequence);
-
-      const optimizedStops = optimized.locationSequence.map(idx => validStops[idx]);
+      // Use nearest neighbor algorithm to optimize
+      console.log('🔄 Optimizing route using nearest neighbor algorithm...');
+      const optimizedStops = nearestNeighborOptimize(validStops);
       
       console.log('📍 Optimized stop order:');
       optimizedStops.forEach((s, i) => console.log(`   ${i + 1}. ${s.address}`));
@@ -324,6 +354,11 @@ export default function MultiStopPlanner({
       
       console.log(`📏 Shortest optimized: ${shortestDistance.toFixed(1)} mi, ${Math.round(shortestTime)} min`);
 
+      const timeSaved = originalTime - fastestTime;
+      const distSaved = originalDistance - fastestDistance;
+      
+      console.log(`💰 Savings: ${Math.round(timeSaved)} min, ${distSaved.toFixed(1)} mi`);
+
       const options: RouteOption[] = [
         { 
           type: 'fastest', 
@@ -331,7 +366,7 @@ export default function MultiStopPlanner({
           distance: fastestDistance, 
           time: fastestTime, 
           stops: optimizedStops, 
-          savings: { time: originalTime - fastestTime, distance: originalDistance - fastestDistance } 
+          savings: { time: timeSaved, distance: distSaved } 
         },
         { 
           type: 'shortest', 
@@ -354,8 +389,6 @@ export default function MultiStopPlanner({
         },
       ];
 
-      console.log('💰 Savings summary:');
-      options.forEach(o => console.log(`   ${o.label}: Save ${Math.round(o.savings.time)} min, ${o.savings.distance.toFixed(1)} mi`));
       console.log('═══════════════════════════════════════════');
 
       setRouteOptions(options);
