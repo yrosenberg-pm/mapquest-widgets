@@ -60,6 +60,8 @@ interface MapQuestMapProps {
   fitBounds?: { north: number; south: number; east: number; west: number };
   zoomToLocation?: { lat: number; lng: number; zoom?: number };
   showTraffic?: boolean;
+  highlightedSegment?: number | null; // Index of segment to highlight
+  stops?: { lat: number; lng: number }[]; // All stops for segment-by-segment routing
 }
 
 declare global {
@@ -95,6 +97,8 @@ export default function MapQuestMap({
   fitBounds,
   zoomToLocation,
   showTraffic = false,
+  highlightedSegment = null,
+  stops = [],
 }: MapQuestMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -103,6 +107,7 @@ export default function MapQuestMap({
   const circlesLayerRef = useRef<any>(null);
   const polygonsLayerRef = useRef<any>(null);
   const trafficLayerRef = useRef<any>(null);
+  const highlightLayerRef = useRef<any>(null);
   const mapIdRef = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
   const [mapReady, setMapReady] = useState(false);
 
@@ -357,6 +362,7 @@ export default function MapQuestMap({
       routeLayerRef.current = L.layerGroup().addTo(map);
       circlesLayerRef.current = L.layerGroup().addTo(map);
       polygonsLayerRef.current = L.layerGroup().addTo(map);
+      highlightLayerRef.current = L.layerGroup().addTo(map);
 
       if (onClick) {
         map.on('click', (e: any) => {
@@ -640,31 +646,137 @@ export default function MapQuestMap({
     });
   }, [polygons, accentColor, mapReady]);
 
+  // Traffic incidents layer ref
+  const trafficIncidentsRef = useRef<any>(null);
+
   // Traffic layer
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const L = window.L;
     const map = mapRef.current;
 
-    // Remove existing traffic layer if any
+    // Remove existing traffic layers if any
     if (trafficLayerRef.current) {
       map.removeLayer(trafficLayerRef.current);
       trafficLayerRef.current = null;
     }
+    if (trafficIncidentsRef.current) {
+      map.removeLayer(trafficIncidentsRef.current);
+      trafficIncidentsRef.current = null;
+    }
 
     if (showTraffic && apiKey) {
-      // Add MapQuest traffic flow layer
-      const trafficLayer = L.tileLayer(
+      // Add MapQuest traffic flow layer (shows road colors based on congestion)
+      const trafficFlowLayer = L.tileLayer(
         `https://api.mapquest.com/traffic/v2/flow/tile/{z}/{x}/{y}.png?key=${apiKey}`,
         {
           maxZoom: 20,
-          opacity: 0.7,
+          opacity: 0.8,
+          zIndex: 400,
         }
       );
-      trafficLayer.addTo(map);
-      trafficLayerRef.current = trafficLayer;
+      trafficFlowLayer.addTo(map);
+      trafficLayerRef.current = trafficFlowLayer;
+
+      // Add MapQuest traffic incidents layer (shows accident/construction markers)
+      const trafficIncidentsLayer = L.tileLayer(
+        `https://api.mapquest.com/traffic/v2/incidents/tile/{z}/{x}/{y}.png?key=${apiKey}`,
+        {
+          maxZoom: 20,
+          opacity: 0.9,
+          zIndex: 450,
+        }
+      );
+      trafficIncidentsLayer.addTo(map);
+      trafficIncidentsRef.current = trafficIncidentsLayer;
     }
   }, [showTraffic, apiKey, mapReady]);
+
+  // Highlighted segment effect
+  useEffect(() => {
+    if (!highlightLayerRef.current || !mapReady) return;
+    const L = window.L;
+    highlightLayerRef.current.clearLayers();
+
+    // Only highlight if we have stops and a valid segment index
+    if (highlightedSegment === null || !stops || stops.length < 2) return;
+    if (highlightedSegment < 0 || highlightedSegment >= stops.length - 1) return;
+
+    const segmentStart = stops[highlightedSegment];
+    const segmentEnd = stops[highlightedSegment + 1];
+
+    // Fetch route just for this segment
+    const fetchSegmentRoute = async () => {
+      try {
+        const response = await fetch(
+          `https://www.mapquestapi.com/directions/v2/route?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              locations: [
+                `${segmentStart.lat},${segmentStart.lng}`,
+                `${segmentEnd.lat},${segmentEnd.lng}`,
+              ],
+              options: {
+                routeType: 'fastest',
+                doReverseGeocode: false,
+                generalize: 0,
+              },
+            }),
+          }
+        );
+
+        const data = await response.json();
+        if (data.route?.shape?.shapePoints) {
+          const points = data.route.shape.shapePoints;
+          const coords: [number, number][] = [];
+          for (let i = 0; i < points.length; i += 2) {
+            coords.push([points[i], points[i + 1]]);
+          }
+
+          // White outer glow for contrast
+          const outerGlow = L.polyline(coords, {
+            color: '#ffffff',
+            weight: 14,
+            opacity: 0.9,
+            lineCap: 'round',
+            lineJoin: 'round',
+          });
+          highlightLayerRef.current.addLayer(outerGlow);
+
+          // Blue shadow for depth
+          const shadowLine = L.polyline(coords, {
+            color: '#1e40af',
+            weight: 11,
+            opacity: 0.4,
+            lineCap: 'round',
+            lineJoin: 'round',
+          });
+          highlightLayerRef.current.addLayer(shadowLine);
+
+          // Main highlighted segment - thick blue line
+          const highlightLine = L.polyline(coords, {
+            color: accentColor,
+            weight: 8,
+            opacity: 1,
+            lineCap: 'round',
+            lineJoin: 'round',
+            className: 'highlighted-segment-glow',
+          });
+          highlightLayerRef.current.addLayer(highlightLine);
+
+          // Fit map bounds to highlighted segment with some padding
+          const bounds = L.latLngBounds(coords);
+          mapRef.current?.fitBounds(bounds, { padding: [80, 80], maxZoom: 15 });
+        }
+      } catch (error) {
+        console.error('Error fetching highlighted segment route:', error);
+      }
+    };
+
+    fetchSegmentRoute();
+  }, [highlightedSegment, stops, apiKey, mapReady, accentColor]);
 
   // Update route (MapQuest directions - NOT for transit)
   useEffect(() => {
@@ -703,25 +815,31 @@ export default function MapQuestMap({
             latLngs.push([points[i], points[i + 1]]);
           }
 
+          // When a segment is highlighted, make the full route gray
+          const isSegmentHighlighted = highlightedSegment !== null;
+          const mainRouteColor = isSegmentHighlighted ? '#9CA3AF' : (routeColor || accentColor);
+          const mainRouteOpacity = isSegmentHighlighted ? 0.5 : 0.9;
+
           // Shadow
           L.polyline(latLngs, {
             color: '#000000',
             weight: 8,
-            opacity: 0.1,
+            opacity: isSegmentHighlighted ? 0.05 : 0.1,
             lineCap: 'round',
             lineJoin: 'round',
           }).addTo(routeLayerRef.current);
 
           // Main route
           const routeLine = L.polyline(latLngs, {
-            color: routeColor || accentColor,
-            weight: 5,
-            opacity: 0.9,
+            color: mainRouteColor,
+            weight: isSegmentHighlighted ? 4 : 5,
+            opacity: mainRouteOpacity,
             lineCap: 'round',
             lineJoin: 'round',
           }).addTo(routeLayerRef.current);
 
-          if (mapRef.current) {
+          // Only fit bounds if no segment is highlighted (let highlight effect handle zoom)
+          if (mapRef.current && !isSegmentHighlighted) {
             mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
           }
         }
@@ -731,7 +849,7 @@ export default function MapQuestMap({
     };
 
     fetchRoute();
-  }, [showRoute, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady, transitSegments]);
+  }, [showRoute, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady, transitSegments, highlightedSegment]);
 
   // Draw pre-calculated route polyline (e.g., from HERE transit API)
   useEffect(() => {

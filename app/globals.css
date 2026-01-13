@@ -35,3 +35,19 @@ body {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* Highlighted segment pulsing animation */
+@keyframes segment-pulse {
+  0%, 100% {
+    stroke-opacity: 1;
+    stroke-width: 8;
+  }
+  50% {
+    stroke-opacity: 0.7;
+    stroke-width: 10;
+  }
+}
+
+.highlighted-segment-glow {
+  animation: segment-pulse 1.5s ease-in-out infinite;
+}
