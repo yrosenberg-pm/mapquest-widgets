@@ -249,7 +249,7 @@ export default function MultiStopPlanner({
     }
   };
 
-  const calculateRoute = () => calculateRouteForStops(stops, selectedRouteType);
+  const calculateRoute = () => calculateRouteForStops(stops, selectedRouteType === 'balanced' ? 'fastest' : selectedRouteType);
 
   const handleOptimizeRoute = async () => {
     const validStops = stops.filter(s => s.lat && s.lng);
