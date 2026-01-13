@@ -5,7 +5,7 @@ import { useState, useRef } from 'react';
 import { 
   Plus, Trash2, GripVertical, Loader2, RotateCcw, Route, 
   Sparkles, Clock, Check, AlertTriangle, XCircle, ChevronDown,
-  Download, Share2, Shuffle, Navigation, MoreHorizontal
+  Download, Share2, Shuffle, Navigation, MoreHorizontal, ArrowRight
 } from 'lucide-react';
 import { geocode, getDirections, optimizeRoute, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -20,6 +20,7 @@ interface Stop {
   arriveBy?: string;
   duration: number;
   eta?: Date;
+  animatingTo?: number; // For reorder animation
 }
 
 interface LegInfo {
@@ -42,7 +43,7 @@ interface RouteOption {
   distance: number;
   time: number;
   stops: Stop[];
-  savings?: { time: number };
+  savings: { time: number; distance: number };
 }
 
 interface MultiStopPlannerProps {
@@ -75,6 +76,7 @@ export default function MultiStopPlanner({
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -255,6 +257,11 @@ export default function MultiStopPlanner({
 
     setOptimizing(true);
     setError(null);
+    
+    // Log original order
+    console.log('=== ROUTE OPTIMIZATION START ===');
+    console.log('Original stop order:', validStops.map((s, i) => `${i + 1}. ${s.address.substring(0, 30)}...`));
+    
     try {
       // Get original metrics
       let originalDistance = 0, originalTime = 0;
@@ -264,15 +271,22 @@ export default function MultiStopPlanner({
         const d = await getDirections(from, to, 'fastest');
         if (d) { originalDistance += d.distance; originalTime += d.time; }
       }
+      
+      console.log(`Original route: ${originalDistance.toFixed(1)} mi, ${originalTime.toFixed(0)} min`);
       setOriginalRoute({ distance: originalDistance, time: originalTime });
 
       const locations = validStops.map(s => ({ lat: s.lat!, lng: s.lng! }));
       const optimized = await optimizeRoute(locations);
+      
       if (!optimized) throw new Error('Optimization failed');
+      
+      console.log('Optimization response - locationSequence:', optimized.locationSequence);
 
       const optimizedStops = optimized.locationSequence.map(idx => validStops[idx]);
       
-      // Calculate fastest route
+      console.log('Optimized stop order:', optimizedStops.map((s, i) => `${i + 1}. ${s.address.substring(0, 30)}...`));
+      
+      // Calculate fastest route with optimized order
       let fastestDistance = 0, fastestTime = 0;
       for (let i = 0; i < optimizedStops.length - 1; i++) {
         const from = `${optimizedStops[i].lat},${optimizedStops[i].lng}`;
@@ -280,8 +294,10 @@ export default function MultiStopPlanner({
         const d = await getDirections(from, to, 'fastest');
         if (d) { fastestDistance += d.distance; fastestTime += d.time; }
       }
+      
+      console.log(`Fastest optimized: ${fastestDistance.toFixed(1)} mi, ${fastestTime.toFixed(0)} min`);
 
-      // Calculate shortest route
+      // Calculate shortest route with optimized order
       let shortestDistance = 0, shortestTime = 0;
       for (let i = 0; i < optimizedStops.length - 1; i++) {
         const from = `${optimizedStops[i].lat},${optimizedStops[i].lng}`;
@@ -289,17 +305,55 @@ export default function MultiStopPlanner({
         const d = await getDirections(from, to, 'shortest');
         if (d) { shortestDistance += d.distance; shortestTime += d.time; }
       }
+      
+      console.log(`Shortest optimized: ${shortestDistance.toFixed(1)} mi, ${shortestTime.toFixed(0)} min`);
 
       const options: RouteOption[] = [
-        { type: 'fastest', label: 'Fastest', distance: fastestDistance, time: fastestTime, stops: optimizedStops, savings: { time: originalTime - fastestTime } },
-        { type: 'shortest', label: 'Shortest', distance: shortestDistance, time: shortestTime, stops: optimizedStops, savings: { time: originalTime - shortestTime } },
-        { type: 'balanced', label: 'Balanced', distance: (fastestDistance + shortestDistance) / 2, time: (fastestTime + shortestTime) / 2, stops: optimizedStops, savings: { time: originalTime - (fastestTime + shortestTime) / 2 } },
+        { 
+          type: 'fastest', 
+          label: 'Fastest', 
+          distance: fastestDistance, 
+          time: fastestTime, 
+          stops: optimizedStops, 
+          savings: { time: originalTime - fastestTime, distance: originalDistance - fastestDistance } 
+        },
+        { 
+          type: 'shortest', 
+          label: 'Shortest', 
+          distance: shortestDistance, 
+          time: shortestTime, 
+          stops: optimizedStops, 
+          savings: { time: originalTime - shortestTime, distance: originalDistance - shortestDistance } 
+        },
+        { 
+          type: 'balanced', 
+          label: 'Balanced', 
+          distance: (fastestDistance + shortestDistance) / 2, 
+          time: (fastestTime + shortestTime) / 2, 
+          stops: optimizedStops, 
+          savings: { 
+            time: originalTime - (fastestTime + shortestTime) / 2, 
+            distance: originalDistance - (fastestDistance + shortestDistance) / 2 
+          } 
+        },
       ];
 
+      console.log('Route options:', options.map(o => `${o.label}: ${o.distance.toFixed(1)}mi, ${o.time.toFixed(0)}min, saves ${o.savings.time.toFixed(0)}min`));
+      console.log('=== ROUTE OPTIMIZATION END ===');
+
       setRouteOptions(options);
+      
+      // Animate the reordering
+      setIsAnimating(true);
       setShowRouteOptions(true);
-      selectRouteOption('fastest', options);
+      
+      // Apply animation after a brief delay
+      setTimeout(() => {
+        setIsAnimating(false);
+      }, 600);
+
     } catch (err) {
+      console.error('Optimization error:', err);
       setError(err instanceof Error ? err.message : 'Failed to optimize route');
     } finally {
       setOptimizing(false);
@@ -309,11 +363,20 @@ export default function MultiStopPlanner({
   const selectRouteOption = async (type: 'fastest' | 'shortest' | 'balanced', options?: RouteOption[]) => {
     const opt = (options || routeOptions).find(o => o.type === type);
     if (!opt) return;
+    
     setSelectedRouteType(type);
+    setIsAnimating(true);
+    
+    // Animate stops reordering
     const updatedStops = opt.stops.map((s, i) => ({ ...s, id: (i + 1).toString() }));
-    setStops(updatedStops);
-    setShowRouteOptions(false);
-    await calculateRouteForStops(updatedStops, type === 'balanced' ? 'fastest' : type);
+    
+    // Brief animation delay
+    setTimeout(() => {
+      setStops(updatedStops);
+      setShowRouteOptions(false);
+      setIsAnimating(false);
+      calculateRouteForStops(updatedStops, type === 'balanced' ? 'fastest' : type);
+    }, 300);
   };
 
   const addRandomStops = async () => {
@@ -407,24 +470,45 @@ export default function MultiStopPlanner({
       className="prism-widget"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '900px', 
+        minWidth: '1000px', 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      {/* CSS for animations */}
+      <style>{`
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        .stop-item {
+          transition: all 0.3s ease;
+        }
+        .stop-item.animating {
+          animation: slideIn 0.3s ease forwards;
+        }
+        .optimizing-overlay {
+          animation: pulse 1s ease-in-out infinite;
+        }
+      `}</style>
+      
       <div className="flex" style={{ height: '520px' }}>
-        {/* Sidebar */}
-        <div className="w-80 flex flex-col" style={{ borderRight: '1px solid var(--border-subtle)' }}>
+        {/* Sidebar - wider */}
+        <div className="w-96 flex flex-col" style={{ borderRight: '1px solid var(--border-subtle)' }}>
           
           {/* Header */}
-          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${accentColor}15` }}>
-                <Route className="w-4 h-4" style={{ color: accentColor }} />
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: `${accentColor}15` }}>
+                <Route className="w-3.5 h-3.5" style={{ color: accentColor }} />
               </div>
               <div>
                 <h3 className="font-semibold text-sm" style={{ color: 'var(--text-main)' }}>Multi-Stop Planner</h3>
-                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{stops.length} stops</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{stops.length} stops</p>
               </div>
             </div>
             
@@ -440,25 +524,25 @@ export default function MultiStopPlanner({
               
               {showMoreMenu && (
                 <div 
-                  className="absolute right-0 top-full mt-1 w-40 py-1 rounded-lg shadow-lg z-50"
+                  className="absolute right-0 top-full mt-1 w-44 py-1 rounded-lg shadow-lg z-50"
                   style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}
                 >
-                  <button onClick={addRandomStops} className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
+                  <button onClick={addRandomStops} className="w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
                     <Shuffle className="w-3.5 h-3.5" /> Add Demo Stops
                   </button>
                   {routeResult && (
                     <>
-                      <button onClick={downloadRouteSheet} className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
+                      <button onClick={downloadRouteSheet} className="w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
                         <Download className="w-3.5 h-3.5" /> Download Route
                       </button>
-                      <button onClick={generateShareUrl} className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: copySuccess ? 'var(--color-success)' : 'var(--text-secondary)' }}>
+                      <button onClick={generateShareUrl} className="w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: copySuccess ? 'var(--color-success)' : 'var(--text-secondary)' }}>
                         {copySuccess ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
                         {copySuccess ? 'Copied!' : 'Copy Share Link'}
                       </button>
                     </>
                   )}
                   <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '4px 0' }} />
-                  <button onClick={clearAllStops} className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--color-error)' }}>
+                  <button onClick={clearAllStops} className="w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--color-error)' }}>
                     <Trash2 className="w-3.5 h-3.5" /> Clear All
                   </button>
                 </div>
@@ -466,11 +550,26 @@ export default function MultiStopPlanner({
             </div>
           </div>
 
-          {/* Stops List */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-1">
+          {/* Optimizing Overlay */}
+          {optimizing && (
+            <div 
+              className="optimizing-overlay px-4 py-3 flex items-center gap-3"
+              style={{ background: `${accentColor}10`, borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              <Loader2 className="w-4 h-4 prism-spinner" style={{ color: accentColor }} />
+              <div>
+                <p className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>Optimizing route...</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Finding the most efficient order</p>
+              </div>
+            </div>
+          )}
+
+          {/* Stops List - tighter spacing */}
+          <div className="flex-1 overflow-y-auto px-3 py-2">
             {stops.map((stop, index) => {
               const isExpanded = expandedStopId === stop.id;
               const timeStatus = getTimeStatus(stop);
+              const leg = routeResult?.legs[index];
               
               return (
                 <div
@@ -481,18 +580,19 @@ export default function MultiStopPlanner({
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => handleDrop(e, index)}
                   onDragEnd={resetDragState}
-                  className={`rounded-lg transition-all ${draggedIndex === index ? 'opacity-50' : ''}`}
+                  className={`stop-item rounded-lg ${draggedIndex === index ? 'opacity-50' : ''} ${isAnimating ? 'animating' : ''}`}
                   style={{
                     background: dragOverIndex === index ? 'var(--bg-hover)' : isExpanded ? 'var(--bg-panel)' : 'transparent',
                     border: dragOverIndex === index ? '2px dashed var(--border-default)' : '2px solid transparent',
+                    animationDelay: isAnimating ? `${index * 50}ms` : '0ms',
                   }}
                 >
-                  {/* Main Row */}
-                  <div className="flex items-center gap-2 py-1">
-                    <GripVertical className="w-3.5 h-3.5 cursor-grab flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
+                  {/* Main Row - compact */}
+                  <div className="flex items-center gap-1.5 py-1 px-1">
+                    <GripVertical className="w-3 h-3 cursor-grab flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
                     
                     <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
                       style={{ background: `${accentColor}15`, color: accentColor }}
                     >
                       {index + 1}
@@ -507,7 +607,7 @@ export default function MultiStopPlanner({
                             setStops(stops.map(s => s.id === stop.id ? { ...s, address: result.displayString, lat: result.lat, lng: result.lng, geocoded: true } : s));
                           }
                         }}
-                        placeholder={index === 0 ? 'Start' : index === stops.length - 1 ? 'End' : `Stop ${index + 1}`}
+                        placeholder={index === 0 ? 'Start location' : index === stops.length - 1 ? 'End location' : `Stop ${index + 1}`}
                         darkMode={darkMode}
                         inputBg={inputBg}
                         textColor={textColor}
@@ -518,7 +618,7 @@ export default function MultiStopPlanner({
                     </div>
 
                     {/* Status & Actions */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
                       {timeStatus && (
                         <div className="w-4 h-4 flex items-center justify-center">
                           {timeStatus === 'ontime' && <Check className="w-3 h-3" style={{ color: 'var(--color-success)' }} />}
@@ -530,16 +630,16 @@ export default function MultiStopPlanner({
                       {stop.geocoded && (
                         <button
                           onClick={() => setExpandedStopId(isExpanded ? null : stop.id)}
-                          className="p-1 rounded transition-colors"
+                          className="p-0.5 rounded transition-colors"
                           style={{ color: 'var(--text-muted)' }}
                         >
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                          <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </button>
                       )}
                       
                       {stops.length > 2 && (
-                        <button onClick={() => removeStop(stop.id)} className="p-1 rounded transition-colors" style={{ color: 'var(--text-muted)' }}>
-                          <Trash2 className="w-3.5 h-3.5" />
+                        <button onClick={() => removeStop(stop.id)} className="p-0.5 rounded transition-colors" style={{ color: 'var(--text-muted)' }}>
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       )}
                     </div>
@@ -547,24 +647,24 @@ export default function MultiStopPlanner({
                   
                   {/* Expanded Options */}
                   {isExpanded && (
-                    <div className="px-2 pb-2 pt-1 ml-10 space-y-2">
+                    <div className="px-2 pb-1.5 pt-0.5 ml-8 space-y-1.5">
                       <div className="flex gap-2">
                         <div className="flex-1">
-                          <label className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Arrive by</label>
+                          <label className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Arrive by</label>
                           <input
                             type="time"
                             value={stop.arriveBy || ''}
                             onChange={(e) => updateStopDetails(stop.id, { arriveBy: e.target.value })}
-                            className="w-full px-2 py-1 rounded text-xs"
+                            className="w-full px-2 py-0.5 rounded text-[11px]"
                             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
                           />
                         </div>
                         <div className="flex-1">
-                          <label className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Duration</label>
+                          <label className="text-[9px]" style={{ color: 'var(--text-muted)' }}>Duration</label>
                           <select
                             value={stop.duration}
                             onChange={(e) => updateStopDetails(stop.id, { duration: parseInt(e.target.value) })}
-                            className="w-full px-2 py-1 rounded text-xs"
+                            className="w-full px-2 py-0.5 rounded text-[11px]"
                             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
                           >
                             {DURATION_OPTIONS.map(d => <option key={d} value={d}>{d === 0 ? 'None' : `${d} min`}</option>)}
@@ -572,7 +672,7 @@ export default function MultiStopPlanner({
                         </div>
                       </div>
                       {stop.eta && (
-                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
                           ETA: {stop.eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           {stop.duration > 0 && ` · ${stop.duration}m stop`}
                         </p>
@@ -580,19 +680,38 @@ export default function MultiStopPlanner({
                     </div>
                   )}
                   
-                  {/* Leg Info (compact) */}
-                  {routeResult && index < stops.length - 1 && stops[index + 1].geocoded && routeResult.legs[index] && (
-                    <div className="ml-10 mr-2 mb-1 flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      <div 
-                        className="w-1.5 h-1.5 rounded-full"
+                  {/* Leg Info - always visible, styled better */}
+                  {index < stops.length - 1 && stops[index + 1].geocoded && leg && (
+                    <div 
+                      className="mx-2 mb-1 mt-0.5 px-2 py-1 rounded flex items-center justify-between"
+                      style={{ 
+                        background: 'var(--bg-panel)',
+                        borderLeft: `3px solid ${
+                          leg.trafficCondition === 'heavy' ? 'var(--color-error)' :
+                          leg.trafficCondition === 'moderate' ? 'var(--color-warning)' : 'var(--color-success)'
+                        }`,
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <ArrowRight className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                        <span className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                          {leg.distance.toFixed(1)} mi
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        {formatTime(leg.time)}
+                      </span>
+                      <span 
+                        className="text-[9px] px-1.5 py-0.5 rounded"
                         style={{ 
-                          background: routeResult.legs[index].trafficCondition === 'heavy' ? 'var(--color-error)' :
-                                     routeResult.legs[index].trafficCondition === 'moderate' ? 'var(--color-warning)' : 'var(--color-success)'
+                          background: leg.trafficCondition === 'heavy' ? 'var(--color-error-bg)' :
+                                     leg.trafficCondition === 'moderate' ? 'var(--color-warning-bg)' : 'var(--color-success-bg)',
+                          color: leg.trafficCondition === 'heavy' ? 'var(--color-error)' :
+                                 leg.trafficCondition === 'moderate' ? 'var(--color-warning)' : 'var(--color-success)',
                         }}
-                      />
-                      <span>{routeResult.legs[index].distance.toFixed(1)} mi</span>
-                      <span>·</span>
-                      <span>{formatTime(routeResult.legs[index].time)}</span>
+                      >
+                        {leg.trafficCondition || 'clear'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -602,37 +721,57 @@ export default function MultiStopPlanner({
             {stops.length < maxStops && (
               <button
                 onClick={addStop}
-                className="w-full py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
+                className="w-full py-1 mt-1 rounded-lg text-[11px] flex items-center justify-center gap-1 transition-colors"
                 style={{ border: '1px dashed var(--border-default)', color: 'var(--text-muted)' }}
               >
-                <Plus className="w-3.5 h-3.5" /> Add Stop
+                <Plus className="w-3 h-3" /> Add Stop
               </button>
             )}
           </div>
 
-          {/* Route Options Modal */}
+          {/* Route Options Panel - always shows savings */}
           {showRouteOptions && routeOptions.length > 0 && (
             <div className="p-3" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}>
-              <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-main)' }}>Choose Route</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Choose Route</p>
+                {originalRoute && (
+                  <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    Original: {originalRoute.distance.toFixed(1)}mi, {formatTime(originalRoute.time)}
+                  </p>
+                )}
+              </div>
               <div className="space-y-1.5">
                 {routeOptions.map(opt => (
                   <button
                     key={opt.type}
                     onClick={() => selectRouteOption(opt.type)}
-                    className="w-full p-2 rounded-lg text-left flex items-center justify-between transition-all"
-                    style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}
+                    className={`w-full p-2.5 rounded-lg text-left transition-all ${selectedRouteType === opt.type ? 'ring-2' : ''}`}
+                    style={{ 
+                      background: 'var(--bg-widget)', 
+                      border: '1px solid var(--border-subtle)',
+                      ['--tw-ring-color' as string]: accentColor,
+                    }}
                   >
-                    <div>
-                      <span className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>{opt.label}</span>
-                      <span className="text-[10px] ml-2" style={{ color: 'var(--text-muted)' }}>
-                        {opt.distance.toFixed(1)} mi · {formatTime(opt.time)}
-                      </span>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>{opt.label}</span>
+                        <span className="text-xs ml-2" style={{ color: 'var(--text-muted)' }}>
+                          {opt.distance.toFixed(1)} mi · {formatTime(opt.time)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {opt.savings.time > 0 && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
+                            Save {formatTime(opt.savings.time)}
+                          </span>
+                        )}
+                        {opt.savings.distance > 0 && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: 'var(--color-info-bg)', color: 'var(--color-info)' }}>
+                            -{opt.savings.distance.toFixed(1)} mi
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {opt.savings && opt.savings.time > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
-                        -{formatTime(opt.savings.time)}
-                      </span>
-                    )}
                   </button>
                 ))}
               </div>
@@ -641,51 +780,46 @@ export default function MultiStopPlanner({
 
           {/* Route Summary */}
           {routeResult && !showRouteOptions && (
-            <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}>
+            <div className="px-4 py-2.5" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-lg font-semibold" style={{ color: 'var(--text-main)' }}>
-                    {routeResult.totalDistance.toFixed(1)} mi
+                  <p className="text-base font-semibold" style={{ color: 'var(--text-main)' }}>
+                    {routeResult.totalDistance.toFixed(1)} mi · {formatTime(routeResult.totalTime)}
                   </p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatTime(routeResult.totalTime)}</p>
                 </div>
                 {originalRoute && routeResult.totalTime < originalRoute.time && (
-                  <div className="text-right">
-                    <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
-                      Saved {formatTime(originalRoute.time - routeResult.totalTime)}
-                    </span>
-                  </div>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
+                    Saved {formatTime(originalRoute.time - routeResult.totalTime)}
+                  </span>
                 )}
               </div>
             </div>
           )}
 
           {error && (
-            <div className="mx-3 mb-3 p-2 rounded-lg text-xs" style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)' }}>
+            <div className="mx-3 mb-2 p-2 rounded-lg text-[11px]" style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)' }}>
               {error}
             </div>
           )}
 
-          {/* Actions */}
+          {/* Actions - compact */}
           <div className="p-3 space-y-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            {/* Departure Time */}
             <div className="flex items-center gap-2">
               <Clock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
               <input
                 type="datetime-local"
                 value={departureTime.toISOString().slice(0, 16)}
                 onChange={(e) => setDepartureTime(new Date(e.target.value))}
-                className="flex-1 px-2 py-1.5 rounded text-xs"
+                className="flex-1 px-2 py-1 rounded text-[11px]"
                 style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
               />
             </div>
             
-            {/* Buttons */}
             <div className="flex gap-2">
               <button
                 onClick={calculateRoute}
                 disabled={loading || stops.filter(s => s.address.trim()).length < 2}
-                className="prism-btn prism-btn-primary flex-1 text-sm py-2"
+                className="prism-btn prism-btn-primary flex-1 text-sm py-1.5"
                 style={{ background: accentColor }}
               >
                 {loading ? <Loader2 className="w-4 h-4 prism-spinner" /> : <Navigation className="w-4 h-4" />}
@@ -696,17 +830,18 @@ export default function MultiStopPlanner({
                 <button
                   onClick={handleOptimizeRoute}
                   disabled={optimizing || loading}
-                  className="px-3 py-2 rounded-lg text-sm transition-colors flex items-center"
+                  className="px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1"
                   style={{ background: `${accentColor}15`, color: accentColor }}
                   title="Optimize route order"
                 >
                   {optimizing ? <Loader2 className="w-4 h-4 prism-spinner" /> : <Sparkles className="w-4 h-4" />}
+                  <span className="text-xs">Optimize</span>
                 </button>
               )}
               
               {routeResult && (
-                <button onClick={resetRoute} className="px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-                  <RotateCcw className="w-4 h-4" />
+                <button onClick={resetRoute} className="px-2.5 py-1.5 rounded-lg transition-colors" style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+                  <RotateCcw className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
@@ -714,7 +849,7 @@ export default function MultiStopPlanner({
         </div>
 
         {/* Map */}
-        <div className="flex-1">
+        <div className="flex-1 relative">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
@@ -728,6 +863,22 @@ export default function MultiStopPlanner({
             routeEnd={validStops.length >= 2 ? { lat: validStops[validStops.length - 1].lat!, lng: validStops[validStops.length - 1].lng! } : undefined}
             waypoints={routeWaypoints}
           />
+          
+          {/* Optimizing Map Overlay */}
+          {optimizing && (
+            <div 
+              className="absolute inset-0 flex items-center justify-center z-10"
+              style={{ background: 'rgba(0,0,0,0.3)' }}
+            >
+              <div 
+                className="px-4 py-3 rounded-xl flex items-center gap-3"
+                style={{ background: 'var(--bg-widget)' }}
+              >
+                <Loader2 className="w-5 h-5 prism-spinner" style={{ color: accentColor }} />
+                <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>Optimizing...</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
