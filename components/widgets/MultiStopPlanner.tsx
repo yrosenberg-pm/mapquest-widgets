@@ -534,7 +534,6 @@ export default function MultiStopPlanner({
     setOriginalRoute(null);
     setHighlightedSegment(null);
     setError(null);
-    setShowRouteOptions(false);
     setSidebarView('stops');
     setSegmentSettings({});
   };
