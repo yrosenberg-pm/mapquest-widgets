@@ -507,8 +507,14 @@ export default function MultiStopPlanner({
   const generateShareUrl = async () => {
     const validStops = stops.filter(s => s.lat && s.lng);
     if (validStops.length < 2) return;
-    const data = btoa(JSON.stringify({ stops: validStops.map(s => ({ address: s.address, lat: s.lat, lng: s.lng })), type: selectedRouteType }));
-    const url = `${window.location.origin}?route=${data}`;
+    const shareData = {
+      stops: validStops.map(s => ({ address: s.address, lat: s.lat, lng: s.lng })),
+      type: selectedRouteType,
+      departureTime: departureTime.toISOString(),
+      companyName: companyName,
+    };
+    const data = btoa(JSON.stringify(shareData));
+    const url = `${window.location.origin}/share/${data}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopySuccess(true);
