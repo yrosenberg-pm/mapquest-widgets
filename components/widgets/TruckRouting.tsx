@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2, AlertTriangle } from 'lucide-react';
+import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -55,6 +55,109 @@ interface TruckRoutingProps {
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
+// HERE Flexible Polyline decoder
+// Based on https://github.com/heremaps/flexible-polyline
+function decodeHerePolyline(encoded: string): { lat: number; lng: number }[] {
+  const DECODING_TABLE = [
+    62, -1, -1, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, -1,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+    22, 23, 24, 25, -1, -1, -1, -1, 63, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+    36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
+  ];
+
+  const result: { lat: number; lng: number }[] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  // Decode header
+  let version = 0;
+  let shift = 0;
+  let value = 0;
+
+  // Skip header bytes (version + precision info)
+  while (index < encoded.length) {
+    const char = encoded.charCodeAt(index++) - 45;
+    const v = DECODING_TABLE[char];
+    value |= (v & 31) << shift;
+    if ((v & 32) === 0) {
+      version = value;
+      break;
+    }
+    shift += 5;
+  }
+
+  // Skip precision bytes
+  shift = 0;
+  value = 0;
+  while (index < encoded.length) {
+    const char = encoded.charCodeAt(index++) - 45;
+    const v = DECODING_TABLE[char];
+    value |= (v & 31) << shift;
+    if ((v & 32) === 0) break;
+    shift += 5;
+  }
+
+  const precision = Math.pow(10, -(value & 15));
+  const precision3D = Math.pow(10, -((value >> 4) & 15));
+  const hasElevation = (value >> 8) & 1;
+
+  // Decode points
+  while (index < encoded.length) {
+    // Decode latitude delta
+    shift = 0;
+    value = 0;
+    while (index < encoded.length) {
+      const char = encoded.charCodeAt(index++) - 45;
+      if (char < 0 || char >= DECODING_TABLE.length) break;
+      const v = DECODING_TABLE[char];
+      if (v === -1) break;
+      value |= (v & 31) << shift;
+      if ((v & 32) === 0) break;
+      shift += 5;
+    }
+    const latDelta = (value & 1) ? ~(value >> 1) : (value >> 1);
+    lat += latDelta;
+
+    // Decode longitude delta
+    shift = 0;
+    value = 0;
+    while (index < encoded.length) {
+      const char = encoded.charCodeAt(index++) - 45;
+      if (char < 0 || char >= DECODING_TABLE.length) break;
+      const v = DECODING_TABLE[char];
+      if (v === -1) break;
+      value |= (v & 31) << shift;
+      if ((v & 32) === 0) break;
+      shift += 5;
+    }
+    const lngDelta = (value & 1) ? ~(value >> 1) : (value >> 1);
+    lng += lngDelta;
+
+    // Skip elevation if present
+    if (hasElevation) {
+      shift = 0;
+      value = 0;
+      while (index < encoded.length) {
+        const char = encoded.charCodeAt(index++) - 45;
+        if (char < 0 || char >= DECODING_TABLE.length) break;
+        const v = DECODING_TABLE[char];
+        if (v === -1) break;
+        value |= (v & 31) << shift;
+        if ((v & 32) === 0) break;
+        shift += 5;
+      }
+    }
+
+    result.push({
+      lat: lat * precision,
+      lng: lng * precision
+    });
+  }
+
+  return result;
+}
+
 // Default vehicle constraints (can be overridden via props)
 const DEFAULT_CONSTRAINTS = {
   height: { min: 8, max: 14 },
@@ -97,6 +200,9 @@ export default function TruckRouting({
   const [showVehicleSettings, setShowVehicleSettings] = useState(true);
   const [departureTime, setDepartureTime] = useState<'now' | Date>('now');
   const [showDepartureOptions, setShowDepartureOptions] = useState(false);
+  const [showTruckRestrictions, setShowTruckRestrictions] = useState(false);
+  const [useHereRouting, setUseHereRouting] = useState(true); // Default to HERE for better truck routing
+  const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | undefined>(undefined);
 
   // Vehicle profile state
   const [vehicle, setVehicle] = useState<VehicleProfile>({
@@ -128,8 +234,91 @@ export default function TruckRouting({
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
 
-  // Get truck directions using MapQuest Truck Routing API
-  const getTruckDirections = async (
+  // Get truck directions using HERE Routing API (better truck restrictions support)
+  const getHereTruckDirections = async (
+    fromCoords: { lat: number; lng: number },
+    toCoords: { lat: number; lng: number },
+    vehicleProfile: VehicleProfile,
+    departure?: 'now' | Date
+  ) => {
+    // Convert dimensions to centimeters for HERE API
+    const heightCm = Math.round(vehicleProfile.height * 30.48); // feet to cm
+    const widthCm = Math.round(vehicleProfile.width * 30.48);
+    const lengthCm = Math.round(vehicleProfile.length * 30.48);
+    // Convert weight to kg (short tons to kg)
+    const weightKg = Math.round(vehicleProfile.weight * 907.185);
+
+    const params = new URLSearchParams({
+      endpoint: 'routes',
+      origin: `${fromCoords.lat},${fromCoords.lng}`,
+      destination: `${toCoords.lat},${toCoords.lng}`,
+      transportMode: 'truck',
+      truckHeight: heightCm.toString(),
+      truckWidth: widthCm.toString(),
+      truckLength: lengthCm.toString(),
+      truckWeight: weightKg.toString(),
+      truckAxles: vehicleProfile.axleCount.toString(),
+    });
+
+    // Add departure time if specified
+    if (departure && departure !== 'now') {
+      params.append('departureTime', departure.toISOString());
+    } else {
+      params.append('departureTime', new Date().toISOString());
+    }
+
+    console.log('[TruckRouting] HERE request params:', params.toString());
+    const response = await fetch(`/api/here?${params.toString()}`);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[TruckRouting] HERE API error:', response.status, errorText);
+      throw new Error('Failed to get truck route from HERE');
+    }
+
+    const data = await response.json();
+    console.log('[TruckRouting] HERE API response:', data);
+    
+    if (!data.routes || data.routes.length === 0) {
+      throw new Error('No truck-safe route found. Try adjusting vehicle dimensions.');
+    }
+
+    const route = data.routes[0];
+    const section = route.sections[0];
+    
+    // Get polyline for map display and decode it
+    const encodedPolyline = section.polyline;
+    let decodedPolyline: { lat: number; lng: number }[] = [];
+    
+    if (encodedPolyline) {
+      try {
+        decodedPolyline = decodeHerePolyline(encodedPolyline);
+        console.log('[TruckRouting] Decoded polyline with', decodedPolyline.length, 'points');
+      } catch (err) {
+        console.error('[TruckRouting] Failed to decode polyline:', err);
+      }
+    }
+    
+    // Parse instructions
+    const steps = section.actions?.map((action: any) => ({
+      narrative: action.instruction || action.action,
+      distance: (action.length || 0) / 1609.34, // meters to miles
+      time: (action.duration || 0) / 60, // seconds to minutes
+    })) || [];
+
+    return {
+      distance: (section.summary?.length || 0) / 1609.34, // meters to miles
+      time: (section.summary?.duration || 0) / 60, // seconds to minutes
+      fuelUsed: section.summary?.consumption,
+      hasTolls: section.tolls && section.tolls.length > 0,
+      hasHighway: true, // HERE doesn't provide this directly
+      steps,
+      polyline: decodedPolyline, // Decoded coordinates array
+    };
+  };
+
+  // Get truck directions using MapQuest Truck Routing API (fallback)
+  const getMapQuestTruckDirections = async (
     fromLocation: string,
     toLocation: string,
     vehicleProfile: VehicleProfile,
@@ -160,17 +349,17 @@ export default function TruckRouting({
       params.append('dateTime', departure.toISOString());
     }
 
-    console.log('[TruckRouting] Request params:', params.toString());
+    console.log('[TruckRouting] MapQuest request params:', params.toString());
     const response = await fetch(`/api/mapquest?${params.toString()}`);
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[TruckRouting] API error:', response.status, errorText);
+      console.error('[TruckRouting] MapQuest API error:', response.status, errorText);
       throw new Error('Failed to get truck route');
     }
 
     const data = await response.json();
-    console.log('[TruckRouting] API response:', data);
+    console.log('[TruckRouting] MapQuest API response:', data);
     
     if (data.info?.statuscode !== 0) {
       console.error('[TruckRouting] Route error:', data.info);
@@ -189,6 +378,7 @@ export default function TruckRouting({
         distance: m.distance,
         time: m.time / 60,
       })) || [],
+      polyline: undefined, // MapQuest uses different polyline format
     };
   };
 
@@ -200,6 +390,7 @@ export default function TruckRouting({
 
     setLoading(true);
     setError(null);
+    setRoutePolyline(undefined);
 
     try {
       const [fromResult, toResult] = await Promise.all([
@@ -220,13 +411,37 @@ export default function TruckRouting({
       setFromCoords(fromLoc);
       setToCoords(toLoc);
 
-      // Use truck routing
-      const directions = await getTruckDirections(
-        `${fromLoc.lat},${fromLoc.lng}`, 
-        `${toLoc.lat},${toLoc.lng}`, 
-        vehicle,
-        departureTime
-      );
+      let directions;
+      
+      // Use HERE API for better truck routing (with vehicle dimension restrictions)
+      if (useHereRouting) {
+        try {
+          directions = await getHereTruckDirections(fromLoc, toLoc, vehicle, departureTime);
+          if (directions.polyline && directions.polyline.length > 0) {
+            setRoutePolyline(directions.polyline);
+          } else {
+            setRoutePolyline(undefined);
+          }
+        } catch (hereErr) {
+          console.warn('[TruckRouting] HERE routing failed, falling back to MapQuest:', hereErr);
+          setRoutePolyline(undefined);
+          // Fallback to MapQuest
+          directions = await getMapQuestTruckDirections(
+            `${fromLoc.lat},${fromLoc.lng}`, 
+            `${toLoc.lat},${toLoc.lng}`, 
+            vehicle,
+            departureTime
+          );
+        }
+      } else {
+        setRoutePolyline(undefined);
+        directions = await getMapQuestTruckDirections(
+          `${fromLoc.lat},${fromLoc.lng}`, 
+          `${toLoc.lat},${toLoc.lng}`, 
+          vehicle,
+          departureTime
+        );
+      }
 
       if (!directions) {
         throw new Error('Could not calculate truck route');
@@ -354,6 +569,8 @@ export default function TruckRouting({
             routeStart={fromCoords || undefined}
             routeEnd={toCoords || undefined}
             routeType="fastest"
+            routePolyline={routePolyline}
+            showTruckRestrictions={showTruckRestrictions}
           />
         </div>
         {/* Sidebar */}
@@ -436,6 +653,63 @@ export default function TruckRouting({
                   <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
                   <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
                   <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
+                </div>
+
+                {/* Routing Provider Toggle */}
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                      Use HERE Routing
+                    </span>
+                    <span 
+                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                      style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}
+                    >
+                      Better restrictions
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setUseHereRouting(!useHereRouting)}
+                    className="relative w-10 h-5 rounded-full transition-colors"
+                    style={{ 
+                      background: useHereRouting ? accentColor : 'var(--border-default)'
+                    }}
+                  >
+                    <div 
+                      className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                      style={{ 
+                        transform: useHereRouting ? 'translateX(22px)' : 'translateX(2px)'
+                      }}
+                    />
+                  </button>
+                </div>
+
+                {/* Show Truck Restrictions Toggle */}
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {showTruckRestrictions ? (
+                      <Eye className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                    ) : (
+                      <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                    )}
+                    <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                      Show restrictions on map
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowTruckRestrictions(!showTruckRestrictions)}
+                    className="relative w-10 h-5 rounded-full transition-colors"
+                    style={{ 
+                      background: showTruckRestrictions ? accentColor : 'var(--border-default)'
+                    }}
+                  >
+                    <div 
+                      className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                      style={{ 
+                        transform: showTruckRestrictions ? 'translateX(22px)' : 'translateX(2px)'
+                      }}
+                    />
+                  </button>
                 </div>
 
                 {/* Warning Note */}

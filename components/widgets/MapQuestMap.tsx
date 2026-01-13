@@ -63,6 +63,7 @@ interface MapQuestMapProps {
   highlightedSegment?: number | null; // Index of segment to highlight
   stops?: { lat: number; lng: number }[]; // All stops for segment-by-segment routing
   driverPosition?: { lat: number; lng: number }; // Live driver position for tracking
+  showTruckRestrictions?: boolean; // Show truck restriction overlay on map
 }
 
 declare global {
@@ -101,6 +102,7 @@ export default function MapQuestMap({
   highlightedSegment = null,
   stops = [],
   driverPosition,
+  showTruckRestrictions = false,
 }: MapQuestMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -111,6 +113,7 @@ export default function MapQuestMap({
   const trafficLayerRef = useRef<any>(null);
   const highlightLayerRef = useRef<any>(null);
   const driverLayerRef = useRef<any>(null);
+  const truckRestrictionsLayerRef = useRef<any>(null);
   const mapIdRef = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
   const [mapReady, setMapReady] = useState(false);
 
@@ -774,6 +777,47 @@ export default function MapQuestMap({
       trafficIncidentsRef.current = trafficIncidentsLayer;
     }
   }, [showTraffic, apiKey, mapReady]);
+
+  // Truck restrictions layer (using HERE truck restriction tiles)
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    const L = window.L;
+
+    // Remove existing truck restrictions layer
+    if (truckRestrictionsLayerRef.current) {
+      map.removeLayer(truckRestrictionsLayerRef.current);
+      truckRestrictionsLayerRef.current = null;
+    }
+
+    if (showTruckRestrictions) {
+      // HERE Truck Restrictions tile layer
+      // This shows weight limits, height restrictions, no-truck zones, etc.
+      const hereApiKey = process.env.NEXT_PUBLIC_HERE_API_KEY;
+      if (hereApiKey) {
+        // Use HERE's vector tile style that includes truck restrictions
+        const truckRestrictionsLayer = L.tileLayer(
+          `https://1.base.maps.ls.hereapi.com/maptile/2.1/truckonlytile/newest/normal.day/{z}/{x}/{y}/256/png8?apiKey=${hereApiKey}`,
+          {
+            maxZoom: 20,
+            opacity: 0.7,
+            zIndex: 350,
+            attribution: '&copy; HERE',
+          }
+        );
+        truckRestrictionsLayer.addTo(map);
+        truckRestrictionsLayerRef.current = truckRestrictionsLayer;
+        console.log('[MapQuestMap] Truck restrictions layer added');
+      } else {
+        // Fallback: Add visual indicator that truck restrictions are enabled but layer unavailable
+        console.warn('[MapQuestMap] HERE API key not available for truck restrictions layer');
+        // Create a simple overlay pattern to indicate truck mode
+        const restrictionsOverlay = L.layerGroup();
+        truckRestrictionsLayerRef.current = restrictionsOverlay;
+        restrictionsOverlay.addTo(map);
+      }
+    }
+  }, [showTruckRestrictions, mapReady]);
 
   // Highlighted segment effect
   useEffect(() => {
