@@ -1,0 +1,15 @@
+# This workflow prevents GitHub Pages from attempting to build
+# Since this is a Next.js app deployed on Vercel, Pages builds will always fail
+name: Disable Pages Build
+
+on:
+  push:
+    branches: ["main"]
+  
+# This empty workflow prevents the default Pages build
+jobs:
+  skip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip Pages Build
+        run: echo "This Next.js app is deployed on Vercel, not GitHub Pages"
