@@ -332,17 +332,17 @@ export default function TruckRouting({
 
   return (
     <div 
-      className="prism-widget w-full lg:max-w-[950px]"
+      className="prism-widget w-full md:w-[950px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse lg:flex-row min-h-[600px] lg:h-[750px]">
+      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[750px]">
         {/* Sidebar */}
         <div 
-          className="w-full lg:w-96 flex flex-col border-t lg:border-t-0 lg:border-r overflow-y-auto"
+          className="w-full md:w-96 flex flex-col border-t md:border-t-0 md:border-r overflow-y-auto"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header */}
@@ -785,7 +785,7 @@ export default function TruckRouting({
         </div>
 
         {/* Map */}
-        <div className="flex-1 min-h-[300px] lg:min-h-0">
+        <div className="flex-1 min-h-[300px] md:min-h-0">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}

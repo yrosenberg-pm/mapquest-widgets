@@ -347,17 +347,17 @@ export default function StarbucksFinder({
 
   return (
     <div 
-      className="prism-widget w-full lg:max-w-[900px]"
+      className="prism-widget w-full md:w-[900px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': STARBUCKS_GREEN,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse lg:flex-row min-h-[500px] lg:h-[520px]">
+      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[520px]">
         {/* Left Panel */}
         <div 
-          className="w-full lg:w-80 flex flex-col border-t lg:border-t-0 lg:border-r"
+          className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-r"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Search Header with Starbucks Branding */}
@@ -595,7 +595,7 @@ export default function StarbucksFinder({
         </div>
 
         {/* Map */}
-        <div className="flex-1 min-w-0 min-h-[300px] lg:min-h-0">
+        <div className="flex-1 min-w-0 min-h-[300px] md:min-h-0">
           <MapQuestMap
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}

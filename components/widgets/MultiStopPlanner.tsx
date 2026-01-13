@@ -572,17 +572,17 @@ export default function MultiStopPlanner({
 
   return (
     <div 
-      className="prism-widget w-full lg:max-w-[1100px]"
+      className="prism-widget w-full md:w-[1100px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse lg:flex-row min-h-[600px] lg:h-[700px]">
+      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[700px]">
         {/* Sidebar */}
         <div 
-          className="w-full lg:w-[420px] flex flex-col flex-shrink-0 border-t lg:border-t-0 lg:border-r"
+          className="w-full md:w-[420px] flex flex-col flex-shrink-0 border-t md:border-t-0 md:border-r max-h-[400px] md:max-h-none"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           
@@ -1366,7 +1366,7 @@ export default function MultiStopPlanner({
         </div>
 
         {/* Map */}
-        <div className="flex-1 relative min-h-[300px] lg:min-h-0">
+        <div className="flex-1 relative min-h-[300px] md:min-h-0">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}

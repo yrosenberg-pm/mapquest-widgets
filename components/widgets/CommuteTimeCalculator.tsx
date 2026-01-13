@@ -245,17 +245,17 @@ export default function CommuteTimeCalculator({
 
   return (
     <div 
-      className="prism-widget w-full lg:max-w-[900px]"
+      className="prism-widget w-full md:w-[900px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse lg:flex-row min-h-[500px] lg:h-[600px]">
+      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[600px]">
         {/* Sidebar */}
         <div 
-          className="w-full lg:w-80 flex flex-col overflow-hidden border-t lg:border-t-0 lg:border-r"
+          className="w-full md:w-80 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header */}
@@ -649,7 +649,7 @@ export default function CommuteTimeCalculator({
         </div>
 
         {/* Map */}
-        <div className="flex-1 min-h-[300px] lg:min-h-0">
+        <div className="flex-1 min-h-[300px] md:min-h-0">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}

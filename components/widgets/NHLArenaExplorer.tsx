@@ -637,7 +637,7 @@ export default function NHLArenaExplorer({
 
   return (
     <div 
-      className="prism-widget w-full lg:max-w-[900px]"
+      className="prism-widget w-full md:w-[900px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         '--brand-primary': accentColor,
@@ -645,10 +645,10 @@ export default function NHLArenaExplorer({
         borderRadius: borderRadius || undefined,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse lg:flex-row min-h-[550px] lg:h-[675px]">
+      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[675px]">
         {/* Sidebar */}
         <div 
-          className="w-full lg:w-64 flex flex-col border-t lg:border-t-0 lg:border-r"
+          className="w-full md:w-64 flex flex-col border-t md:border-t-0 md:border-r"
           style={{ 
             borderColor: 'var(--border-subtle)',
             background: 'var(--bg-panel)',
@@ -717,9 +717,9 @@ export default function NHLArenaExplorer({
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-h-[300px] lg:min-h-0">
+        <div className="flex-1 flex flex-col min-h-[300px] md:min-h-0">
           {/* Map */}
-          <div className="h-[180px] lg:h-[220px]">
+          <div className="h-[180px] md:h-[220px]">
             <MapQuestMap
               apiKey={apiKey}
               center={mapCenter}

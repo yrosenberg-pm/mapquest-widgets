@@ -471,9 +471,9 @@ export default function ShareRoutePage() {
       </div>
 
       <div className="max-w-7xl mx-auto p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Left Column - Route Info */}
-          <div className="lg:col-span-1 space-y-4">
+          <div className="md:col-span-1 space-y-4">
             
             {/* Driver Status Card */}
             {driverPosition && routeResult && (
@@ -721,8 +721,8 @@ export default function ShareRoutePage() {
           </div>
 
           {/* Right Column - Map */}
-          <div className="lg:col-span-2 order-first lg:order-last">
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden lg:sticky lg:top-24 h-[300px] sm:h-[400px] lg:h-[700px]">
+          <div className="md:col-span-2 order-first md:order-last">
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden md:sticky md:top-24 h-[300px] sm:h-[400px] md:h-[700px]">
               <MapQuestMap
                 apiKey={API_KEY}
                 center={mapCenter}
