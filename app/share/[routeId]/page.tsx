@@ -4,10 +4,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { 
-  Route, Clock, MapPin, ArrowRight, RefreshCw, Share2, 
-  Check, Navigation, Loader2, AlertCircle, Calendar,
-  Timer, CornerDownRight, Truck, CheckCircle2, Car,
-  CircleDot, Play, Pause
+  Route, Clock, ArrowRight, RefreshCw, Share2, 
+  Check, Loader2, AlertCircle, Calendar,
+  Timer, Truck, CheckCircle2, Car, Play, Pause
 } from 'lucide-react';
 import { getDirections } from '@/lib/mapquest';
 import MapQuestMap from '@/components/widgets/MapQuestMap';
@@ -363,14 +362,13 @@ export default function ShareRoutePage() {
   }
 
   const stops = routeData?.stops || [];
-  const mapCenter = driverPosition 
-    ? { lat: driverPosition.lat, lng: driverPosition.lng }
-    : stops.length > 0
-      ? { 
-          lat: stops.reduce((sum, s) => sum + s.lat, 0) / stops.length, 
-          lng: stops.reduce((sum, s) => sum + s.lng, 0) / stops.length 
-        }
-      : { lat: 39.8283, lng: -98.5795 };
+  // Fixed map center based on route - don't follow driver to prevent constant zooming
+  const mapCenter = stops.length > 0
+    ? { 
+        lat: stops.reduce((sum, s) => sum + s.lat, 0) / stops.length, 
+        lng: stops.reduce((sum, s) => sum + s.lng, 0) / stops.length 
+      }
+    : { lat: 39.8283, lng: -98.5795 };
 
   // Build markers for stops (driver marker is handled separately by MapQuestMap)
   const markers = stops.map((stop, index) => ({
@@ -619,7 +617,7 @@ export default function ShareRoutePage() {
                 Stops ({stops.length})
               </h2>
               
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {stops.map((stop, index) => {
                   const eta = etas[index];
                   const isFirst = index === 0;
@@ -628,101 +626,78 @@ export default function ShareRoutePage() {
                   const isCurrent = driverPosition && index === driverPosition.currentLegIndex + 1;
                   
                   return (
-                    <div key={index} className="relative">
-                      {/* Connecting line */}
-                      {!isLast && (
-                        <div 
-                          className="absolute left-[15px] top-[36px] w-0.5 h-[calc(100%+4px)]"
-                          style={{ 
-                            background: isCompleted && !isCurrent
-                              ? '#22c55e' 
-                              : `${accentColor}30` 
-                          }}
-                        />
-                      )}
-                      
+                    <div 
+                      key={index}
+                      className="flex items-center gap-3 p-3 rounded-xl transition-all"
+                      style={{
+                        background: isCurrent 
+                          ? `${accentColor}10` 
+                          : isCompleted 
+                            ? '#f0fdf4' 
+                            : '#f9fafb',
+                        border: isCurrent ? `2px solid ${accentColor}40` : '1px solid #e5e7eb',
+                      }}
+                    >
+                      {/* Stop Number */}
                       <div 
-                        className="flex items-start gap-3 p-3 rounded-xl relative z-10 transition-all"
-                        style={{
-                          background: isCurrent 
-                            ? `${accentColor}10` 
-                            : isCompleted 
-                              ? '#f0fdf4' 
-                              : '#f9fafb',
-                          border: isCurrent ? `2px solid ${accentColor}40` : '1px solid transparent',
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                        style={{ 
+                          background: isCompleted 
+                            ? '#22c55e' 
+                            : isFirst || isLast 
+                              ? accentColor 
+                              : '#6b7280',
+                          color: 'white' 
                         }}
                       >
-                        {/* Stop Number */}
-                        <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
-                          style={{ 
-                            background: isCompleted 
-                              ? '#22c55e' 
-                              : isFirst || isLast 
-                                ? accentColor 
-                                : '#6b7280',
-                            color: 'white' 
-                          }}
-                        >
-                          {isCompleted && !isFirst ? <Check className="w-4 h-4" /> : index + 1}
-                        </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {isFirst && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">
-                                START
-                              </span>
-                            )}
-                            {isLast && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">
-                                END
-                              </span>
-                            )}
-                            {isCurrent && (
-                              <span 
-                                className="px-2 py-0.5 rounded text-[10px] font-semibold animate-pulse"
-                                style={{ background: `${accentColor}20`, color: accentColor }}
-                              >
-                                NEXT STOP
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-900 font-medium truncate" title={stop.address}>
-                            {stop.address}
-                          </p>
-                          {eta && (
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <Timer className="w-3 h-3 text-gray-400" />
-                              <span className="text-xs text-gray-500">
-                                {isCompleted && !isFirst ? 'Arrived: ' : 'ETA: '}
-                                <span 
-                                  className="font-semibold" 
-                                  style={{ color: isCompleted ? '#22c55e' : accentColor }}
-                                >
-                                  {eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        
-                        {isCompleted && !isFirst && (
-                          <div className="flex-shrink-0">
-                            <CheckCircle2 className="w-5 h-5 text-green-500" />
-                          </div>
-                        )}
+                        {isCompleted && !isFirst ? <Check className="w-4 h-4" /> : index + 1}
                       </div>
                       
-                      {/* Leg info between stops */}
-                      {routeResult?.legs[index] && (
-                        <div className="ml-[15px] pl-6 py-2 text-xs text-gray-400 flex items-center gap-2">
-                          <CornerDownRight className="w-3 h-3" />
-                          <span>{routeResult.legs[index].distance.toFixed(1)} mi</span>
-                          <span>·</span>
-                          <span>{formatTime(routeResult.legs[index].time)}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          {isFirst && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-700">
+                              START
+                            </span>
+                          )}
+                          {isLast && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">
+                              END
+                            </span>
+                          )}
+                          {isCurrent && (
+                            <span 
+                              className="px-2 py-0.5 rounded text-[10px] font-semibold animate-pulse"
+                              style={{ background: `${accentColor}20`, color: accentColor }}
+                            >
+                              NEXT
+                            </span>
+                          )}
+                          {!isFirst && !isLast && !isCurrent && routeResult?.legs[index - 1] && (
+                            <span className="text-[10px] text-gray-400">
+                              {routeResult.legs[index - 1].distance.toFixed(1)} mi · {formatTime(routeResult.legs[index - 1].time)}
+                            </span>
+                          )}
                         </div>
-                      )}
+                        <p className="text-sm text-gray-900 font-medium truncate" title={stop.address}>
+                          {stop.address}
+                        </p>
+                      </div>
+                      
+                      {/* ETA on the right */}
+                      <div className="flex-shrink-0 text-right">
+                        {eta && (
+                          <p 
+                            className="text-sm font-semibold" 
+                            style={{ color: isCompleted ? '#22c55e' : accentColor }}
+                          >
+                            {eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
+                        {isCompleted && !isFirst && (
+                          <CheckCircle2 className="w-4 h-4 text-green-500 ml-auto mt-0.5" />
+                        )}
+                      </div>
                     </div>
                   );
                 })}
