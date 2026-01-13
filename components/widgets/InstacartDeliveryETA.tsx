@@ -243,7 +243,7 @@ export default function InstacartDeliveryETA({
 
   return (
     <div 
-      className="prism-widget w-full max-w-[480px]"
+      className="prism-widget w-full md:w-[480px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',

@@ -160,7 +160,7 @@ export default function DeliveryETA({
 
   return (
     <div 
-      className="prism-widget w-full max-w-[550px]"
+      className="prism-widget w-full md:w-[550px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',

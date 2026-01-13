@@ -196,7 +196,7 @@ export default function SmartAddressInput({
   return (
     <div 
       ref={containerRef} 
-      className="w-full max-w-[400px]"
+      className="w-full md:w-[400px]"
       style={{ 
         fontFamily: fontFamily || "'Inter', system-ui, -apple-system, sans-serif",
       }}
