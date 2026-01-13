@@ -655,35 +655,6 @@ export default function TruckRouting({
                   <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
                 </div>
 
-                {/* Routing Provider Toggle */}
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                      Use HERE Routing
-                    </span>
-                    <span 
-                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                      style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}
-                    >
-                      Better restrictions
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setUseHereRouting(!useHereRouting)}
-                    className="relative w-10 h-5 rounded-full transition-colors"
-                    style={{ 
-                      background: useHereRouting ? accentColor : 'var(--border-default)'
-                    }}
-                  >
-                    <div 
-                      className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                      style={{ 
-                        transform: useHereRouting ? 'translateX(22px)' : 'translateX(2px)'
-                      }}
-                    />
-                  </button>
-                </div>
-
                 {/* Show Truck Restrictions Toggle */}
                 <div className="mt-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
