@@ -250,7 +250,7 @@ function HomeContent() {
         {/* Compact Header with Widget Selector */}
         <div className="flex items-center justify-between mb-6">
           {/* Widget Selector Dropdown */}
-          <div className="relative" ref={menuRef}>
+          <div className="relative z-50" ref={menuRef}>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white shadow-lg shadow-gray-200/80 hover:shadow-xl transition-all"
@@ -330,7 +330,7 @@ function HomeContent() {
         </div>
 
         {/* Widget Display */}
-        <div className="flex flex-col items-center w-full">
+        <div className="flex flex-col items-center w-full relative z-10">
           <div className="w-full md:w-auto shadow-2xl shadow-gray-400/30 rounded-xl overflow-hidden">
             {renderWidget()}
           </div>
