@@ -89,9 +89,10 @@ export default function SmartAddressInput({
 
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
-      setIsOpen(false);
       try {
+        console.log('[SmartAddressInput] Searching for:', query);
         const results = await searchAhead(query, 6);
+        console.log('[SmartAddressInput] Results:', results);
         setSuggestions(results);
         
         if (results && results.length > 0) {
@@ -101,7 +102,7 @@ export default function SmartAddressInput({
         }
         setHighlightedIndex(-1);
       } catch (err) {
-        console.error('Search failed:', err);
+        console.error('[SmartAddressInput] Search failed:', err);
         setSuggestions([]);
         setIsOpen(false);
       } finally {

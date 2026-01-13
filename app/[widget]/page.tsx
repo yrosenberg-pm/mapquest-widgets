@@ -124,7 +124,7 @@ export default function WidgetPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
-      <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl overflow-hidden">
+      <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl">
         {renderWidget()}
       </div>
     </div>
