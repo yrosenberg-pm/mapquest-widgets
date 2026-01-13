@@ -12,6 +12,8 @@ const ENDPOINTS: Record<string, string> = {
   transit: 'https://transit.router.hereapi.com/v8/routes',
   // HERE Destination Weather API
   weather: 'https://weather.ls.hereapi.com/weather/1.0/report.json',
+  // HERE Fleet Telematics - Truck Restrictions
+  truckrestrictions: 'https://fleet.ls.hereapi.com/2/overlays.json',
 };
 
 export async function GET(request: NextRequest) {
@@ -172,6 +174,30 @@ export async function GET(request: NextRequest) {
         url = `${ENDPOINTS.weather}?apiKey=${HERE_API_KEY}&product=${product}&latitude=${latitude}&longitude=${longitude}&metric=false`;
         
         console.log('HERE Weather API URL:', url.replace(HERE_API_KEY!, '***'));
+        break;
+      }
+
+      case 'truckrestrictions': {
+        // HERE Fleet Telematics - Truck Restrictions Overlay
+        // Returns truck restrictions (height, weight, etc.) for a bounding box
+        const bbox = searchParams.get('bbox'); // format: west,south,east,north
+        const overlay = searchParams.get('overlay') || 'TRUCK_RESTRICTIONS'; // TRUCK_RESTRICTIONS, VEHICLE_RESTRICTIONS
+        
+        if (!bbox) {
+          return NextResponse.json({ error: 'Bounding box (bbox) is required' }, { status: 400 });
+        }
+
+        // Parse bbox and validate
+        const [west, south, east, north] = bbox.split(',').map(Number);
+        if ([west, south, east, north].some(isNaN)) {
+          return NextResponse.json({ error: 'Invalid bounding box format' }, { status: 400 });
+        }
+
+        // HERE Fleet Telematics API for truck restrictions
+        // overlay=TRUCK_RESTRICTIONS returns height, weight, length, width restrictions
+        url = `${ENDPOINTS.truckrestrictions}?apiKey=${HERE_API_KEY}&overlay=${overlay}&bbox=${bbox}&responseattributes=shape`;
+        
+        console.log('HERE Truck Restrictions API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
       }
 

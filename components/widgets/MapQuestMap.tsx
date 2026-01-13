@@ -778,7 +778,7 @@ export default function MapQuestMap({
     }
   }, [showTraffic, apiKey, mapReady]);
 
-  // Truck restrictions layer (using HERE truck restriction tiles)
+  // Truck restrictions layer - fetch and display restriction markers from HERE API
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
@@ -790,33 +790,203 @@ export default function MapQuestMap({
       truckRestrictionsLayerRef.current = null;
     }
 
-    if (showTruckRestrictions) {
-      // HERE Truck Restrictions tile layer
-      // This shows weight limits, height restrictions, no-truck zones, etc.
-      const hereApiKey = process.env.NEXT_PUBLIC_HERE_API_KEY;
-      if (hereApiKey) {
-        // Use HERE's vector tile style that includes truck restrictions
-        const truckRestrictionsLayer = L.tileLayer(
-          `https://1.base.maps.ls.hereapi.com/maptile/2.1/truckonlytile/newest/normal.day/{z}/{x}/{y}/256/png8?apiKey=${hereApiKey}`,
-          {
-            maxZoom: 20,
-            opacity: 0.7,
-            zIndex: 350,
-            attribution: '&copy; HERE',
+    if (!showTruckRestrictions) return;
+
+    // Create a layer group for restriction markers
+    const restrictionsLayer = L.layerGroup();
+    restrictionsLayer.addTo(map);
+    truckRestrictionsLayerRef.current = restrictionsLayer;
+
+    // Function to fetch and display restrictions for current bounds
+    const fetchRestrictions = async () => {
+      const bounds = map.getBounds();
+      const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+      
+      try {
+        const response = await fetch(`/api/here?endpoint=truckrestrictions&bbox=${bbox}`);
+        if (!response.ok) {
+          console.warn('[MapQuestMap] Failed to fetch truck restrictions');
+          return;
+        }
+        
+        const data = await response.json();
+        console.log('[MapQuestMap] Truck restrictions data:', data);
+        
+        // Clear existing markers
+        restrictionsLayer.clearLayers();
+        
+        // Process restrictions from HERE API response
+        // HERE returns restrictions in overlays array
+        const restrictions = data.overlays || data.OVERLAY || [];
+        
+        restrictions.forEach((overlay: any) => {
+          const shapes = overlay.SHAPE || overlay.shapes || [];
+          const attrs = overlay.TRUCK_RESTRICTION || overlay.attributes || {};
+          
+          shapes.forEach((shape: any) => {
+            // Get coordinates from shape
+            let lat, lng;
+            if (shape.LAT !== undefined && shape.LON !== undefined) {
+              lat = shape.LAT;
+              lng = shape.LON;
+            } else if (Array.isArray(shape) && shape.length >= 2) {
+              lat = shape[0];
+              lng = shape[1];
+            } else if (shape.lat !== undefined && shape.lng !== undefined) {
+              lat = shape.lat;
+              lng = shape.lng;
+            }
+            
+            if (lat === undefined || lng === undefined) return;
+            
+            // Build restriction info
+            const restrictions: string[] = [];
+            
+            // Height restriction (convert from cm to feet)
+            if (attrs.HEIGHT_RESTRICTION || attrs.height) {
+              const heightCm = attrs.HEIGHT_RESTRICTION || attrs.height;
+              const heightFt = (heightCm / 30.48).toFixed(1);
+              restrictions.push(`🚧 ${heightFt} ft`);
+            }
+            
+            // Weight restriction (convert from kg to tons)
+            if (attrs.WEIGHT_RESTRICTION || attrs.weight) {
+              const weightKg = attrs.WEIGHT_RESTRICTION || attrs.weight;
+              const weightTons = (weightKg / 907.185).toFixed(1);
+              restrictions.push(`⚖️ ${weightTons} tons`);
+            }
+            
+            // Length restriction (convert from cm to feet)
+            if (attrs.LENGTH_RESTRICTION || attrs.length) {
+              const lengthCm = attrs.LENGTH_RESTRICTION || attrs.length;
+              const lengthFt = (lengthCm / 30.48).toFixed(0);
+              restrictions.push(`📏 ${lengthFt} ft`);
+            }
+            
+            // Width restriction
+            if (attrs.WIDTH_RESTRICTION || attrs.width) {
+              const widthCm = attrs.WIDTH_RESTRICTION || attrs.width;
+              const widthFt = (widthCm / 30.48).toFixed(1);
+              restrictions.push(`↔️ ${widthFt} ft`);
+            }
+            
+            // Axle weight
+            if (attrs.SINGLE_AXLE_WEIGHT || attrs.axleWeight) {
+              const axleKg = attrs.SINGLE_AXLE_WEIGHT || attrs.axleWeight;
+              const axleTons = (axleKg / 907.185).toFixed(1);
+              restrictions.push(`🛞 ${axleTons}t/axle`);
+            }
+            
+            // No trucks
+            if (attrs.NO_THROUGH_TRUCKS || attrs.noTrucks) {
+              restrictions.push(`🚫 No Trucks`);
+            }
+            
+            // Hazmat
+            if (attrs.HAZMAT_RESTRICTION || attrs.hazmat) {
+              restrictions.push(`☢️ No Hazmat`);
+            }
+            
+            if (restrictions.length === 0) {
+              restrictions.push(`⚠️ Restriction`);
+            }
+            
+            // Create marker with restriction icon
+            const iconHtml = `
+              <div style="
+                background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+                color: white;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+                white-space: nowrap;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                border: 2px solid white;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 2px;
+              ">
+                ${restrictions.map(r => `<span>${r}</span>`).join('')}
+              </div>
+            `;
+            
+            const icon = L.divIcon({
+              html: iconHtml,
+              className: 'truck-restriction-marker',
+              iconSize: [80, 40],
+              iconAnchor: [40, 20],
+            });
+            
+            L.marker([lat, lng], { icon }).addTo(restrictionsLayer);
+          });
+        });
+        
+        // If no structured data, try showing sample restrictions for testing
+        if (restrictions.length === 0) {
+          console.log('[MapQuestMap] No restrictions found in API response, checking alternative format');
+          
+          // Check for alternative response formats
+          if (data.ROUTE_LINKS || data.links) {
+            const links = data.ROUTE_LINKS || data.links || [];
+            links.forEach((link: any) => {
+              const linkRestrictions = link.TRUCK_RESTRICTIONS || link.restrictions || [];
+              linkRestrictions.forEach((r: any) => {
+                const lat = r.LAT || r.lat;
+                const lng = r.LON || r.lng || r.lon;
+                if (lat && lng) {
+                  const label = r.DESCRIPTION || r.description || 'Restriction';
+                  const iconHtml = `
+                    <div style="
+                      background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
+                      color: white;
+                      padding: 4px 8px;
+                      border-radius: 6px;
+                      font-size: 11px;
+                      font-weight: 600;
+                      white-space: nowrap;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                      border: 2px solid white;
+                    ">
+                      ⚠️ ${label}
+                    </div>
+                  `;
+                  const icon = L.divIcon({
+                    html: iconHtml,
+                    className: 'truck-restriction-marker',
+                    iconSize: [100, 30],
+                    iconAnchor: [50, 15],
+                  });
+                  L.marker([lat, lng], { icon }).addTo(restrictionsLayer);
+                }
+              });
+            });
           }
-        );
-        truckRestrictionsLayer.addTo(map);
-        truckRestrictionsLayerRef.current = truckRestrictionsLayer;
-        console.log('[MapQuestMap] Truck restrictions layer added');
-      } else {
-        // Fallback: Add visual indicator that truck restrictions are enabled but layer unavailable
-        console.warn('[MapQuestMap] HERE API key not available for truck restrictions layer');
-        // Create a simple overlay pattern to indicate truck mode
-        const restrictionsOverlay = L.layerGroup();
-        truckRestrictionsLayerRef.current = restrictionsOverlay;
-        restrictionsOverlay.addTo(map);
+        }
+        
+      } catch (err) {
+        console.error('[MapQuestMap] Error fetching truck restrictions:', err);
       }
-    }
+    };
+
+    // Fetch restrictions initially and on map move
+    fetchRestrictions();
+    
+    const onMoveEnd = () => {
+      // Only fetch if zoom level is high enough (restrictions are local)
+      if (map.getZoom() >= 10) {
+        fetchRestrictions();
+      } else {
+        restrictionsLayer.clearLayers();
+      }
+    };
+    
+    map.on('moveend', onMoveEnd);
+    
+    return () => {
+      map.off('moveend', onMoveEnd);
+    };
   }, [showTruckRestrictions, mapReady]);
 
   // Highlighted segment effect
