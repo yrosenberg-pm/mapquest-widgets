@@ -136,15 +136,15 @@ export default function TruckRouting({
     departure?: 'now' | Date
   ) => {
     const params = new URLSearchParams({
-      key: apiKey,
+      endpoint: 'directions',
       from: fromLocation,
       to: toLocation,
       routeType: 'fastest',
-      unit: 'm',
-      // Truck-specific parameters
+      type: 'truck',
+      // Truck-specific parameters (convert to metric for API)
       // Height in meters (convert from feet)
       vehicleHeight: (vehicleProfile.height * 0.3048).toFixed(2),
-      // Weight in metric tons (already in tons, assume short tons, convert to metric)
+      // Weight in metric tons (convert from short tons)
       vehicleWeight: (vehicleProfile.weight * 0.907185).toFixed(2),
       // Length in meters (convert from feet)
       vehicleLength: (vehicleProfile.length * 0.3048).toFixed(2),
@@ -152,8 +152,6 @@ export default function TruckRouting({
       vehicleWidth: (vehicleProfile.width * 0.3048).toFixed(2),
       // Axle count
       vehicleAxles: vehicleProfile.axleCount.toString(),
-      // Request truck route
-      drivingStyle: '2', // Truck driving style
     });
 
     // Add departure time if specified
@@ -162,15 +160,20 @@ export default function TruckRouting({
       params.append('dateTime', departure.toISOString());
     }
 
-    const response = await fetch(`/api/mapquest?${params.toString()}&type=truck`);
+    console.log('[TruckRouting] Request params:', params.toString());
+    const response = await fetch(`/api/mapquest?${params.toString()}`);
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[TruckRouting] API error:', response.status, errorText);
       throw new Error('Failed to get truck route');
     }
 
     const data = await response.json();
+    console.log('[TruckRouting] API response:', data);
     
     if (data.info?.statuscode !== 0) {
+      console.error('[TruckRouting] Route error:', data.info);
       throw new Error(data.info?.messages?.[0] || 'Route calculation failed');
     }
 
