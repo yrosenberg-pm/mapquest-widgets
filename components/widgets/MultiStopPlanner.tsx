@@ -5,7 +5,7 @@ import { useState, useRef } from 'react';
 import { 
   Plus, Trash2, GripVertical, Loader2, RotateCcw, Route, 
   Sparkles, Clock, Check, AlertTriangle, XCircle, ChevronDown,
-  Download, Share2, Shuffle, Navigation, MoreHorizontal, ArrowDown
+  Download, Share2, Shuffle, Navigation, MoreHorizontal
 } from 'lucide-react';
 import { geocode, getDirections, optimizeRoute, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -555,7 +555,6 @@ export default function MultiStopPlanner({
               {stops.map((stop, index) => {
                 const isExpanded = expandedStopId === stop.id;
                 const timeStatus = getTimeStatus(stop);
-                const leg = routeResult?.legs[index];
                 
                 return (
                   <div key={stop.id}>
@@ -673,32 +672,6 @@ export default function MultiStopPlanner({
                       )}
                     </div>
                     
-                    {/* Leg Info between stops - compact */}
-                    {index < stops.length - 1 && stops[index + 1].geocoded && leg && (
-                      <div className="flex items-center justify-center py-0.5">
-                        <div className="flex items-center gap-1.5 px-2 py-0.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                          <ArrowDown className="w-2.5 h-2.5" />
-                          <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>
-                            {leg.distance.toFixed(1)} mi
-                          </span>
-                          <span>·</span>
-                          <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>
-                            {formatTime(leg.time)}
-                          </span>
-                          <span 
-                            className="px-1.5 py-0.5 rounded-full"
-                            style={{ 
-                              background: leg.trafficCondition === 'heavy' ? 'var(--color-error-bg)' :
-                                         leg.trafficCondition === 'moderate' ? 'var(--color-warning-bg)' : 'var(--color-success-bg)',
-                              color: leg.trafficCondition === 'heavy' ? 'var(--color-error)' :
-                                     leg.trafficCondition === 'moderate' ? 'var(--color-warning)' : 'var(--color-success)',
-                            }}
-                          >
-                            {leg.trafficCondition || 'clear'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}
