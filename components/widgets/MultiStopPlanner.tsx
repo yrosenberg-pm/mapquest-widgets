@@ -581,7 +581,7 @@ export default function MultiStopPlanner({
     >
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map - shown first on mobile */}
-        <div className="flex-1 relative h-[250px] md:h-auto md:order-2">
+        <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
@@ -616,7 +616,7 @@ export default function MultiStopPlanner({
         </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-[420px] flex flex-col flex-shrink-0 border-t md:border-t-0 md:border-r max-h-[350px] md:max-h-none overflow-hidden md:order-1"
+          className="w-full md:w-[420px] flex flex-col flex-shrink-0 border-t md:border-t-0 md:border-r flex-1 md:flex-initial min-h-[300px] md:min-h-0 md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           

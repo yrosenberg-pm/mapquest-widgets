@@ -427,7 +427,7 @@ export default function NeighborhoodScore({
     >
       <div className="flex flex-col md:flex-row md:h-[600px]">
         {/* Map - shown first on mobile */}
-        <div className="flex-1 relative h-[250px] md:h-auto md:order-2">
+        <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}

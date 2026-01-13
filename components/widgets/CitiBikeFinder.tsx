@@ -340,7 +340,7 @@ export default function CitiBikeFinder({
     >
       <div className="flex flex-col md:flex-row md:h-[520px]">
         {/* Map - shown first on mobile */}
-        <div className="flex-1 min-w-0 h-[250px] md:h-auto md:order-2">
+        <div className="min-w-0 h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}
@@ -352,9 +352,9 @@ export default function CitiBikeFinder({
             markers={markers}
           />
         </div>
-        {/* Left Panel */}
+        {/* Left Panel - Station list visible on mobile */}
         <div 
-          className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-r md:order-1"
+          className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-r md:order-1 flex-1 md:flex-initial min-h-[250px] md:min-h-0"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header with Citi Bike + Lyft Branding */}
