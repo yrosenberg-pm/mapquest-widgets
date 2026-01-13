@@ -1,11 +1,11 @@
 // components/widgets/MultiStopPlanner.tsx
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { 
-  Plus, Trash2, GripVertical, Loader2, RotateCcw, ArrowUpDown, Route, 
-  Sparkles, Clock, Check, AlertTriangle, XCircle, ChevronDown, ChevronUp,
-  Download, Share2, Shuffle, Map, Layers, Navigation, Car
+  Plus, Trash2, GripVertical, Loader2, RotateCcw, Route, 
+  Sparkles, Clock, Check, AlertTriangle, XCircle, ChevronDown,
+  Download, Share2, Shuffle, Navigation, MoreHorizontal
 } from 'lucide-react';
 import { geocode, getDirections, optimizeRoute, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -17,10 +17,9 @@ interface Stop {
   lat?: number;
   lng?: number;
   geocoded?: boolean;
-  arriveBy?: string; // HH:MM format
-  duration: number; // minutes at stop
-  eta?: Date; // calculated ETA
-  departureTime?: Date; // calculated departure time
+  arriveBy?: string;
+  duration: number;
+  eta?: Date;
 }
 
 interface LegInfo {
@@ -40,11 +39,10 @@ interface RouteResult {
 interface RouteOption {
   type: 'fastest' | 'shortest' | 'balanced';
   label: string;
-  description: string;
   distance: number;
   time: number;
   stops: Stop[];
-  savings?: { distance: number; time: number };
+  savings?: { time: number };
 }
 
 interface MultiStopPlannerProps {
@@ -59,18 +57,6 @@ interface MultiStopPlannerProps {
 }
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
-
-// Generate a unique short ID for shareable links
-const generateShortId = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-};
-
-// Duration options in minutes
 const DURATION_OPTIONS = [0, 5, 10, 15, 30, 45, 60];
 
 export default function MultiStopPlanner({
@@ -80,7 +66,7 @@ export default function MultiStopPlanner({
   companyName,
   companyLogo,
   fontFamily,
-  maxStops = 25, // Increased for demo
+  maxStops = 25,
 }: MultiStopPlannerProps) {
   const [stops, setStops] = useState<Stop[]>([
     { id: '1', address: '', duration: 0 },
@@ -94,20 +80,16 @@ export default function MultiStopPlanner({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const dragNode = useRef<HTMLDivElement | null>(null);
 
-  // New state for enhancements
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  // UI State
+  const [expandedStopId, setExpandedStopId] = useState<string | null>(null);
+  const [showRouteOptions, setShowRouteOptions] = useState(false);
   const [routeOptions, setRouteOptions] = useState<RouteOption[]>([]);
   const [selectedRouteType, setSelectedRouteType] = useState<'fastest' | 'shortest' | 'balanced'>('fastest');
   const [originalRoute, setOriginalRoute] = useState<{ distance: number; time: number } | null>(null);
-  const [showLegDetails, setShowLegDetails] = useState(false);
-  const [selectedLegIndex, setSelectedLegIndex] = useState<number | null>(null);
-  const [showTraffic, setShowTraffic] = useState(false);
   const [departureTime, setDepartureTime] = useState<Date>(new Date());
-  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
 
-  // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
@@ -137,8 +119,7 @@ export default function MultiStopPlanner({
     setRouteResult(null);
     setRouteOptions([]);
     setOriginalRoute(null);
-    setSelectedLegIndex(null);
-    setShareUrl(null);
+    setShowMoreMenu(false);
   };
 
   const updateStop = (id: string, address: string) => {
@@ -147,84 +128,48 @@ export default function MultiStopPlanner({
     setRouteOptions([]);
   };
 
-  const updateStopArriveBy = (id: string, arriveBy: string) => {
-    setStops(stops.map(s => s.id === id ? { ...s, arriveBy } : s));
-  };
-
-  const updateStopDuration = (id: string, duration: number) => {
-    setStops(stops.map(s => s.id === id ? { ...s, duration } : s));
-    // Recalculate ETAs if route exists
-    if (routeResult) {
-      calculateETAs(stops.map(s => s.id === id ? { ...s, duration } : s), routeResult);
+  const updateStopDetails = (id: string, updates: Partial<Stop>) => {
+    setStops(stops.map(s => s.id === id ? { ...s, ...updates } : s));
+    if (routeResult && updates.duration !== undefined) {
+      calculateETAs(stops.map(s => s.id === id ? { ...s, ...updates } : s), routeResult);
     }
   };
 
-  // Calculate ETAs for all stops based on departure time and durations
   const calculateETAs = (stopsToCalc: Stop[], result: RouteResult) => {
     let currentTime = new Date(departureTime);
     const updatedStops = stopsToCalc.map((stop, index) => {
-      const eta = new Date(currentTime);
-      
-      // Add travel time from previous leg
       if (index > 0 && result.legs[index - 1]) {
         currentTime = new Date(currentTime.getTime() + result.legs[index - 1].time * 60 * 1000);
       }
-      
-      const arrivalEta = new Date(currentTime);
-      const departureFromStop = new Date(currentTime.getTime() + stop.duration * 60 * 1000);
-      currentTime = departureFromStop;
-
-      return {
-        ...stop,
-        eta: arrivalEta,
-        departureTime: stop.duration > 0 ? departureFromStop : undefined,
-      };
+      const eta = new Date(currentTime);
+      currentTime = new Date(currentTime.getTime() + stop.duration * 60 * 1000);
+      return { ...stop, eta };
     });
-    
     setStops(updatedStops);
   };
 
-  // Check if stop will arrive on time
   const getTimeStatus = (stop: Stop): 'ontime' | 'close' | 'late' | null => {
     if (!stop.arriveBy || !stop.eta) return null;
-    
     const [hours, minutes] = stop.arriveBy.split(':').map(Number);
     const deadline = new Date(stop.eta);
     deadline.setHours(hours, minutes, 0, 0);
-    
-    const diffMinutes = (deadline.getTime() - stop.eta.getTime()) / (60 * 1000);
-    
-    if (diffMinutes < 0) return 'late';
-    if (diffMinutes <= 10) return 'close';
+    const diff = (deadline.getTime() - stop.eta.getTime()) / 60000;
+    if (diff < 0) return 'late';
+    if (diff <= 10) return 'close';
     return 'ontime';
   };
 
+  // Drag handlers
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
     dragNode.current = e.target as HTMLDivElement;
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', index.toString());
-    setTimeout(() => {
-      if (dragNode.current) {
-        dragNode.current.style.opacity = '0.5';
-      }
-    }, 0);
+    setTimeout(() => { if (dragNode.current) dragNode.current.style.opacity = '0.5'; }, 0);
   };
 
   const handleDragEnter = (e: React.DragEvent, index: number) => {
     e.preventDefault();
-    if (draggedIndex !== null && draggedIndex !== index) {
-      setDragOverIndex(index);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) setDragOverIndex(index);
   };
 
   const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
@@ -233,109 +178,68 @@ export default function MultiStopPlanner({
       resetDragState();
       return;
     }
-
     const newStops = [...stops];
     const [draggedStop] = newStops.splice(draggedIndex, 1);
     newStops.splice(dropIndex, 0, draggedStop);
-    
     setStops(newStops);
     resetDragState();
     setRouteResult(null);
-    setRouteOptions([]);
-
     const validStops = newStops.filter(s => s.lat && s.lng);
-    if (validStops.length >= 2) {
-      await calculateRouteForStops(newStops);
-    }
-  };
-
-  const handleDragEnd = () => {
-    resetDragState();
+    if (validStops.length >= 2) await calculateRouteForStops(newStops);
   };
 
   const resetDragState = () => {
-    if (dragNode.current) {
-      dragNode.current.style.opacity = '1';
-    }
+    if (dragNode.current) dragNode.current.style.opacity = '1';
     setDraggedIndex(null);
     setDragOverIndex(null);
     dragNode.current = null;
   };
 
   const geocodeStops = async (stopsToGeocode: Stop[]): Promise<Stop[]> => {
-    const geocodedStops = await Promise.all(
-      stopsToGeocode.map(async (stop) => {
-        if (stop.geocoded && stop.lat && stop.lng) return stop;
-        if (!stop.address.trim()) return stop;
-
-        try {
-          const result = await geocode(stop.address);
-          if (result && result.lat && result.lng) {
-            return { ...stop, lat: result.lat, lng: result.lng, geocoded: true };
-          }
-        } catch (err) {
-          console.error('Geocode error:', err);
+    return Promise.all(stopsToGeocode.map(async (stop) => {
+      if (stop.geocoded && stop.lat && stop.lng) return stop;
+      if (!stop.address.trim()) return stop;
+      try {
+        const result = await geocode(stop.address);
+        if (result?.lat && result?.lng) {
+          return { ...stop, lat: result.lat, lng: result.lng, geocoded: true };
         }
-        return stop;
-      })
-    );
-    return geocodedStops;
+      } catch (err) { console.error('Geocode error:', err); }
+      return stop;
+    }));
   };
 
-  const calculateRouteForStops = async (stopsToCalc: Stop[], routeType: 'fastest' | 'shortest' | 'pedestrian' | 'bicycle' = 'fastest') => {
+  const calculateRouteForStops = async (stopsToCalc: Stop[], routeType: 'fastest' | 'shortest' = 'fastest') => {
     setLoading(true);
     setError(null);
-
     try {
       const geocodedStops = await geocodeStops(stopsToCalc);
       setStops(geocodedStops);
-      
       const validStops = geocodedStops.filter(s => s.lat && s.lng);
-      if (validStops.length < 2) {
-        throw new Error('Need at least 2 valid addresses');
-      }
+      if (validStops.length < 2) throw new Error('Need at least 2 valid addresses');
 
-      const waypoints = validStops.map(s => ({ lat: s.lat!, lng: s.lng! }));
-      
-      let totalDistance = 0;
-      let totalTime = 0;
+      let totalDistance = 0, totalTime = 0;
       const legs: LegInfo[] = [];
 
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        const from = `${waypoints[i].lat},${waypoints[i].lng}`;
-        const to = `${waypoints[i + 1].lat},${waypoints[i + 1].lng}`;
+      for (let i = 0; i < validStops.length - 1; i++) {
+        const from = `${validStops[i].lat},${validStops[i].lng}`;
+        const to = `${validStops[i + 1].lat},${validStops[i + 1].lng}`;
         const directions = await getDirections(from, to, routeType, departureTime);
         if (directions) {
           totalDistance += directions.distance;
           totalTime += directions.time;
-          
-          // Estimate traffic condition based on time
+          const expectedTime = directions.distance * 2;
           let trafficCondition: 'light' | 'moderate' | 'heavy' = 'light';
-          const expectedTime = directions.distance * 2; // Rough estimate: 2 min per mile
           if (directions.time > expectedTime * 1.3) trafficCondition = 'heavy';
           else if (directions.time > expectedTime * 1.1) trafficCondition = 'moderate';
-          
-          legs.push({ 
-            from: validStops[i].address,
-            to: validStops[i + 1].address,
-            distance: directions.distance, 
-            time: directions.time,
-            trafficCondition,
-          });
+          legs.push({ from: validStops[i].address, to: validStops[i + 1].address, distance: directions.distance, time: directions.time, trafficCondition });
         }
       }
 
       const result = { totalDistance, totalTime, legs };
       setRouteResult(result);
-      
-      // Store original route for comparison
-      if (!originalRoute) {
-        setOriginalRoute({ distance: totalDistance, time: totalTime });
-      }
-      
-      // Calculate ETAs
+      if (!originalRoute) setOriginalRoute({ distance: totalDistance, time: totalTime });
       calculateETAs(geocodedStops, result);
-      
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to calculate route');
     } finally {
@@ -343,123 +247,58 @@ export default function MultiStopPlanner({
     }
   };
 
-  const calculateRoute = async () => {
-    await calculateRouteForStops(stops, selectedRouteType);
-  };
+  const calculateRoute = () => calculateRouteForStops(stops, selectedRouteType);
 
-  // Optimize route using MapQuest API
   const handleOptimizeRoute = async () => {
     const validStops = stops.filter(s => s.lat && s.lng);
-    if (validStops.length < 3) {
-      setError('Need at least 3 stops to optimize');
-      return;
-    }
+    if (validStops.length < 3) { setError('Need at least 3 stops to optimize'); return; }
 
     setOptimizing(true);
     setError(null);
-
     try {
-      // Store original order for comparison
-      const originalOrder = [...validStops];
-      let originalDistance = 0;
-      let originalTime = 0;
-
-      // Calculate original route metrics
-      for (let i = 0; i < originalOrder.length - 1; i++) {
-        const from = `${originalOrder[i].lat},${originalOrder[i].lng}`;
-        const to = `${originalOrder[i + 1].lat},${originalOrder[i + 1].lng}`;
-        const directions = await getDirections(from, to, 'fastest');
-        if (directions) {
-          originalDistance += directions.distance;
-          originalTime += directions.time;
-        }
+      // Get original metrics
+      let originalDistance = 0, originalTime = 0;
+      for (let i = 0; i < validStops.length - 1; i++) {
+        const from = `${validStops[i].lat},${validStops[i].lng}`;
+        const to = `${validStops[i + 1].lat},${validStops[i + 1].lng}`;
+        const d = await getDirections(from, to, 'fastest');
+        if (d) { originalDistance += d.distance; originalTime += d.time; }
       }
-
       setOriginalRoute({ distance: originalDistance, time: originalTime });
 
-      // Get optimized route from MapQuest
       const locations = validStops.map(s => ({ lat: s.lat!, lng: s.lng! }));
       const optimized = await optimizeRoute(locations);
+      if (!optimized) throw new Error('Optimization failed');
 
-      if (!optimized) {
-        throw new Error('Optimization failed');
-      }
-
-      // Calculate all three route options
-      const options: RouteOption[] = [];
-
-      // 1. Fastest (optimized sequence)
       const optimizedStops = optimized.locationSequence.map(idx => validStops[idx]);
-      let fastestDistance = 0;
-      let fastestTime = 0;
+      
+      // Calculate fastest route
+      let fastestDistance = 0, fastestTime = 0;
       for (let i = 0; i < optimizedStops.length - 1; i++) {
         const from = `${optimizedStops[i].lat},${optimizedStops[i].lng}`;
         const to = `${optimizedStops[i + 1].lat},${optimizedStops[i + 1].lng}`;
-        const directions = await getDirections(from, to, 'fastest');
-        if (directions) {
-          fastestDistance += directions.distance;
-          fastestTime += directions.time;
-        }
+        const d = await getDirections(from, to, 'fastest');
+        if (d) { fastestDistance += d.distance; fastestTime += d.time; }
       }
-      
-      options.push({
-        type: 'fastest',
-        label: 'Fastest',
-        description: 'Least travel time',
-        distance: fastestDistance,
-        time: fastestTime,
-        stops: optimizedStops,
-        savings: {
-          distance: originalDistance - fastestDistance,
-          time: originalTime - fastestTime,
-        },
-      });
 
-      // 2. Shortest distance route
-      let shortestDistance = 0;
-      let shortestTime = 0;
+      // Calculate shortest route
+      let shortestDistance = 0, shortestTime = 0;
       for (let i = 0; i < optimizedStops.length - 1; i++) {
         const from = `${optimizedStops[i].lat},${optimizedStops[i].lng}`;
         const to = `${optimizedStops[i + 1].lat},${optimizedStops[i + 1].lng}`;
-        const directions = await getDirections(from, to, 'shortest');
-        if (directions) {
-          shortestDistance += directions.distance;
-          shortestTime += directions.time;
-        }
+        const d = await getDirections(from, to, 'shortest');
+        if (d) { shortestDistance += d.distance; shortestTime += d.time; }
       }
-      
-      options.push({
-        type: 'shortest',
-        label: 'Shortest',
-        description: 'Least distance',
-        distance: shortestDistance,
-        time: shortestTime,
-        stops: optimizedStops,
-        savings: {
-          distance: originalDistance - shortestDistance,
-          time: originalTime - shortestTime,
-        },
-      });
 
-      // 3. Balanced (average of fastest and shortest)
-      options.push({
-        type: 'balanced',
-        label: 'Balanced',
-        description: 'Time & distance compromise',
-        distance: (fastestDistance + shortestDistance) / 2,
-        time: (fastestTime + shortestTime) / 2,
-        stops: optimizedStops,
-        savings: {
-          distance: originalDistance - (fastestDistance + shortestDistance) / 2,
-          time: originalTime - (fastestTime + shortestTime) / 2,
-        },
-      });
+      const options: RouteOption[] = [
+        { type: 'fastest', label: 'Fastest', distance: fastestDistance, time: fastestTime, stops: optimizedStops, savings: { time: originalTime - fastestTime } },
+        { type: 'shortest', label: 'Shortest', distance: shortestDistance, time: shortestTime, stops: optimizedStops, savings: { time: originalTime - shortestTime } },
+        { type: 'balanced', label: 'Balanced', distance: (fastestDistance + shortestDistance) / 2, time: (fastestTime + shortestTime) / 2, stops: optimizedStops, savings: { time: originalTime - (fastestTime + shortestTime) / 2 } },
+      ];
 
       setRouteOptions(options);
-      
-      // Apply fastest by default
+      setShowRouteOptions(true);
       selectRouteOption('fastest', options);
-
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to optimize route');
     } finally {
@@ -468,182 +307,69 @@ export default function MultiStopPlanner({
   };
 
   const selectRouteOption = async (type: 'fastest' | 'shortest' | 'balanced', options?: RouteOption[]) => {
-    const opts = options || routeOptions;
-    const option = opts.find(o => o.type === type);
-    if (!option) return;
-
+    const opt = (options || routeOptions).find(o => o.type === type);
+    if (!opt) return;
     setSelectedRouteType(type);
-    
-    // Update stops with optimized order
-    const updatedStops = option.stops.map((s, i) => ({
-      ...s,
-      id: (i + 1).toString(),
-    }));
+    const updatedStops = opt.stops.map((s, i) => ({ ...s, id: (i + 1).toString() }));
     setStops(updatedStops);
-    
-    // Recalculate full route
+    setShowRouteOptions(false);
     await calculateRouteForStops(updatedStops, type === 'balanced' ? 'fastest' : type);
   };
 
-  // Add random stops for demo
   const addRandomStops = async () => {
     setLoading(true);
-    setError(null);
-    
+    setShowMoreMenu(false);
     try {
-      // Get center point from existing stops or use default
       const validStops = stops.filter(s => s.lat && s.lng);
-      let centerLat = 40.7128; // NYC default
-      let centerLng = -74.0060;
-      
+      let centerLat = 40.7128, centerLng = -74.0060;
       if (validStops.length > 0) {
         centerLat = validStops.reduce((sum, s) => sum + s.lat!, 0) / validStops.length;
         centerLng = validStops.reduce((sum, s) => sum + s.lng!, 0) / validStops.length;
       }
       
-      // Search for random POIs nearby
-      const categories = ['restaurant', 'gas station', 'coffee shop', 'hotel', 'pharmacy', 'grocery'];
-      const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+      const categories = ['restaurant', 'gas station', 'coffee shop', 'hotel', 'pharmacy'];
+      const places = await searchPlaces(centerLat, centerLng, `q:${categories[Math.floor(Math.random() * categories.length)]}`, 15, 15);
       
-      const places = await searchPlaces(centerLat, centerLng, `q:${randomCategory}`, 15, 15);
+      const newStops = places.slice(0, 10).map((place, i) => {
+        const coords = place.place?.geometry?.coordinates;
+        return {
+          id: Date.now().toString() + i,
+          address: place.displayString || place.name,
+          lat: coords ? coords[1] : undefined,
+          lng: coords ? coords[0] : undefined,
+          geocoded: !!coords,
+          duration: 0,
+        };
+      }).filter(s => s.lat && s.lng);
       
-      if (places.length < 5) {
-        // Fallback: generate random coordinates nearby
-        const newStops: Stop[] = [];
-        for (let i = 0; i < 10; i++) {
-          const lat = centerLat + (Math.random() - 0.5) * 0.3;
-          const lng = centerLng + (Math.random() - 0.5) * 0.3;
-          
-          // Reverse geocode to get address
-          const result = await geocode(`${lat},${lng}`);
-          if (result) {
-            newStops.push({
-              id: Date.now().toString() + i,
-              address: `${result.street || ''}, ${result.adminArea5 || ''}, ${result.adminArea3 || ''}`.replace(/^, /, ''),
-              lat: result.lat,
-              lng: result.lng,
-              geocoded: true,
-              duration: 0,
-            });
-          }
-        }
-        
-        if (newStops.length > 0) {
-          setStops([...stops.filter(s => s.address.trim()), ...newStops].slice(0, maxStops));
-        }
-      } else {
-        // Use found places
-        const newStops = places.slice(0, 10).map((place, i) => {
-          const coords = place.place?.geometry?.coordinates;
-          return {
-            id: Date.now().toString() + i,
-            address: place.displayString || place.name,
-            lat: coords ? coords[1] : undefined,
-            lng: coords ? coords[0] : undefined,
-            geocoded: !!coords,
-            duration: Math.random() > 0.5 ? DURATION_OPTIONS[Math.floor(Math.random() * 4) + 1] : 0,
-          };
-        }).filter(s => s.lat && s.lng);
-        
-        const existingValid = stops.filter(s => s.address.trim());
-        setStops([...existingValid, ...newStops].slice(0, maxStops));
-      }
-    } catch (err) {
-      setError('Failed to add random stops');
-    } finally {
-      setLoading(false);
-    }
+      setStops([...stops.filter(s => s.address.trim()), ...newStops].slice(0, maxStops));
+    } catch { setError('Failed to add random stops'); }
+    finally { setLoading(false); }
   };
 
-  // Generate shareable URL
-  const generateShareUrl = () => {
+  const generateShareUrl = async () => {
     const validStops = stops.filter(s => s.lat && s.lng);
     if (validStops.length < 2) return;
-
-    // Encode route data in URL params
-    const routeData = {
-      stops: validStops.map(s => ({
-        address: s.address,
-        lat: s.lat,
-        lng: s.lng,
-        duration: s.duration,
-      })),
-      type: selectedRouteType,
-    };
-
-    const encoded = btoa(JSON.stringify(routeData));
-    const shortId = generateShortId();
-    
-    // In production, you'd store this server-side
-    // For now, we'll use URL params
-    const url = `${window.location.origin}/shared/route/${shortId}?data=${encoded}`;
-    setShareUrl(url);
-  };
-
-  const copyShareUrl = async () => {
-    if (!shareUrl) return;
+    const data = btoa(JSON.stringify({ stops: validStops.map(s => ({ address: s.address, lat: s.lat, lng: s.lng })), type: selectedRouteType }));
+    const url = `${window.location.origin}?route=${data}`;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await navigator.clipboard.writeText(url);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
+    } catch { console.error('Failed to copy'); }
+    setShowMoreMenu(false);
   };
 
-  // Generate PDF (simplified - in production use a PDF library)
-  const generatePdf = async () => {
+  const downloadRouteSheet = () => {
     if (!routeResult) return;
-    setGeneratingPdf(true);
-    
-    try {
-      const validStops = stops.filter(s => s.lat && s.lng);
-      
-      // Create printable content
-      const content = `
-MULTI-STOP ROUTE SHEET
-Generated: ${new Date().toLocaleString()}
-================================
-
-ROUTE SUMMARY
-Total Distance: ${routeResult.totalDistance.toFixed(1)} miles
-Total Time: ${formatTime(routeResult.totalTime)}
-Number of Stops: ${validStops.length}
-
-STOPS
-${validStops.map((stop, i) => `
-${i + 1}. ${stop.address}
-   ${stop.eta ? `ETA: ${stop.eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-   ${stop.duration > 0 ? `Duration: ${stop.duration} min` : ''}
-   ${stop.arriveBy ? `Arrive by: ${stop.arriveBy}` : ''}
-`).join('')}
-
-LEG DETAILS
-${routeResult.legs.map((leg, i) => `
-Leg ${i + 1}: ${leg.from} → ${leg.to}
-   Distance: ${leg.distance.toFixed(1)} mi
-   Time: ${formatTime(leg.time)}
-`).join('')}
-
-================================
-Powered by MapQuest
-      `;
-      
-      // Create downloadable text file (in production, use jsPDF or similar)
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `route-sheet-${new Date().toISOString().slice(0,10)}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError('Failed to generate route sheet');
-    } finally {
-      setGeneratingPdf(false);
-    }
+    const validStops = stops.filter(s => s.lat && s.lng);
+    const content = `ROUTE SHEET - ${new Date().toLocaleDateString()}\n${'='.repeat(40)}\n\nTotal: ${routeResult.totalDistance.toFixed(1)} mi | ${formatTime(routeResult.totalTime)}\n\nSTOPS:\n${validStops.map((s, i) => `${i + 1}. ${s.address}${s.eta ? ` (ETA: ${s.eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` : ''}`).join('\n')}\n\nLEGS:\n${routeResult.legs.map((l, i) => `${i + 1}. ${l.distance.toFixed(1)} mi, ${formatTime(l.time)}`).join('\n')}\n\nPowered by MapQuest`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `route-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    setShowMoreMenu(false);
   };
 
   const resetRoute = () => {
@@ -651,8 +377,7 @@ Powered by MapQuest
     setRouteOptions([]);
     setOriginalRoute(null);
     setError(null);
-    setSelectedLegIndex(null);
-    setShareUrl(null);
+    setShowRouteOptions(false);
   };
 
   const formatTime = (minutes: number) => {
@@ -661,26 +386,16 @@ Powered by MapQuest
     return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
   };
 
-  const formatTimeShort = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
   const validStops = stops.filter(s => s.lat && s.lng);
-  
   const mapCenter = validStops.length > 0
-    ? {
-        lat: validStops.reduce((sum, s) => sum + s.lat!, 0) / validStops.length,
-        lng: validStops.reduce((sum, s) => sum + s.lng!, 0) / validStops.length,
-      }
+    ? { lat: validStops.reduce((sum, s) => sum + s.lat!, 0) / validStops.length, lng: validStops.reduce((sum, s) => sum + s.lng!, 0) / validStops.length }
     : { lat: 39.8283, lng: -98.5795 };
 
   const markers = validStops.map((stop, index) => ({
     lat: stop.lat!,
     lng: stop.lng!,
     label: `${index + 1}`,
-    color: selectedLegIndex !== null && (index === selectedLegIndex || index === selectedLegIndex + 1) 
-      ? accentColor 
-      : (darkMode ? '#6b7280' : '#4b5563'),
+    color: darkMode ? '#6b7280' : '#4b5563',
   }));
 
   const routeWaypoints = validStops.length > 2 
@@ -692,345 +407,231 @@ Powered by MapQuest
       className="prism-widget"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
-        minWidth: '1000px', 
+        minWidth: '900px', 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex" style={{ height: '600px' }}>
+      <div className="flex" style={{ height: '520px' }}>
         {/* Sidebar */}
-        <div 
-          className="w-96 flex flex-col overflow-hidden"
-          style={{ borderRight: '1px solid var(--border-subtle)' }}
-        >
+        <div className="w-80 flex flex-col" style={{ borderRight: '1px solid var(--border-subtle)' }}>
+          
           {/* Header */}
-          <div 
-            className="p-3"
-            style={{ borderBottom: '1px solid var(--border-subtle)' }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: `${accentColor}15` }}
-                >
-                  <span style={{ color: accentColor }}><Route className="w-4 h-4" /></span>
-                </div>
-                <div>
-                  <h3 
-                    className="font-bold"
-                    style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
-                  >
-                    Multi-Stop Planner
-                  </h3>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {validStops.length} stops · Drag to reorder
-                  </p>
-                </div>
+          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${accentColor}15` }}>
+                <Route className="w-4 h-4" style={{ color: accentColor }} />
               </div>
+              <div>
+                <h3 className="font-semibold text-sm" style={{ color: 'var(--text-main)' }}>Multi-Stop Planner</h3>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{stops.length} stops</p>
+              </div>
+            </div>
+            
+            {/* More Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                className="p-1.5 rounded-lg transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
               
-              {/* Demo Actions */}
-              <div className="flex gap-1">
-                <button
-                  onClick={addRandomStops}
-                  disabled={loading || stops.length >= maxStops}
-                  className="p-1.5 rounded-lg transition-colors"
-                  style={{ 
-                    color: 'var(--text-muted)',
-                    background: 'var(--bg-hover)',
-                  }}
-                  title="Add 10 random stops (demo)"
+              {showMoreMenu && (
+                <div 
+                  className="absolute right-0 top-full mt-1 w-40 py-1 rounded-lg shadow-lg z-50"
+                  style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}
                 >
-                  <Shuffle className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={clearAllStops}
-                  className="p-1.5 rounded-lg transition-colors"
-                  style={{ color: 'var(--text-muted)' }}
-                  title="Clear all stops"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+                  <button onClick={addRandomStops} className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
+                    <Shuffle className="w-3.5 h-3.5" /> Add Demo Stops
+                  </button>
+                  {routeResult && (
+                    <>
+                      <button onClick={downloadRouteSheet} className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
+                        <Download className="w-3.5 h-3.5" /> Download Route
+                      </button>
+                      <button onClick={generateShareUrl} className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: copySuccess ? 'var(--color-success)' : 'var(--text-secondary)' }}>
+                        {copySuccess ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                        {copySuccess ? 'Copied!' : 'Copy Share Link'}
+                      </button>
+                    </>
+                  )}
+                  <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '4px 0' }} />
+                  <button onClick={clearAllStops} className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-black/5" style={{ color: 'var(--color-error)' }}>
+                    <Trash2 className="w-3.5 h-3.5" /> Clear All
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Stops List */}
-          <div className="flex-1 overflow-y-auto prism-scrollbar p-3 min-h-0">
-            <div className="space-y-1">
-              {stops.map((stop, index) => {
-                const timeStatus = getTimeStatus(stop);
-                
-                return (
-                  <div
-                    key={stop.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, index)}
-                    onDragEnter={(e) => handleDragEnter(e, index)}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, index)}
-                    onDragEnd={handleDragEnd}
-                    className={`rounded-lg transition-all ${
-                      draggedIndex === index ? 'opacity-50' : ''
-                    }`}
-                    style={{
-                      background: dragOverIndex === index ? 'var(--bg-hover)' : 'transparent',
-                      border: dragOverIndex === index ? '2px dashed var(--border-default)' : '2px solid transparent',
-                    }}
-                  >
-                    <div className="flex items-center gap-2 py-1.5">
-                      <GripVertical 
-                        className="w-4 h-4 cursor-grab active:cursor-grabbing flex-shrink-0"
-                        style={{ color: 'var(--text-muted)' }}
-                      />
-                      
-                      <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                        style={{ 
-                          background: 'var(--bg-panel)',
-                          border: '2px solid var(--border-default)',
-                          color: 'var(--text-secondary)',
+          <div className="flex-1 overflow-y-auto p-3 space-y-1">
+            {stops.map((stop, index) => {
+              const isExpanded = expandedStopId === stop.id;
+              const timeStatus = getTimeStatus(stop);
+              
+              return (
+                <div
+                  key={stop.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, index)}
+                  onDragEnter={(e) => handleDragEnter(e, index)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragEnd={resetDragState}
+                  className={`rounded-lg transition-all ${draggedIndex === index ? 'opacity-50' : ''}`}
+                  style={{
+                    background: dragOverIndex === index ? 'var(--bg-hover)' : isExpanded ? 'var(--bg-panel)' : 'transparent',
+                    border: dragOverIndex === index ? '2px dashed var(--border-default)' : '2px solid transparent',
+                  }}
+                >
+                  {/* Main Row */}
+                  <div className="flex items-center gap-2 py-1">
+                    <GripVertical className="w-3.5 h-3.5 cursor-grab flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
+                    
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                      style={{ background: `${accentColor}15`, color: accentColor }}
+                    >
+                      {index + 1}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <AddressAutocomplete
+                        value={stop.address}
+                        onChange={(value) => updateStop(stop.id, value)}
+                        onSelect={(result) => {
+                          if (result.lat && result.lng) {
+                            setStops(stops.map(s => s.id === stop.id ? { ...s, address: result.displayString, lat: result.lat, lng: result.lng, geocoded: true } : s));
+                          }
                         }}
-                      >
-                        {index + 1}
-                      </div>
+                        placeholder={index === 0 ? 'Start' : index === stops.length - 1 ? 'End' : `Stop ${index + 1}`}
+                        darkMode={darkMode}
+                        inputBg={inputBg}
+                        textColor={textColor}
+                        mutedText={mutedText}
+                        borderColor={borderColor}
+                        className="w-full"
+                      />
+                    </div>
 
-                      <div className="relative flex-1 min-w-0">
-                        <AddressAutocomplete
-                          value={stop.address}
-                          onChange={(value) => updateStop(stop.id, value)}
-                          onSelect={(result) => {
-                            if (result.lat && result.lng) {
-                              updateStop(stop.id, result.displayString);
-                              setStops(stops.map(s => s.id === stop.id ? { ...s, lat: result.lat, lng: result.lng, geocoded: true } : s));
-                            }
-                          }}
-                          placeholder={index === 0 ? 'Start address' : index === stops.length - 1 ? 'End address' : `Stop ${index + 1}`}
-                          darkMode={darkMode}
-                          inputBg={inputBg}
-                          textColor={textColor}
-                          mutedText={mutedText}
-                          borderColor={borderColor}
-                          className="w-full"
-                        />
-                        
-                        {/* Status indicators */}
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 z-20">
-                          {stop.geocoded && (
-                            <div 
-                              className="w-2 h-2 rounded-full"
-                              style={{ background: 'var(--color-success)' }}
-                              title="Geocoded" 
-                            />
-                          )}
-                          {timeStatus && (
-                            <div title={
-                              timeStatus === 'ontime' ? 'Will arrive on time' :
-                              timeStatus === 'close' ? 'Cutting it close!' :
-                              'Cannot reach in time'
-                            }>
-                              {timeStatus === 'ontime' && <Check className="w-3.5 h-3.5" style={{ color: 'var(--color-success)' }} />}
-                              {timeStatus === 'close' && <AlertTriangle className="w-3.5 h-3.5" style={{ color: 'var(--color-warning)' }} />}
-                              {timeStatus === 'late' && <XCircle className="w-3.5 h-3.5" style={{ color: 'var(--color-error)' }} />}
-                            </div>
-                          )}
+                    {/* Status & Actions */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {timeStatus && (
+                        <div className="w-4 h-4 flex items-center justify-center">
+                          {timeStatus === 'ontime' && <Check className="w-3 h-3" style={{ color: 'var(--color-success)' }} />}
+                          {timeStatus === 'close' && <AlertTriangle className="w-3 h-3" style={{ color: 'var(--color-warning)' }} />}
+                          {timeStatus === 'late' && <XCircle className="w-3 h-3" style={{ color: 'var(--color-error)' }} />}
                         </div>
-                      </div>
-
-                      {stops.length > 2 && (
+                      )}
+                      
+                      {stop.geocoded && (
                         <button
-                          onClick={() => removeStop(stop.id)}
-                          className="p-1 rounded-lg transition-colors flex-shrink-0"
+                          onClick={() => setExpandedStopId(isExpanded ? null : stop.id)}
+                          className="p-1 rounded transition-colors"
                           style={{ color: 'var(--text-muted)' }}
                         >
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
+                      
+                      {stops.length > 2 && (
+                        <button onClick={() => removeStop(stop.id)} className="p-1 rounded transition-colors" style={{ color: 'var(--text-muted)' }}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
-                    
-                    {/* Advanced Options (Time Window & Duration) */}
-                    {showAdvancedOptions && stop.geocoded && (
-                      <div 
-                        className="ml-12 mr-2 mb-2 p-2 rounded-lg space-y-2"
-                        style={{ background: 'var(--bg-panel)' }}
-                      >
-                        <div className="flex gap-2">
-                          {/* Arrive By */}
-                          <div className="flex-1">
-                            <label className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
-                              Arrive by
-                            </label>
-                            <input
-                              type="time"
-                              value={stop.arriveBy || ''}
-                              onChange={(e) => updateStopArriveBy(stop.id, e.target.value)}
-                              className="w-full px-2 py-1 rounded text-xs"
-                              style={{ 
-                                background: 'var(--bg-input)', 
-                                border: '1px solid var(--border-subtle)',
-                                color: 'var(--text-main)',
-                              }}
-                            />
-                          </div>
-                          
-                          {/* Duration */}
-                          <div className="flex-1">
-                            <label className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
-                              Time at stop
-                            </label>
-                            <select
-                              value={stop.duration}
-                              onChange={(e) => updateStopDuration(stop.id, parseInt(e.target.value))}
-                              className="w-full px-2 py-1 rounded text-xs"
-                              style={{ 
-                                background: 'var(--bg-input)', 
-                                border: '1px solid var(--border-subtle)',
-                                color: 'var(--text-main)',
-                              }}
-                            >
-                              {DURATION_OPTIONS.map(d => (
-                                <option key={d} value={d}>{d === 0 ? 'None' : `${d} min`}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        
-                        {/* ETA Display */}
-                        {stop.eta && (
-                          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                            Arrive {formatTimeShort(stop.eta)}
-                            {stop.duration > 0 && stop.departureTime && (
-                              <> · {stop.duration}min stop · Depart {formatTimeShort(stop.departureTime)}</>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Leg Details (between stops) */}
-                    {showLegDetails && routeResult && index < stops.length - 1 && stops[index + 1].geocoded && (
-                      <div 
-                        className={`ml-12 mr-2 mb-1 px-2 py-1.5 rounded cursor-pointer transition-all ${
-                          selectedLegIndex === index ? 'ring-2' : ''
-                        }`}
-                        style={{ 
-                          background: selectedLegIndex === index ? `${accentColor}15` : 'var(--bg-hover)',
-                          borderLeft: `3px solid ${
-                            routeResult.legs[index]?.trafficCondition === 'heavy' ? 'var(--color-error)' :
-                            routeResult.legs[index]?.trafficCondition === 'moderate' ? 'var(--color-warning)' :
-                            'var(--color-success)'
-                          }`,
-                          ['--tw-ring-color' as any]: accentColor,
-                        }}
-                        onClick={() => setSelectedLegIndex(selectedLegIndex === index ? null : index)}
-                      >
-                        <div className="flex items-center justify-between text-xs">
-                          <span style={{ color: 'var(--text-secondary)' }}>
-                            {routeResult.legs[index]?.distance.toFixed(1)} mi
-                          </span>
-                          <span style={{ color: 'var(--text-secondary)' }}>
-                            {formatTime(routeResult.legs[index]?.time || 0)}
-                          </span>
-                          <span 
-                            className="text-[10px] px-1.5 py-0.5 rounded-full"
-                            style={{ 
-                              background: 
-                                routeResult.legs[index]?.trafficCondition === 'heavy' ? 'var(--color-error-bg)' :
-                                routeResult.legs[index]?.trafficCondition === 'moderate' ? 'var(--color-warning-bg)' :
-                                'var(--color-success-bg)',
-                              color: 
-                                routeResult.legs[index]?.trafficCondition === 'heavy' ? 'var(--color-error)' :
-                                routeResult.legs[index]?.trafficCondition === 'moderate' ? 'var(--color-warning)' :
-                                'var(--color-success)',
-                            }}
-                          >
-                            {routeResult.legs[index]?.trafficCondition || 'light'} traffic
-                          </span>
-                        </div>
-                      </div>
-                    )}
                   </div>
-                );
-              })}
-            </div>
+                  
+                  {/* Expanded Options */}
+                  {isExpanded && (
+                    <div className="px-2 pb-2 pt-1 ml-10 space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Arrive by</label>
+                          <input
+                            type="time"
+                            value={stop.arriveBy || ''}
+                            onChange={(e) => updateStopDetails(stop.id, { arriveBy: e.target.value })}
+                            className="w-full px-2 py-1 rounded text-xs"
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Duration</label>
+                          <select
+                            value={stop.duration}
+                            onChange={(e) => updateStopDetails(stop.id, { duration: parseInt(e.target.value) })}
+                            className="w-full px-2 py-1 rounded text-xs"
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
+                          >
+                            {DURATION_OPTIONS.map(d => <option key={d} value={d}>{d === 0 ? 'None' : `${d} min`}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      {stop.eta && (
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          ETA: {stop.eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {stop.duration > 0 && ` · ${stop.duration}m stop`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Leg Info (compact) */}
+                  {routeResult && index < stops.length - 1 && stops[index + 1].geocoded && routeResult.legs[index] && (
+                    <div className="ml-10 mr-2 mb-1 flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      <div 
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ 
+                          background: routeResult.legs[index].trafficCondition === 'heavy' ? 'var(--color-error)' :
+                                     routeResult.legs[index].trafficCondition === 'moderate' ? 'var(--color-warning)' : 'var(--color-success)'
+                        }}
+                      />
+                      <span>{routeResult.legs[index].distance.toFixed(1)} mi</span>
+                      <span>·</span>
+                      <span>{formatTime(routeResult.legs[index].time)}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {stops.length < maxStops && (
               <button
                 onClick={addStop}
-                className="w-full mt-2 py-2 px-3 rounded-lg text-sm flex items-center justify-center gap-2 transition-colors"
-                style={{ 
-                  border: '2px dashed var(--border-default)',
-                  color: 'var(--text-muted)',
-                }}
+                className="w-full py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
+                style={{ border: '1px dashed var(--border-default)', color: 'var(--text-muted)' }}
               >
-                <Plus className="w-4 h-4" />
-                Add Stop
-              </button>
-            )}
-            
-            {/* Advanced Options Toggle */}
-            <button
-              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-              className="w-full mt-2 py-1.5 px-3 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
-              style={{ 
-                color: 'var(--text-muted)',
-                background: showAdvancedOptions ? 'var(--bg-panel)' : 'transparent',
-              }}
-            >
-              {showAdvancedOptions ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              {showAdvancedOptions ? 'Hide' : 'Show'} Time Windows & Durations
-            </button>
-            
-            {/* Leg Details Toggle */}
-            {routeResult && (
-              <button
-                onClick={() => setShowLegDetails(!showLegDetails)}
-                className="w-full mt-1 py-1.5 px-3 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
-                style={{ 
-                  color: 'var(--text-muted)',
-                  background: showLegDetails ? 'var(--bg-panel)' : 'transparent',
-                }}
-              >
-                {showLegDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                {showLegDetails ? 'Hide' : 'Show'} Leg Details
+                <Plus className="w-3.5 h-3.5" /> Add Stop
               </button>
             )}
           </div>
 
-          {/* Route Options (after optimization) */}
-          {routeOptions.length > 0 && (
-            <div 
-              className="p-3"
-              style={{ borderTop: '1px solid var(--border-subtle)' }}
-            >
-              <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-muted)' }}>
-                Route Options
-              </p>
-              <div className="grid grid-cols-3 gap-2">
-                {routeOptions.map(option => (
+          {/* Route Options Modal */}
+          {showRouteOptions && routeOptions.length > 0 && (
+            <div className="p-3" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}>
+              <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-main)' }}>Choose Route</p>
+              <div className="space-y-1.5">
+                {routeOptions.map(opt => (
                   <button
-                    key={option.type}
-                    onClick={() => selectRouteOption(option.type)}
-                    className={`p-2 rounded-lg text-left transition-all ${
-                      selectedRouteType === option.type ? 'ring-2' : ''
-                    }`}
-                    style={{ 
-                      background: selectedRouteType === option.type ? `${accentColor}15` : 'var(--bg-panel)',
-                      border: '1px solid var(--border-subtle)',
-                      ['--tw-ring-color' as any]: accentColor,
-                    }}
+                    key={opt.type}
+                    onClick={() => selectRouteOption(opt.type)}
+                    className="w-full p-2 rounded-lg text-left flex items-center justify-between transition-all"
+                    style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}
                   >
-                    <p className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>
-                      {option.label}
-                    </p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      {option.distance.toFixed(1)}mi · {formatTime(option.time)}
-                    </p>
-                    {option.savings && option.savings.time > 0 && (
-                      <p className="text-[10px] font-medium" style={{ color: 'var(--color-success)' }}>
-                        Save {formatTime(option.savings.time)}
-                      </p>
+                    <div>
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>{opt.label}</span>
+                      <span className="text-[10px] ml-2" style={{ color: 'var(--text-muted)' }}>
+                        {opt.distance.toFixed(1)} mi · {formatTime(opt.time)}
+                      </span>
+                    </div>
+                    {opt.savings && opt.savings.time > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
+                        -{formatTime(opt.savings.time)}
+                      </span>
                     )}
                   </button>
                 ))}
@@ -1039,241 +640,94 @@ Powered by MapQuest
           )}
 
           {/* Route Summary */}
-          {routeResult && (
-            <div 
-              className="p-3"
-              style={{ 
-                borderTop: '1px solid var(--border-subtle)',
-                background: 'var(--bg-panel)',
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span 
-                  className="text-sm font-medium"
-                  style={{ color: 'var(--text-main)' }}
-                >
-                  Route Summary
-                </span>
-                {originalRoute && routeResult.totalTime < originalRoute.time && (
-                  <span 
-                    className="text-xs font-medium px-2 py-0.5 rounded-full"
-                    style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}
-                  >
-                    Saved {formatTime(originalRoute.time - routeResult.totalTime)}!
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div 
-                  className="p-2 rounded-lg"
-                  style={{ 
-                    background: 'var(--bg-widget)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total Distance</p>
-                  <p 
-                    className="text-lg font-semibold"
-                    style={{ color: 'var(--text-main)' }}
-                  >
+          {routeResult && !showRouteOptions && (
+            <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-lg font-semibold" style={{ color: 'var(--text-main)' }}>
                     {routeResult.totalDistance.toFixed(1)} mi
                   </p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatTime(routeResult.totalTime)}</p>
                 </div>
-                <div 
-                  className="p-2 rounded-lg"
-                  style={{ 
-                    background: 'var(--bg-widget)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Total Time</p>
-                  <p 
-                    className="text-lg font-semibold"
-                    style={{ color: 'var(--text-main)' }}
-                  >
-                    {formatTime(routeResult.totalTime)}
-                  </p>
-                </div>
+                {originalRoute && routeResult.totalTime < originalRoute.time && (
+                  <div className="text-right">
+                    <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)' }}>
+                      Saved {formatTime(originalRoute.time - routeResult.totalTime)}
+                    </span>
+                  </div>
+                )}
               </div>
-              
-              {/* Comparison with original */}
-              {originalRoute && (
-                <div 
-                  className="mt-2 p-2 rounded-lg text-xs"
-                  style={{ 
-                    background: 'var(--bg-hover)',
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  Original: {originalRoute.distance.toFixed(1)} mi, {formatTime(originalRoute.time)}
-                </div>
-              )}
             </div>
           )}
 
-          {/* Error */}
           {error && (
-            <div 
-              className="mx-3 mb-3 p-2.5 rounded-lg text-sm"
-              style={{ 
-                background: 'var(--color-error-bg)',
-                border: '1px solid var(--color-error)',
-                color: 'var(--color-error)',
-              }}
-            >
+            <div className="mx-3 mb-3 p-2 rounded-lg text-xs" style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)' }}>
               {error}
             </div>
           )}
 
           {/* Actions */}
-          <div 
-            className="p-3"
-            style={{ borderTop: '1px solid var(--border-subtle)' }}
-          >
+          <div className="p-3 space-y-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
             {/* Departure Time */}
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Depart:</span>
+            <div className="flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
               <input
                 type="datetime-local"
                 value={departureTime.toISOString().slice(0, 16)}
                 onChange={(e) => setDepartureTime(new Date(e.target.value))}
-                className="flex-1 px-2 py-1 rounded text-xs"
-                style={{ 
-                  background: 'var(--bg-input)', 
-                  border: '1px solid var(--border-subtle)',
-                  color: 'var(--text-main)',
-                }}
+                className="flex-1 px-2 py-1.5 rounded text-xs"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
               />
             </div>
             
-            <div className="flex gap-2 mb-2">
+            {/* Buttons */}
+            <div className="flex gap-2">
               <button
                 onClick={calculateRoute}
                 disabled={loading || stops.filter(s => s.address.trim()).length < 2}
-                className="prism-btn prism-btn-primary flex-1 text-sm"
-                style={{ 
-                  background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
-                  boxShadow: `0 4px 12px ${accentColor}40`,
-                }}
+                className="prism-btn prism-btn-primary flex-1 text-sm py-2"
+                style={{ background: accentColor }}
               >
-                {loading ? (
-                  <><Loader2 className="w-4 h-4 prism-spinner" /> Calculating...</>
-                ) : (
-                  <><Navigation className="w-4 h-4" /> Calculate Route</>
-                )}
+                {loading ? <Loader2 className="w-4 h-4 prism-spinner" /> : <Navigation className="w-4 h-4" />}
+                <span className="ml-1.5">{loading ? 'Calculating...' : 'Get Route'}</span>
               </button>
               
               {validStops.length >= 3 && (
                 <button
                   onClick={handleOptimizeRoute}
                   disabled={optimizing || loading}
-                  className="px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
-                  style={{ 
-                    background: `${accentColor}15`,
-                    color: accentColor,
-                    border: `1px solid ${accentColor}40`,
-                  }}
+                  className="px-3 py-2 rounded-lg text-sm transition-colors flex items-center"
+                  style={{ background: `${accentColor}15`, color: accentColor }}
                   title="Optimize route order"
                 >
-                  {optimizing ? (
-                    <Loader2 className="w-4 h-4 prism-spinner" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
+                  {optimizing ? <Loader2 className="w-4 h-4 prism-spinner" /> : <Sparkles className="w-4 h-4" />}
                 </button>
               )}
               
               {routeResult && (
-                <button
-                  onClick={resetRoute}
-                  className="px-3 py-2 rounded-lg transition-colors"
-                  style={{ 
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-muted)',
-                  }}
-                  title="Reset"
-                >
+                <button onClick={resetRoute} className="px-3 py-2 rounded-lg transition-colors" style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
                   <RotateCcw className="w-4 h-4" />
                 </button>
               )}
             </div>
-            
-            {/* Export Options */}
-            {routeResult && (
-              <div className="flex gap-2">
-                <button
-                  onClick={generatePdf}
-                  disabled={generatingPdf}
-                  className="flex-1 px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
-                  style={{ 
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  {generatingPdf ? (
-                    <Loader2 className="w-3 h-3 prism-spinner" />
-                  ) : (
-                    <Download className="w-3 h-3" />
-                  )}
-                  Route Sheet
-                </button>
-                
-                <button
-                  onClick={shareUrl ? copyShareUrl : generateShareUrl}
-                  className="flex-1 px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 transition-colors"
-                  style={{ 
-                    border: '1px solid var(--border-subtle)',
-                    color: copySuccess ? 'var(--color-success)' : 'var(--text-secondary)',
-                  }}
-                >
-                  {copySuccess ? (
-                    <><Check className="w-3 h-3" /> Copied!</>
-                  ) : (
-                    <><Share2 className="w-3 h-3" /> {shareUrl ? 'Copy Link' : 'Share Route'}</>
-                  )}
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
         {/* Map */}
-        <div className="flex-1 relative">
+        <div className="flex-1">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
             zoom={validStops.length > 0 ? 10 : 4}
             darkMode={darkMode}
             accentColor={accentColor}
-            height="600px"
+            height="520px"
             markers={markers}
             showRoute={validStops.length >= 2}
             routeStart={validStops.length >= 2 ? { lat: validStops[0].lat!, lng: validStops[0].lng! } : undefined}
             routeEnd={validStops.length >= 2 ? { lat: validStops[validStops.length - 1].lat!, lng: validStops[validStops.length - 1].lng! } : undefined}
             waypoints={routeWaypoints}
           />
-          
-          {/* Traffic Toggle */}
-          <div 
-            className="absolute top-3 right-3 z-10"
-          >
-            <button
-              onClick={() => setShowTraffic(!showTraffic)}
-              className={`p-2 rounded-lg shadow-md transition-colors flex items-center gap-1.5 text-xs font-medium ${
-                showTraffic ? 'ring-2' : ''
-              }`}
-              style={{ 
-                background: 'var(--bg-widget)',
-                border: '1px solid var(--border-subtle)',
-                color: showTraffic ? accentColor : 'var(--text-secondary)',
-                ['--tw-ring-color' as any]: accentColor,
-              }}
-            >
-              <Layers className="w-4 h-4" />
-              Traffic
-            </button>
-          </div>
         </div>
       </div>
 
@@ -1281,14 +735,7 @@ Powered by MapQuest
       {showBranding && (
         <div className="prism-footer">
           {companyLogo && (
-            <img 
-              src={companyLogo} 
-              alt={companyName || 'Company logo'} 
-              className="prism-footer-logo"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+            <img src={companyLogo} alt={companyName || 'Company logo'} className="prism-footer-logo" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           )}
           <span>
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
