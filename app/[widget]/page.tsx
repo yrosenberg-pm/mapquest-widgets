@@ -123,8 +123,8 @@ export default function WidgetPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <div className="shadow-2xl shadow-gray-400/30 rounded-xl">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
+      <div className="w-full md:w-auto shadow-2xl shadow-gray-400/30 rounded-xl overflow-hidden">
         {renderWidget()}
       </div>
     </div>

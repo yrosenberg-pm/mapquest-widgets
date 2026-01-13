@@ -579,10 +579,44 @@ export default function MultiStopPlanner({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[700px]">
+      <div className="flex flex-col md:flex-row md:h-[700px]">
+        {/* Map - shown first on mobile */}
+        <div className="flex-1 relative h-[250px] md:h-auto md:order-2">
+          <MapQuestMap
+            apiKey={apiKey}
+            center={mapCenter}
+            zoom={validStops.length > 0 ? 10 : 4}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            height="100%"
+            markers={markers}
+            showRoute={!!routeResult && validStops.length >= 2}
+            routeStart={routeResult && validStops.length >= 2 ? { lat: validStops[0].lat!, lng: validStops[0].lng! } : undefined}
+            routeEnd={routeResult && validStops.length >= 2 ? { lat: validStops[validStops.length - 1].lat!, lng: validStops[validStops.length - 1].lng! } : undefined}
+            waypoints={routeResult ? routeWaypoints : []}
+            highlightedSegment={highlightedSegment}
+            stops={validStops.map(s => ({ lat: s.lat!, lng: s.lng! }))}
+          />
+          
+          {/* Optimizing Map Overlay */}
+          {optimizing && (
+            <div 
+              className="absolute inset-0 flex items-center justify-center z-10"
+              style={{ background: 'rgba(0,0,0,0.4)' }}
+            >
+              <div 
+                className="px-6 py-4 rounded-2xl flex items-center gap-4 shadow-2xl"
+                style={{ background: 'var(--bg-widget)' }}
+              >
+                <Loader2 className="w-6 h-6 animate-spin" style={{ color: accentColor }} />
+                <span className="text-base font-medium" style={{ color: 'var(--text-main)' }}>Optimizing route...</span>
+              </div>
+            </div>
+          )}
+        </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-[420px] flex flex-col flex-shrink-0 border-t md:border-t-0 md:border-r max-h-[400px] md:max-h-none"
+          className="w-full md:w-[420px] flex flex-col flex-shrink-0 border-t md:border-t-0 md:border-r max-h-[350px] md:max-h-none overflow-hidden md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           
@@ -1365,40 +1399,6 @@ export default function MultiStopPlanner({
           </div>
         </div>
 
-        {/* Map */}
-        <div className="flex-1 relative min-h-[300px] md:min-h-0">
-          <MapQuestMap
-            apiKey={apiKey}
-            center={mapCenter}
-            zoom={validStops.length > 0 ? 10 : 4}
-            darkMode={darkMode}
-            accentColor={accentColor}
-            height="100%"
-            markers={markers}
-            showRoute={!!routeResult && validStops.length >= 2}
-            routeStart={routeResult && validStops.length >= 2 ? { lat: validStops[0].lat!, lng: validStops[0].lng! } : undefined}
-            routeEnd={routeResult && validStops.length >= 2 ? { lat: validStops[validStops.length - 1].lat!, lng: validStops[validStops.length - 1].lng! } : undefined}
-            waypoints={routeResult ? routeWaypoints : []}
-            highlightedSegment={highlightedSegment}
-            stops={validStops.map(s => ({ lat: s.lat!, lng: s.lng! }))}
-          />
-          
-          {/* Optimizing Map Overlay */}
-          {optimizing && (
-            <div 
-              className="absolute inset-0 flex items-center justify-center z-10"
-              style={{ background: 'rgba(0,0,0,0.4)' }}
-            >
-              <div 
-                className="px-6 py-4 rounded-2xl flex items-center gap-4 shadow-2xl"
-                style={{ background: 'var(--bg-widget)' }}
-              >
-                <Loader2 className="w-6 h-6 animate-spin" style={{ color: accentColor }} />
-                <span className="text-base font-medium" style={{ color: 'var(--text-main)' }}>Optimizing route...</span>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Footer */}

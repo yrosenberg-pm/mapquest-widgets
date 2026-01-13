@@ -339,10 +339,26 @@ export default function TruckRouting({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[750px]">
+      <div className="flex flex-col md:flex-row md:h-[750px]">
+        {/* Map - shown first on mobile */}
+        <div className="flex-1 h-[250px] md:h-auto md:order-2">
+          <MapQuestMap
+            apiKey={apiKey}
+            center={mapCenter}
+            zoom={fromCoords && toCoords ? 10 : 4}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            height="100%"
+            markers={markers}
+            showRoute={!!(fromCoords && toCoords)}
+            routeStart={fromCoords || undefined}
+            routeEnd={toCoords || undefined}
+            routeType="fastest"
+          />
+        </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-96 flex flex-col border-t md:border-t-0 md:border-r overflow-y-auto"
+          className="w-full md:w-96 flex flex-col border-t md:border-t-0 md:border-r overflow-y-auto md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header */}
@@ -784,22 +800,6 @@ export default function TruckRouting({
           )}
         </div>
 
-        {/* Map */}
-        <div className="flex-1 min-h-[300px] md:min-h-0">
-          <MapQuestMap
-            apiKey={apiKey}
-            center={mapCenter}
-            zoom={fromCoords && toCoords ? 10 : 4}
-            darkMode={darkMode}
-            accentColor={accentColor}
-            height="100%"
-            markers={markers}
-            showRoute={!!(fromCoords && toCoords)}
-            routeStart={fromCoords || undefined}
-            routeEnd={toCoords || undefined}
-            routeType="fastest"
-          />
-        </div>
       </div>
 
       {/* Footer / Branding */}

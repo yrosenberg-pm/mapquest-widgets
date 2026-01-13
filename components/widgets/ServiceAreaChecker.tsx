@@ -222,10 +222,30 @@ export default function ServiceAreaChecker({
       </div>
 
       {/* Content - Side by Side Layout */}
-      <div className="flex flex-col-reverse md:flex-row" style={{ minHeight: '400px' }}>
+      <div className="flex flex-col md:flex-row" style={{ minHeight: '400px' }}>
+        {/* Map - shown first on mobile */}
+        <div className="flex-1 relative h-[200px] md:h-auto md:order-2">
+          <MapQuestMap
+            apiKey={apiKey}
+            center={serviceCenter}
+            zoom={9}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            markers={markers}
+            circles={showServiceArea ? [{
+              lat: serviceCenter.lat,
+              lng: serviceCenter.lng,
+              radius: serviceRadiusMiles * 1609.34,
+              color: accentColor,
+              fillOpacity: 0.1,
+            }] : []}
+            height="100%"
+            onClick={handleMapClick}
+          />
+        </div>
         {/* Left Panel - Form & Results */}
         <div 
-          className="w-full md:w-72 flex-shrink-0 p-4 flex flex-col border-t md:border-t-0 md:border-r"
+          className="w-full md:w-72 flex-shrink-0 p-4 flex flex-col border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <form onSubmit={handleSubmit} className="space-y-2">
@@ -337,26 +357,6 @@ export default function ServiceAreaChecker({
           </div>
         </div>
 
-        {/* Right Panel - Map */}
-        <div className="flex-1 relative min-h-[250px] md:min-h-[400px]">
-          <MapQuestMap
-            apiKey={apiKey}
-            center={serviceCenter}
-            zoom={9}
-            darkMode={darkMode}
-            accentColor={accentColor}
-            markers={markers}
-            circles={showServiceArea ? [{
-              lat: serviceCenter.lat,
-              lng: serviceCenter.lng,
-              radius: serviceRadiusMiles * 1609.34, // Convert miles to meters
-              color: accentColor,
-              fillOpacity: 0.1,
-            }] : []}
-            height="100%"
-            onClick={handleMapClick}
-          />
-        </div>
       </div>
 
       {/* Footer / Branding */}

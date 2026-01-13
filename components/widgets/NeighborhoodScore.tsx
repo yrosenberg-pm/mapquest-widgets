@@ -425,10 +425,76 @@ export default function NeighborhoodScore({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[600px]">
+      <div className="flex flex-col md:flex-row md:h-[600px]">
+        {/* Map - shown first on mobile */}
+        <div className="flex-1 relative h-[250px] md:h-auto md:order-2">
+          <MapQuestMap
+            apiKey={apiKey}
+            center={mapCenter}
+            zoom={location ? 14 : 4}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            height="100%"
+            markers={(() => {
+              const markers: Array<{ lat: number; lng: number; label?: string; color?: string; type?: 'home' | 'poi'; onClick?: () => void }> = [];
+              
+              if (location) {
+                markers.push({ lat: location.lat, lng: location.lng, label: 'Home', color: accentColor, type: 'home' });
+              }
+              
+              if (selectedCategory && selectedCategory.places.length > 0) {
+                const categoryColor = categoryColors[selectedCategory.category.id] || '#10b981';
+                const highlightedPoiColor = '#3b82f6';
+                
+                selectedCategory.places.forEach((poi) => {
+                  if (poi.lat && poi.lng) {
+                    const isHighlighted = selectedPlace?.name === poi.name && selectedPlace?.distance === poi.distance;
+                    markers.push({
+                      lat: poi.lat,
+                      lng: poi.lng,
+                      label: poi.name,
+                      color: isHighlighted ? highlightedPoiColor : categoryColor,
+                      type: 'poi',
+                      onClick: () => {
+                        const matchingPoi = selectedCategory.places.find(
+                          p => p.lat === poi.lat && p.lng === poi.lng
+                        );
+                        if (matchingPoi) {
+                          setSelectedPlace(matchingPoi);
+                          setMapZoomToLocation({ lat: matchingPoi.lat!, lng: matchingPoi.lng!, zoom: 16 });
+                          setMapFitBounds(undefined);
+                          
+                          const placeKey = `${matchingPoi.name}-${matchingPoi.distance}`;
+                          const listItem = placeItemRefs.current.get(placeKey);
+                          if (listItem) {
+                            if (!expandedCategories.has(selectedCategory.category.id) && 
+                                selectedCategory.places.indexOf(matchingPoi) >= 10) {
+                              const newExpanded = new Set(expandedCategories);
+                              newExpanded.add(selectedCategory.category.id);
+                              setExpandedCategories(newExpanded);
+                              setTimeout(() => {
+                                listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              }, 100);
+                            } else {
+                              listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                          }
+                        }
+                      },
+                    });
+                  }
+                });
+              }
+              
+              return markers;
+            })()}
+            fitBounds={mapFitBounds}
+            zoomToLocation={mapZoomToLocation}
+          />
+        </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-80 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r"
+          className="w-full md:w-80 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header with Input */}
@@ -762,72 +828,6 @@ export default function NeighborhoodScore({
           </div>
         </div>
 
-        {/* Map */}
-        <div className="flex-1 relative min-h-[300px] md:min-h-0">
-          <MapQuestMap
-            apiKey={apiKey}
-            center={mapCenter}
-            zoom={location ? 14 : 4}
-            darkMode={darkMode}
-            accentColor={accentColor}
-            height="100%"
-            markers={(() => {
-              const markers: Array<{ lat: number; lng: number; label?: string; color?: string; type?: 'home' | 'poi'; onClick?: () => void }> = [];
-              
-              if (location) {
-                markers.push({ lat: location.lat, lng: location.lng, label: 'Home', color: accentColor, type: 'home' });
-              }
-              
-              if (selectedCategory && selectedCategory.places.length > 0) {
-                const categoryColor = categoryColors[selectedCategory.category.id] || '#10b981';
-                const highlightedPoiColor = '#3b82f6';
-                
-                selectedCategory.places.forEach((poi) => {
-                  if (poi.lat && poi.lng) {
-                    const isHighlighted = selectedPlace?.name === poi.name && selectedPlace?.distance === poi.distance;
-                    markers.push({
-                      lat: poi.lat,
-                      lng: poi.lng,
-                      label: poi.name,
-                      color: isHighlighted ? highlightedPoiColor : categoryColor,
-                      type: 'poi',
-                      onClick: () => {
-                        const matchingPoi = selectedCategory.places.find(
-                          p => p.lat === poi.lat && p.lng === poi.lng
-                        );
-                        if (matchingPoi) {
-                          setSelectedPlace(matchingPoi);
-                          setMapZoomToLocation({ lat: matchingPoi.lat!, lng: matchingPoi.lng!, zoom: 16 });
-                          setMapFitBounds(undefined);
-                          
-                          const placeKey = `${matchingPoi.name}-${matchingPoi.distance}`;
-                          const listItem = placeItemRefs.current.get(placeKey);
-                          if (listItem) {
-                            if (!expandedCategories.has(selectedCategory.category.id) && 
-                                selectedCategory.places.indexOf(matchingPoi) >= 10) {
-                              const newExpanded = new Set(expandedCategories);
-                              newExpanded.add(selectedCategory.category.id);
-                              setExpandedCategories(newExpanded);
-                              setTimeout(() => {
-                                listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                              }, 100);
-                            } else {
-                              listItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }
-                          }
-                        }
-                      },
-                    });
-                  }
-                });
-              }
-              
-              return markers;
-            })()}
-            fitBounds={mapFitBounds}
-            zoomToLocation={mapZoomToLocation}
-          />
-        </div>
       </div>
 
       {/* Footer / Branding */}

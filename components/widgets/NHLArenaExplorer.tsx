@@ -645,10 +645,10 @@ export default function NHLArenaExplorer({
         borderRadius: borderRadius || undefined,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[675px]">
+      <div className="flex flex-col md:flex-row md:h-[675px]">
         {/* Sidebar */}
         <div 
-          className="w-full md:w-64 flex flex-col border-t md:border-t-0 md:border-r"
+          className="w-full md:w-64 flex flex-col border-t md:border-t-0 md:border-r md:order-1 max-h-[200px] md:max-h-none overflow-hidden"
           style={{ 
             borderColor: 'var(--border-subtle)',
             background: 'var(--bg-panel)',
@@ -717,9 +717,9 @@ export default function NHLArenaExplorer({
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-h-[300px] md:min-h-0">
+        <div className="flex-1 flex flex-col md:order-2">
           {/* Map */}
-          <div className="h-[180px] md:h-[220px]">
+          <div className="h-[200px] md:h-[220px]">
             <MapQuestMap
               apiKey={apiKey}
               center={mapCenter}

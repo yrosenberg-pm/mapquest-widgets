@@ -252,10 +252,25 @@ export default function CommuteTimeCalculator({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[600px]">
+      <div className="flex flex-col md:flex-row md:h-[600px]">
+        {/* Map - shown first on mobile */}
+        <div className="flex-1 h-[250px] md:h-auto md:order-2">
+          <MapQuestMap
+            apiKey={apiKey}
+            center={mapCenter}
+            zoom={baseCoords && destCoords ? 10 : baseCoords ? 12 : 4}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            height="100%"
+            markers={markers}
+            showRoute={!!(baseCoords && destCoords)}
+            routeStart={destCoords || undefined}
+            routeEnd={baseCoords || undefined}
+          />
+        </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-80 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r"
+          className="w-full md:w-80 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header */}
@@ -648,21 +663,6 @@ export default function CommuteTimeCalculator({
           )}
         </div>
 
-        {/* Map */}
-        <div className="flex-1 min-h-[300px] md:min-h-0">
-          <MapQuestMap
-            apiKey={apiKey}
-            center={mapCenter}
-            zoom={baseCoords && destCoords ? 10 : baseCoords ? 12 : 4}
-            darkMode={darkMode}
-            accentColor={accentColor}
-            height="100%"
-            markers={markers}
-            showRoute={!!(baseCoords && destCoords)}
-            routeStart={destCoords || undefined}
-            routeEnd={baseCoords || undefined}
-          />
-        </div>
       </div>
 
       {/* Footer */}

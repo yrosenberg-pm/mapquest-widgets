@@ -235,8 +235,8 @@ function HomeContent() {
   // Embed mode: show only the widget without header/menu
   if (embedMode) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-        <div className="shadow-2xl shadow-gray-400/30 rounded-xl">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
+        <div className="w-full md:w-auto shadow-2xl shadow-gray-400/30 rounded-xl overflow-hidden">
           {renderWidget()}
         </div>
       </div>
@@ -245,7 +245,7 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen bg-gray-50" style={{ minHeight: '100vh' }}>
-      <div className="p-6">
+      <div className="p-2 md:p-6">
         <div className="max-w-6xl mx-auto">
         {/* Compact Header with Widget Selector */}
         <div className="flex items-center justify-between mb-6">
@@ -330,8 +330,8 @@ function HomeContent() {
         </div>
 
         {/* Widget Display */}
-        <div className="flex flex-col items-center">
-          <div className="shadow-2xl shadow-gray-400/30 rounded-xl">
+        <div className="flex flex-col items-center w-full">
+          <div className="w-full md:w-auto shadow-2xl shadow-gray-400/30 rounded-xl overflow-hidden">
             {renderWidget()}
           </div>
           {activeWidget === 'address' && (

@@ -338,10 +338,23 @@ export default function CitiBikeFinder({
         '--brand-primary': CITIBIKE_BLUE,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[520px]">
+      <div className="flex flex-col md:flex-row md:h-[520px]">
+        {/* Map - shown first on mobile */}
+        <div className="flex-1 min-w-0 h-[250px] md:h-auto md:order-2">
+          <MapQuestMap
+            apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
+            center={mapCenter}
+            zoom={15}
+            minZoom={13}
+            darkMode={darkMode}
+            accentColor={CITIBIKE_BLUE}
+            height="100%"
+            markers={markers}
+          />
+        </div>
         {/* Left Panel */}
         <div 
-          className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-r"
+          className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header with Citi Bike + Lyft Branding */}
@@ -666,19 +679,6 @@ export default function CitiBikeFinder({
           )}
         </div>
 
-        {/* Map */}
-        <div className="flex-1 min-w-0 min-h-[300px] md:min-h-0">
-          <MapQuestMap
-            apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
-            center={mapCenter}
-            zoom={15}
-            minZoom={13}
-            darkMode={darkMode}
-            accentColor={CITIBIKE_BLUE}
-            height="100%"
-            markers={markers}
-          />
-        </div>
       </div>
 
       {/* Footer / Branding */}

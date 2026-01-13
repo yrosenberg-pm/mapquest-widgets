@@ -354,10 +354,24 @@ export default function StarbucksFinder({
         '--brand-primary': STARBUCKS_GREEN,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col-reverse md:flex-row h-auto md:h-[520px]">
+      <div className="flex flex-col md:flex-row md:h-[520px]">
+        {/* Map - shown first on mobile */}
+        <div className="flex-1 min-w-0 h-[250px] md:h-auto md:order-2">
+          <MapQuestMap
+            apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
+            center={mapCenter}
+            zoom={mapZoom}
+            minZoom={12}
+            darkMode={darkMode}
+            accentColor={STARBUCKS_GREEN}
+            height="100%"
+            markers={markers}
+            onBoundsChange={handleBoundsChange}
+          />
+        </div>
         {/* Left Panel */}
         <div 
-          className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-r"
+          className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Search Header with Starbucks Branding */}
@@ -594,20 +608,6 @@ export default function StarbucksFinder({
           )}
         </div>
 
-        {/* Map */}
-        <div className="flex-1 min-w-0 min-h-[300px] md:min-h-0">
-          <MapQuestMap
-            apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
-            center={mapCenter}
-            zoom={mapZoom}
-            minZoom={12}
-            darkMode={darkMode}
-            accentColor={STARBUCKS_GREEN}
-            height="100%"
-            markers={markers}
-            onBoundsChange={handleBoundsChange}
-          />
-        </div>
       </div>
 
       {/* Footer / Branding */}
