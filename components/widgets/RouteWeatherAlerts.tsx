@@ -584,19 +584,19 @@ export default function RouteWeatherAlerts({
       <div className="flex flex-col md:flex-row md:h-[760px]">
         {/* Left panel */}
         <div className="w-full md:w-[460px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="p-5" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-base" style={{ color: 'var(--text-main)' }}>Route Weather Alerts</h3>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                  Destination weather + severe alerts along your route
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Weather + alerts along your route
                 </p>
               </div>
               {(loadingWeather || loadingRoute || loadingAlerts) && <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />}
             </div>
           </div>
 
-          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <AutosuggestInput
               label="Starting point"
               placeholder="Enter a starting address"
@@ -625,7 +625,7 @@ export default function RouteWeatherAlerts({
             />
           </div>
 
-          <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <button
               type="button"
               onClick={runAll}
@@ -644,14 +644,15 @@ export default function RouteWeatherAlerts({
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar p-5 space-y-4">
+          {/* Keep content visible without internal scroll by compacting sections */}
+          <div className="flex-1 min-h-0 overflow-hidden p-4 space-y-3">
             {runError && (
               <div className="p-3 rounded-xl text-sm" style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', border: '1px solid var(--border-subtle)' }}>
                 {runError}
               </div>
             )}
             {/* Destination Weather */}
-            <div className="rounded-2xl p-4" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+            <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
                   Destination Weather
@@ -677,7 +678,7 @@ export default function RouteWeatherAlerts({
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-main)' }}>
+                        <span className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-main)' }}>
                           {toNumber(obs.temperature) ?? '--'}°F
                         </span>
                         <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
@@ -693,7 +694,8 @@ export default function RouteWeatherAlerts({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Compact metrics row */}
+                  <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
                       <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                         <Droplets className="w-4 h-4" />
@@ -721,15 +723,6 @@ export default function RouteWeatherAlerts({
                         {toNumber(obs.visibility) ?? '--'} mi
                       </div>
                     </div>
-                    <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                        <Thermometer className="w-4 h-4" />
-                        Conditions
-                      </div>
-                      <div className="text-sm font-semibold mt-1 truncate" style={{ color: 'var(--text-main)' }}>
-                        {(obs.skyDescription || '—').slice(0, 20)}
-                      </div>
-                    </div>
                   </div>
                 </div>
               ) : (
@@ -740,8 +733,8 @@ export default function RouteWeatherAlerts({
             </div>
 
             {/* Forecast */}
-            <div className="rounded-2xl p-4" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
-              <div className="flex items-center justify-between mb-3">
+            <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+              <div className="flex items-center justify-between mb-2">
                 <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
                   Forecast
                 </div>
@@ -774,27 +767,26 @@ export default function RouteWeatherAlerts({
               </div>
 
               {forecastMode === 'daily' ? (
-                <div className="grid grid-cols-7 gap-2">
+                <div className="grid grid-cols-7 gap-1.5">
                   {forecastDays.slice(0, 7).map((d, i) => (
-                    <div key={i} className="rounded-xl p-2 text-center" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
+                    <div key={i} className="rounded-xl p-1.5 text-center" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
                         {(d.dayOfWeek || '').slice(0, 3) || '—'}
                       </div>
-                      <div className="mt-1 flex items-center justify-center" style={{ color: accentColor }}>
-                        <WeatherIcon desc={d.description || ''} />
+                      <div className="mt-0.5 flex items-center justify-center" style={{ color: accentColor }}>
+                        <div className="scale-90">
+                          <WeatherIcon desc={d.description || ''} />
+                        </div>
                       </div>
-                      <div className="text-[11px] font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
+                      <div className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-main)' }}>
                         {toNumber(d.highTemperature) ?? '--'}/{toNumber(d.lowTemperature) ?? '--'}
-                      </div>
-                      <div className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        {toNumber(d.precipitationProbability) ?? 0}% precip
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2">
-                  {forecastHours.slice(0, 12).map((h, i) => (
+                  {forecastHours.slice(0, 6).map((h, i) => (
                     <div key={i} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
                       <div className="flex items-center justify-between">
                         <div className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
@@ -817,7 +809,7 @@ export default function RouteWeatherAlerts({
             </div>
 
             {/* Route Alerts */}
-            <div className="rounded-2xl p-4" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+            <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
                   Route Weather Alerts
@@ -845,7 +837,7 @@ export default function RouteWeatherAlerts({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {alerts.map((a) => {
+                  {alerts.slice(0, 2).map((a) => {
                     const s = severityStyles(a.severity);
                     return (
                       <div key={a.key} className="p-3 rounded-xl" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
@@ -871,6 +863,11 @@ export default function RouteWeatherAlerts({
                       </div>
                     );
                   })}
+                  {alerts.length > 2 && (
+                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      +{alerts.length - 2} more alerts found (zoom map for markers)
+                    </div>
+                  )}
                 </div>
               )}
             </div>
