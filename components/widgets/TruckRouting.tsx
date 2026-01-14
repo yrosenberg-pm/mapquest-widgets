@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2, AlertTriangle } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -200,7 +200,6 @@ export default function TruckRouting({
   const [showVehicleSettings, setShowVehicleSettings] = useState(true);
   const [departureTime, setDepartureTime] = useState<'now' | Date>('now');
   const [showDepartureOptions, setShowDepartureOptions] = useState(false);
-  const [showTruckRestrictions, setShowTruckRestrictions] = useState(false);
   const [useHereRouting, setUseHereRouting] = useState(true); // Default to HERE for better truck routing
   const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | undefined>(undefined);
 
@@ -616,7 +615,6 @@ export default function TruckRouting({
             routeEnd={toCoords || undefined}
             routeType="fastest"
             routePolyline={routePolyline}
-            showTruckRestrictions={showTruckRestrictions}
           />
         </div>
         {/* Sidebar */}
@@ -695,34 +693,6 @@ export default function TruckRouting({
                       <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
                       <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
                       <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
-                    </div>
-
-                    {/* Show Truck Restrictions Toggle */}
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {showTruckRestrictions ? (
-                          <Eye className="w-3.5 h-3.5" style={{ color: accentColor }} />
-                        ) : (
-                          <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-                        )}
-                        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                          Show restrictions on map
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => setShowTruckRestrictions(!showTruckRestrictions)}
-                        className="relative w-10 h-5 rounded-full transition-colors"
-                        style={{ 
-                          background: showTruckRestrictions ? accentColor : 'var(--border-default)'
-                        }}
-                      >
-                        <div 
-                          className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                          style={{ 
-                            transform: showTruckRestrictions ? 'translateX(22px)' : 'translateX(2px)'
-                          }}
-                        />
-                      </button>
                     </div>
 
                     {/* Compact warning */}
