@@ -1375,7 +1375,7 @@ export default function MultiStopPlanner({
 
           {/* Actions */}
           <div className="p-4 space-y-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            {sidebarView !== 'segments' && (
+            {sidebarView === 'stops' && (
               <div
                 className="flex items-center gap-3 p-3 rounded-xl"
                 style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
