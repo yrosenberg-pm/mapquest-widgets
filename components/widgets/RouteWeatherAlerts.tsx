@@ -887,7 +887,7 @@ export default function RouteWeatherAlerts({
               )}
               <span>
                 {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-                Powered by <strong>HERE</strong>
+                Powered by <strong>MapQuest</strong>
               </span>
             </div>
           )}
