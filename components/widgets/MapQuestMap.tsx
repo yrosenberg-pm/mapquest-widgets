@@ -805,45 +805,6 @@ export default function MapQuestMap({
       try {
         const response = await fetch(`/api/here?endpoint=truckrestrictions&bbox=${bbox}`);
         if (!response.ok) {
-          // Fleet Telematics API might not be available - show info message instead
-          if (response.status === 404 || response.status === 400) {
-            // Add a simple indicator that restrictions mode is active
-            const centerLat = (bounds.getNorth() + bounds.getSouth()) / 2;
-            const centerLng = (bounds.getEast() + bounds.getWest()) / 2;
-            
-            // Show a banner-style indicator
-            const indicatorHtml = `
-              <div style="
-                background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
-                color: white;
-                padding: 8px 16px;
-                border-radius: 8px;
-                font-size: 12px;
-                font-weight: 600;
-                white-space: nowrap;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                border: 2px solid white;
-                display: flex;
-                align-items: center;
-                gap: 6px;
-              ">
-                <span>🚛</span>
-                <span>Truck Mode Active - Route avoids restrictions</span>
-              </div>
-            `;
-            
-            const icon = L.divIcon({
-              html: indicatorHtml,
-              className: 'truck-mode-indicator',
-              iconSize: [280, 40],
-              iconAnchor: [140, 20],
-            });
-            
-            // Only add if not already present
-            if (restrictionsLayer.getLayers().length === 0) {
-              L.marker([bounds.getNorth() - 0.01, centerLng], { icon, interactive: false }).addTo(restrictionsLayer);
-            }
-          }
           return;
         }
         
