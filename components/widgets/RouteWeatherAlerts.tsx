@@ -481,15 +481,43 @@ export default function RouteWeatherAlerts({
         iconName: obsItem?.iconName,
       });
 
-      const days = dd?.forecasts?.forecastLocation?.forecast || dd?.forecasts?.forecastLocation?.[0]?.forecast || [];
+      // HERE weather payload shape varies by plan/product. Try multiple known shapes.
+      const days =
+        dd?.forecasts?.forecastLocation?.forecast ||
+        dd?.forecasts?.forecastLocation?.[0]?.forecast ||
+        dd?.forecasts?.forecastLocation?.[0]?.forecasts ||
+        dd?.forecastLocation?.forecast ||
+        dd?.forecastLocation?.[0]?.forecast ||
+        dd?.dailyForecasts?.forecastLocation?.forecast ||
+        dd?.dailyForecasts?.forecastLocation?.[0]?.forecast ||
+        [];
       setForecastDays(
         (Array.isArray(days) ? days : []).slice(0, 7).map((x: any) => ({
-          dayOfWeek: x.dayOfWeek,
-          highTemperature: x.highTemperature,
-          lowTemperature: x.lowTemperature,
-          description: x.description,
-          iconName: x.iconName,
-          precipitationProbability: x.precipitationProbability,
+          dayOfWeek: x.dayOfWeek || x.weekday || x.day || x.weekDay,
+          highTemperature:
+            x.highTemperature ??
+            x.highTemperatureF ??
+            x.temperatureHigh ??
+            x.temperatureMax ??
+            x.maxTemperature ??
+            x.highTemp ??
+            x.high,
+          lowTemperature:
+            x.lowTemperature ??
+            x.lowTemperatureF ??
+            x.temperatureLow ??
+            x.temperatureMin ??
+            x.minTemperature ??
+            x.lowTemp ??
+            x.low,
+          description: x.description || x.skyDescription || x.forecastDescription,
+          iconName: x.iconName || x.icon,
+          precipitationProbability:
+            x.precipitationProbability ??
+            x.precipitationProbabilityDay ??
+            x.precipitationProbabilityNight ??
+            x.rainFall ??
+            x.precipChance,
         }))
       );
 
@@ -581,7 +609,7 @@ export default function RouteWeatherAlerts({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col md:flex-row md:h-[760px]">
+      <div className="flex flex-col md:flex-row md:h-[780px]">
         {/* Left panel */}
         <div className="w-full md:w-[460px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -769,7 +797,7 @@ export default function RouteWeatherAlerts({
               {forecastMode === 'daily' ? (
                 <div className="grid grid-cols-7 gap-1.5">
                   {forecastDays.slice(0, 7).map((d, i) => (
-                    <div key={i} className="rounded-xl p-1.5 text-center" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
+                    <div key={i} className="rounded-xl p-2 text-center" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
                         {(d.dayOfWeek || '').slice(0, 3) || '—'}
                       </div>
