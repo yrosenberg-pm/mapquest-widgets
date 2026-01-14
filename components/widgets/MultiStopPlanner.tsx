@@ -1,13 +1,13 @@
 // components/widgets/MultiStopPlanner.tsx
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { 
   Plus, Trash2, GripVertical, Loader2, RotateCcw, Route, 
   Sparkles, Clock, Check, AlertTriangle, XCircle,
   Download, Share2, Shuffle, Navigation, MoreHorizontal,
   MapPin, Timer, TrendingDown, List, ArrowRight,
-  Edit3, CornerDownRight, Waypoints
+  Edit3, CornerDownRight, Waypoints, Calendar
 } from 'lucide-react';
 import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -91,11 +91,38 @@ export default function MultiStopPlanner({
     stopDuration: number;
   }>>({});
   const [highlightedSegment, setHighlightedSegment] = useState<number | null>(null);
+  const [showDeparturePicker, setShowDeparturePicker] = useState(false);
+
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const departurePickerRef = useRef<HTMLDivElement | null>(null);
 
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+
+  const pad2 = (n: number) => n.toString().padStart(2, '0');
+  const departureDateValue = `${departureTime.getFullYear()}-${pad2(departureTime.getMonth() + 1)}-${pad2(departureTime.getDate())}`;
+  const departureTimeValue = `${pad2(departureTime.getHours())}:${pad2(departureTime.getMinutes())}`;
+  const setDepartureFromParts = (dateStr: string, timeStr: string) => {
+    if (!dateStr || !timeStr) return;
+    const next = new Date(`${dateStr}T${timeStr}:00`);
+    if (!isNaN(next.getTime())) setDepartureTime(next);
+  };
+
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (showMoreMenu && moreMenuRef.current && !moreMenuRef.current.contains(target)) {
+        setShowMoreMenu(false);
+      }
+      if (showDeparturePicker && departurePickerRef.current && !departurePickerRef.current.contains(target)) {
+        setShowDeparturePicker(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [showMoreMenu, showDeparturePicker]);
 
   const addStop = () => {
     if (stops.length < maxStops) {
@@ -579,7 +606,7 @@ export default function MultiStopPlanner({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col md:flex-row md:h-[700px]">
+      <div className="flex flex-col md:flex-row md:h-[715px]">
         {/* Map - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
@@ -633,7 +660,7 @@ export default function MultiStopPlanner({
             </div>
             
             {/* More Menu */}
-            <div className="relative">
+            <div className="relative" ref={moreMenuRef}>
               <button
                 onClick={() => setShowMoreMenu(!showMoreMenu)}
                 className="p-2 rounded-lg transition-colors hover:bg-black/5"
@@ -1368,26 +1395,125 @@ export default function MultiStopPlanner({
                     {departureTime.toLocaleDateString([], { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
-                <input
-                  type="datetime-local"
-                  value={departureTime.toISOString().slice(0, 16)}
-                  onChange={(e) => setDepartureTime(new Date(e.target.value))}
-                  className="w-full mt-1 px-3 py-2 rounded-xl text-sm font-medium outline-none transition-all"
-                  style={{
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-main)',
-                    boxShadow: '0 1px 0 rgba(255,255,255,0.06) inset',
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = `${accentColor}80`;
-                    e.currentTarget.style.boxShadow = `0 0 0 4px ${accentColor}20`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                    e.currentTarget.style.boxShadow = '0 1px 0 rgba(255,255,255,0.06) inset';
-                  }}
-                />
+                <div className="relative mt-1" ref={departurePickerRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeparturePicker(v => !v)}
+                    className="w-full px-3 py-2 rounded-xl text-sm font-medium outline-none transition-all flex items-center justify-between gap-2"
+                    style={{
+                      background: 'var(--bg-input)',
+                      border: `1px solid ${showDeparturePicker ? `${accentColor}80` : 'var(--border-subtle)'}`,
+                      color: 'var(--text-main)',
+                      boxShadow: showDeparturePicker
+                        ? `0 0 0 4px ${accentColor}20`
+                        : '0 1px 0 rgba(255,255,255,0.06) inset',
+                    }}
+                  >
+                    <span className="truncate">
+                      {departureTime.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                      ·{' '}
+                      {departureTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
+                  </button>
+
+                  {showDeparturePicker && (
+                    <div
+                      className="absolute left-0 right-0 top-full mt-2 rounded-2xl p-3 z-50"
+                      style={{
+                        background: 'var(--bg-widget)',
+                        border: '1px solid var(--border-subtle)',
+                        boxShadow: '0 18px 50px rgba(0,0,0,0.22)',
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                          Departure
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowDeparturePicker(false)}
+                          className="text-xs font-medium px-2 py-1 rounded-lg"
+                          style={{
+                            background: 'var(--bg-panel)',
+                            color: 'var(--text-muted)',
+                            border: '1px solid var(--border-subtle)',
+                          }}
+                        >
+                          Done
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                            Date
+                          </label>
+                          <input
+                            type="date"
+                            value={departureDateValue}
+                            onChange={(e) => setDepartureFromParts(e.target.value, departureTimeValue)}
+                            className="w-full mt-1 px-3 py-2 rounded-xl text-sm font-medium outline-none"
+                            style={{
+                              background: 'var(--bg-input)',
+                              border: '1px solid var(--border-subtle)',
+                              color: 'var(--text-main)',
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                            Time
+                          </label>
+                          <input
+                            type="time"
+                            value={departureTimeValue}
+                            onChange={(e) => setDepartureFromParts(departureDateValue, e.target.value)}
+                            className="w-full mt-1 px-3 py-2 rounded-xl text-sm font-medium outline-none"
+                            style={{
+                              background: 'var(--bg-input)',
+                              border: '1px solid var(--border-subtle)',
+                              color: 'var(--text-main)',
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-4 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setDepartureTime(new Date()); setShowDeparturePicker(false); }}
+                          className="px-2 py-2 rounded-xl text-[11px] font-semibold transition-all"
+                          style={{
+                            background: 'var(--bg-panel)',
+                            border: '1px solid var(--border-subtle)',
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          Now
+                        </button>
+                        {[15, 30, 60].map((mins) => (
+                          <button
+                            key={mins}
+                            type="button"
+                            onClick={() => {
+                              setDepartureTime(new Date(Date.now() + mins * 60 * 1000));
+                              setShowDeparturePicker(false);
+                            }}
+                            className="px-2 py-2 rounded-xl text-[11px] font-semibold transition-all"
+                            style={{
+                              background: `${accentColor}12`,
+                              border: `1px solid ${accentColor}25`,
+                              color: accentColor,
+                            }}
+                          >
+                            +{mins}m
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             
