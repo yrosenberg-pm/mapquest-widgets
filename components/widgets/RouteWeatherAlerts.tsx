@@ -28,6 +28,7 @@ type HereAutosuggestItem = {
   title?: string;
   address?: { label?: string };
   position?: { lat: number; lng: number };
+  access?: Array<{ lat: number; lng: number }>;
   resultType?: string;
 };
 
@@ -241,8 +242,13 @@ function AutosuggestInput({
         const res = await fetch(`/api/here?endpoint=autosuggest&q=${encodeURIComponent(query)}&at=${encodeURIComponent(atParam)}&limit=6`);
         const data = await res.json();
         const list: HereAutosuggestItem[] = Array.isArray(data.items) ? data.items : [];
-        setItems(list.filter(i => i.position?.lat && i.position?.lng));
-        setOpen(list.length > 0);
+        // HERE autosuggest items may provide coordinates in `position` OR `access[0]` depending on resultType
+        const normalized = list.filter(i => {
+          const p = i.position || i.access?.[0];
+          return !!(p && typeof p.lat === 'number' && typeof p.lng === 'number');
+        });
+        setItems(normalized);
+        setOpen(normalized.length > 0);
       } catch {
         setItems([]);
         setOpen(false);
@@ -284,6 +290,7 @@ function AutosuggestInput({
         >
           {items.map((it, idx) => {
             const labelText = it.title || it.address?.label || 'Result';
+            const pos = it.position || it.access?.[0];
             return (
               <button
                 key={`${it.id || idx}-${labelText}`}
@@ -291,8 +298,8 @@ function AutosuggestInput({
                 className="w-full px-4 py-3 text-left text-sm flex items-start gap-3 hover:bg-black/5"
                 style={{ color: 'var(--text-main)' }}
                 onClick={() => {
-                  if (!it.position) return;
-                  onSelect({ label: labelText, lat: it.position.lat, lng: it.position.lng });
+                  if (!pos) return;
+                  onSelect({ label: labelText, lat: pos.lat, lng: pos.lng });
                   setQuery(labelText);
                   setOpen(false);
                 }}

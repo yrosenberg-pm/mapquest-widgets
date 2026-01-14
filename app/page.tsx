@@ -37,7 +37,7 @@ const WIDGETS = [
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', category: 'Bigger Bet' },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', category: 'Bigger Bet' },
   { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', category: 'Bigger Bet' },
-  { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route (HERE)', category: 'Bigger Bet' },
+  { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', category: 'Bigger Bet' },
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time (HERE API)', category: 'Bigger Bet' },
 ];
 
