@@ -124,6 +124,75 @@ function toNumber(v: unknown): number | null {
   return null;
 }
 
+function pickFirstNumber(...vals: unknown[]): number | null {
+  for (const v of vals) {
+    const n = toNumber(v);
+    if (n !== null) return n;
+  }
+  return null;
+}
+
+function findForecastArrayDeep(obj: any, maxDepth = 6): any[] {
+  // Find the first array that looks like a daily forecast array.
+  const seen = new Set<any>();
+  const queue: Array<{ v: any; d: number }> = [{ v: obj, d: 0 }];
+
+  const looksLikeForecastItem = (it: any) => {
+    if (!it || typeof it !== 'object') return false;
+    const keys = Object.keys(it);
+    return (
+      keys.some(k => /dayOfWeek|weekday|day/i.test(k)) &&
+      keys.some(k => /high|low|max|min|temperature/i.test(k))
+    );
+  };
+
+  while (queue.length) {
+    const { v, d } = queue.shift()!;
+    if (!v || typeof v !== 'object') continue;
+    if (seen.has(v)) continue;
+    seen.add(v);
+
+    if (Array.isArray(v) && v.length > 0 && looksLikeForecastItem(v[0])) return v;
+
+    if (d >= maxDepth) continue;
+    for (const k of Object.keys(v)) {
+      queue.push({ v: (v as any)[k], d: d + 1 });
+    }
+  }
+  return [];
+}
+
+function extractDailyTemps(x: any): { high: number | null; low: number | null } {
+  // Try common flat keys first
+  const high = pickFirstNumber(
+    x?.highTemperature,
+    x?.highTemperatureF,
+    x?.temperatureHigh,
+    x?.temperatureMax,
+    x?.maxTemperature,
+    x?.highTemp,
+    x?.high,
+    x?.temperature?.high,
+    x?.temperature?.max,
+    x?.temp?.high,
+    x?.temp?.max
+  );
+  const low = pickFirstNumber(
+    x?.lowTemperature,
+    x?.lowTemperatureF,
+    x?.temperatureLow,
+    x?.temperatureMin,
+    x?.minTemperature,
+    x?.lowTemp,
+    x?.low,
+    x?.temperature?.low,
+    x?.temperature?.min,
+    x?.temp?.low,
+    x?.temp?.min
+  );
+  return { high, low };
+}
+
 function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 3958.7613; // miles
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
@@ -490,35 +559,27 @@ export default function RouteWeatherAlerts({
         dd?.forecastLocation?.[0]?.forecast ||
         dd?.dailyForecasts?.forecastLocation?.forecast ||
         dd?.dailyForecasts?.forecastLocation?.[0]?.forecast ||
-        [];
+        findForecastArrayDeep(dd);
+
       setForecastDays(
-        (Array.isArray(days) ? days : []).slice(0, 7).map((x: any) => ({
-          dayOfWeek: x.dayOfWeek || x.weekday || x.day || x.weekDay,
-          highTemperature:
-            x.highTemperature ??
-            x.highTemperatureF ??
-            x.temperatureHigh ??
-            x.temperatureMax ??
-            x.maxTemperature ??
-            x.highTemp ??
-            x.high,
-          lowTemperature:
-            x.lowTemperature ??
-            x.lowTemperatureF ??
-            x.temperatureLow ??
-            x.temperatureMin ??
-            x.minTemperature ??
-            x.lowTemp ??
-            x.low,
-          description: x.description || x.skyDescription || x.forecastDescription,
-          iconName: x.iconName || x.icon,
-          precipitationProbability:
-            x.precipitationProbability ??
-            x.precipitationProbabilityDay ??
-            x.precipitationProbabilityNight ??
-            x.rainFall ??
-            x.precipChance,
-        }))
+        (Array.isArray(days) ? days : [])
+          .slice(0, 7)
+          .map((x: any) => {
+            const temps = extractDailyTemps(x);
+            return {
+              dayOfWeek: x?.dayOfWeek || x?.weekday || x?.day || x?.weekDay || x?.name,
+              highTemperature: temps.high ?? x?.highTemperature,
+              lowTemperature: temps.low ?? x?.lowTemperature,
+              description: x?.description || x?.skyDescription || x?.forecastDescription,
+              iconName: x?.iconName || x?.icon,
+              precipitationProbability:
+                x?.precipitationProbability ??
+                x?.precipitationProbabilityDay ??
+                x?.precipitationProbabilityNight ??
+                x?.rainFall ??
+                x?.precipChance,
+            };
+          })
       );
 
       const hours = h?.hourlyForecasts?.forecastLocation?.forecast || h?.hourlyForecasts?.forecastLocation?.[0]?.forecast || [];
