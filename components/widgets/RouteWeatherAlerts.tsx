@@ -198,6 +198,7 @@ function AutosuggestInput({
   label,
   placeholder,
   value,
+  onChange,
   onSelect,
   accentColor,
   darkMode,
@@ -206,6 +207,7 @@ function AutosuggestInput({
   label: string;
   placeholder: string;
   value: string;
+  onChange: (val: string) => void;
   onSelect: (sel: PlaceSelection) => void;
   accentColor: string;
   darkMode: boolean;
@@ -273,7 +275,10 @@ function AutosuggestInput({
         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} />
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            onChange(e.target.value);
+          }}
           onFocus={() => items.length > 0 && setOpen(true)}
           placeholder={placeholder}
           className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium outline-none transition-all"
@@ -356,6 +361,7 @@ export default function RouteWeatherAlerts({
 
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
+  const [runError, setRunError] = useState<string | null>(null);
 
   const mapCenter = useMemo(() => {
     const pt = dest || start;
@@ -383,164 +389,156 @@ export default function RouteWeatherAlerts({
     });
   }, [alerts]);
 
-  // Destination weather fetch
-  useEffect(() => {
-    const run = async () => {
-      if (!dest) {
-        setObs(null);
-        setForecastDays([]);
-        setForecastHours([]);
-        return;
+  const geocodeOne = async (q: string): Promise<PlaceSelection | null> => {
+    const query = q.trim();
+    if (!query) return null;
+    const res = await fetch(`/api/here?endpoint=geocode&q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    const item = data?.items?.[0];
+    const pos = item?.position;
+    const label = item?.title || item?.address?.label || query;
+    if (!pos?.lat || !pos?.lng) return null;
+    return { label, lat: pos.lat, lng: pos.lng };
+  };
+
+  const runAll = async () => {
+    setRunError(null);
+    setObs(null);
+    setForecastDays([]);
+    setForecastHours([]);
+    setAlerts([]);
+    setRoutePolyline(null);
+    setRouteMiles(null);
+
+    setLoadingWeather(true);
+    setLoadingRoute(true);
+    setLoadingAlerts(true);
+
+    try {
+      // Ensure we have coordinates (either selected from autosuggest, or geocoded from text)
+      let s = start;
+      let d = dest;
+      if (!s) s = await geocodeOne(startText);
+      if (!d) d = await geocodeOne(destText);
+      if (!s || !d) {
+        throw new Error('Please select a starting point and destination from the suggestions (or type a full address).');
       }
-      setLoadingWeather(true);
-      try {
-        const [oRes, dRes, hRes] = await Promise.all([
-          fetch(`/api/here?endpoint=weather&product=observation&latitude=${dest.lat}&longitude=${dest.lng}`),
-          fetch(`/api/here?endpoint=weather&product=forecast_7days&latitude=${dest.lat}&longitude=${dest.lng}`),
-          fetch(`/api/here?endpoint=weather&product=forecast_hourly&latitude=${dest.lat}&longitude=${dest.lng}`),
-        ]);
-        const o = await oRes.json();
-        const d = await dRes.json();
-        const h = await hRes.json();
+      setStart(s);
+      setDest(d);
+      setStartText(s.label);
+      setDestText(d.label);
 
-        const obsItem = o?.observations?.location?.[0]?.observation?.[0] || o?.observations?.location?.observation?.[0];
-        setObs({
-          temperature: obsItem?.temperature,
-          comfort: obsItem?.comfort,
-          skyDescription: obsItem?.skyDescription || obsItem?.description,
-          humidity: obsItem?.humidity,
-          windSpeed: obsItem?.windSpeed,
-          visibility: obsItem?.visibility,
-          iconName: obsItem?.iconName,
-        });
+      // Destination weather
+      const [oRes, dRes, hRes] = await Promise.all([
+        fetch(`/api/here?endpoint=weather&product=observation&latitude=${d.lat}&longitude=${d.lng}`),
+        fetch(`/api/here?endpoint=weather&product=forecast_7days&latitude=${d.lat}&longitude=${d.lng}`),
+        fetch(`/api/here?endpoint=weather&product=forecast_hourly&latitude=${d.lat}&longitude=${d.lng}`),
+      ]);
+      const o = await oRes.json();
+      const dd = await dRes.json();
+      const h = await hRes.json();
 
-        const days = d?.forecasts?.forecastLocation?.forecast || d?.forecasts?.forecastLocation?.[0]?.forecast || [];
-        setForecastDays(
-          (Array.isArray(days) ? days : []).slice(0, 7).map((x: any) => ({
-            dayOfWeek: x.dayOfWeek,
-            highTemperature: x.highTemperature,
-            lowTemperature: x.lowTemperature,
-            description: x.description,
-            iconName: x.iconName,
-            precipitationProbability: x.precipitationProbability,
-          }))
-        );
+      const obsItem = o?.observations?.location?.[0]?.observation?.[0] || o?.observations?.location?.observation?.[0];
+      setObs({
+        temperature: obsItem?.temperature,
+        comfort: obsItem?.comfort,
+        skyDescription: obsItem?.skyDescription || obsItem?.description,
+        humidity: obsItem?.humidity,
+        windSpeed: obsItem?.windSpeed,
+        visibility: obsItem?.visibility,
+        iconName: obsItem?.iconName,
+      });
 
-        const hours = h?.hourlyForecasts?.forecastLocation?.forecast || h?.hourlyForecasts?.forecastLocation?.[0]?.forecast || [];
-        setForecastHours(
-          (Array.isArray(hours) ? hours : []).slice(0, 36).map((x: any) => ({
-            localTime: x.localTime,
-            temperature: x.temperature,
-            description: x.description,
-            iconName: x.iconName,
-            precipitationProbability: x.precipitationProbability,
-          }))
-        );
-      } catch {
-        setObs(null);
-        setForecastDays([]);
-        setForecastHours([]);
-      } finally {
-        setLoadingWeather(false);
-      }
-    };
-    run();
-  }, [dest]);
+      const days = dd?.forecasts?.forecastLocation?.forecast || dd?.forecasts?.forecastLocation?.[0]?.forecast || [];
+      setForecastDays(
+        (Array.isArray(days) ? days : []).slice(0, 7).map((x: any) => ({
+          dayOfWeek: x.dayOfWeek,
+          highTemperature: x.highTemperature,
+          lowTemperature: x.lowTemperature,
+          description: x.description,
+          iconName: x.iconName,
+          precipitationProbability: x.precipitationProbability,
+        }))
+      );
 
-  // Route + alerts
-  useEffect(() => {
-    const run = async () => {
-      if (!start || !dest) {
-        setRoutePolyline(null);
-        setRouteMiles(null);
-        setAlerts([]);
-        return;
-      }
+      const hours = h?.hourlyForecasts?.forecastLocation?.forecast || h?.hourlyForecasts?.forecastLocation?.[0]?.forecast || [];
+      setForecastHours(
+        (Array.isArray(hours) ? hours : []).slice(0, 36).map((x: any) => ({
+          localTime: x.localTime,
+          temperature: x.temperature,
+          description: x.description,
+          iconName: x.iconName,
+          precipitationProbability: x.precipitationProbability,
+        }))
+      );
+      setLoadingWeather(false);
 
-      setLoadingRoute(true);
-      setLoadingAlerts(true);
-      try {
-        const rRes = await fetch(
-          `/api/here?endpoint=routes&transportMode=car&origin=${start.lat},${start.lng}&destination=${dest.lat},${dest.lng}`
-        );
-        const rJson: HereRouteResponse = await rRes.json();
-        const poly = rJson?.routes?.[0]?.sections?.[0]?.polyline;
-        const lengthMeters = rJson?.routes?.[0]?.sections?.[0]?.summary?.length;
+      // Route polyline
+      const rRes = await fetch(`/api/here?endpoint=routes&transportMode=car&origin=${s.lat},${s.lng}&destination=${d.lat},${d.lng}`);
+      const rJson: HereRouteResponse = await rRes.json();
+      const poly = rJson?.routes?.[0]?.sections?.[0]?.polyline;
+      const lengthMeters = rJson?.routes?.[0]?.sections?.[0]?.summary?.length;
+      if (!poly) throw new Error('Could not calculate a route for those locations.');
+      const coords = decodeHerePolyline(poly);
+      setRoutePolyline(coords);
+      const miles = typeof lengthMeters === 'number' ? lengthMeters / 1609.34 : null;
+      setRouteMiles(miles);
+      setLoadingRoute(false);
 
-        if (!poly) {
-          setRoutePolyline(null);
-          setRouteMiles(null);
-          setAlerts([]);
-          return;
+      // Sample points & fetch alerts
+      const sampleEveryMiles = 50;
+      const samples: Array<{ lat: number; lng: number; milesAt: number }> = [];
+      let acc = 0;
+      let nextTarget = sampleEveryMiles;
+      for (let i = 1; i < coords.length; i++) {
+        const seg = milesBetween(coords[i - 1], coords[i]);
+        acc += seg;
+        if (acc >= nextTarget) {
+          samples.push({ lat: coords[i].lat, lng: coords[i].lng, milesAt: Math.round(acc) });
+          nextTarget += sampleEveryMiles;
+          if (samples.length >= 12) break;
         }
-
-        const coords = decodeHerePolyline(poly);
-        setRoutePolyline(coords);
-        if (typeof lengthMeters === 'number') setRouteMiles(lengthMeters / 1609.34);
-
-        // sample points every ~50 miles along decoded polyline
-        const sampleEveryMiles = 50;
-        const samples: Array<{ lat: number; lng: number; milesAt: number }> = [];
-        let acc = 0;
-        let nextTarget = sampleEveryMiles;
-        for (let i = 1; i < coords.length; i++) {
-          const seg = milesBetween(coords[i - 1], coords[i]);
-          acc += seg;
-          if (acc >= nextTarget) {
-            samples.push({ lat: coords[i].lat, lng: coords[i].lng, milesAt: Math.round(acc) });
-            nextTarget += sampleEveryMiles;
-            if (samples.length >= 12) break;
-          }
-        }
-        // Always check near destination too
-        samples.push({ lat: dest.lat, lng: dest.lng, milesAt: routeMiles ? Math.round(routeMiles) : Math.round(acc) });
-
-        const found: RouteAlert[] = [];
-        const seen = new Set<string>();
-
-        for (const s of samples) {
-          const aRes = await fetch(`/api/here?endpoint=weather&product=alerts&latitude=${s.lat}&longitude=${s.lng}`);
-          const aJson = await aRes.json();
-          const list: AlertItem[] =
-            aJson?.alerts?.alerts || aJson?.alerts || aJson?.warning || aJson?.warnings || [];
-          const arr = Array.isArray(list) ? list : [];
-
-          for (const a of arr) {
-            const title = a.headline || a.type || a.description || 'Weather Alert';
-            const key = `${title}`.toLowerCase();
-            if (seen.has(key)) continue;
-            seen.add(key);
-            const sev = severityFromTitle(title);
-            const timeWindow =
-              a.startTime || a.endTime
-                ? `${a.startTime ? new Date(a.startTime).toLocaleString() : ''}${a.endTime ? ` → ${new Date(a.endTime).toLocaleString()}` : ''}`
-                : undefined;
-            found.push({
-              key,
-              title,
-              severity: sev,
-              detail: a.description,
-              timeWindow,
-              milesAt: s.milesAt,
-              lat: s.lat,
-              lng: s.lng,
-            });
-          }
-        }
-
-        setAlerts(found);
-      } catch {
-        setRoutePolyline(null);
-        setRouteMiles(null);
-        setAlerts([]);
-      } finally {
-        setLoadingRoute(false);
-        setLoadingAlerts(false);
       }
-    };
-    run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start?.lat, start?.lng, dest?.lat, dest?.lng]);
+      samples.push({ lat: d.lat, lng: d.lng, milesAt: miles ? Math.round(miles) : Math.round(acc) });
+
+      const found: RouteAlert[] = [];
+      const seen = new Set<string>();
+      for (const sp of samples) {
+        const aRes = await fetch(`/api/here?endpoint=weather&product=alerts&latitude=${sp.lat}&longitude=${sp.lng}`);
+        const aJson = await aRes.json();
+        const list: AlertItem[] = aJson?.alerts?.alerts || aJson?.alerts || aJson?.warning || aJson?.warnings || [];
+        const arr = Array.isArray(list) ? list : [];
+        for (const a of arr) {
+          const title = a.headline || a.type || a.description || 'Weather Alert';
+          const key = `${title}`.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const sev = severityFromTitle(title);
+          const timeWindow =
+            a.startTime || a.endTime
+              ? `${a.startTime ? new Date(a.startTime).toLocaleString() : ''}${a.endTime ? ` → ${new Date(a.endTime).toLocaleString()}` : ''}`
+              : undefined;
+          found.push({
+            key,
+            title,
+            severity: sev,
+            detail: a.description,
+            timeWindow,
+            milesAt: sp.milesAt,
+            lat: sp.lat,
+            lng: sp.lng,
+          });
+        }
+      }
+      setAlerts(found);
+    } catch (e: any) {
+      setRunError(e?.message || 'Failed to load weather/alerts.');
+    } finally {
+      setLoadingWeather(false);
+      setLoadingRoute(false);
+      setLoadingAlerts(false);
+    }
+  };
 
   return (
     <div
@@ -571,6 +569,7 @@ export default function RouteWeatherAlerts({
               label="Starting point"
               placeholder="Enter a starting address"
               value={startText}
+              onChange={(v) => setStartText(v)}
               onSelect={(sel) => {
                 setStart(sel);
                 setStartText(sel.label);
@@ -583,6 +582,7 @@ export default function RouteWeatherAlerts({
               label="Destination"
               placeholder="Enter a destination"
               value={destText}
+              onChange={(v) => setDestText(v)}
               onSelect={(sel) => {
                 setDest(sel);
                 setDestText(sel.label);
@@ -593,7 +593,31 @@ export default function RouteWeatherAlerts({
             />
           </div>
 
+          <div className="px-5 py-4 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            <button
+              type="button"
+              onClick={runAll}
+              disabled={loadingWeather || loadingRoute || loadingAlerts || (!startText.trim() || !destText.trim())}
+              className="prism-btn prism-btn-primary flex-1 py-3 text-sm"
+              style={{
+                background: accentColor,
+                opacity: loadingWeather || loadingRoute || loadingAlerts || (!startText.trim() || !destText.trim()) ? 0.6 : 1,
+              }}
+            >
+              {(loadingWeather || loadingRoute || loadingAlerts) ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> <span className="ml-2">Loading…</span></>
+              ) : (
+                <><Navigation className="w-4 h-4" /> <span className="ml-2">Get Weather & Alerts</span></>
+              )}
+            </button>
+          </div>
+
           <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar p-5 space-y-4">
+            {runError && (
+              <div className="p-3 rounded-xl text-sm" style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', border: '1px solid var(--border-subtle)' }}>
+                {runError}
+              </div>
+            )}
             {/* Destination Weather */}
             <div className="rounded-2xl p-4" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
               <div className="flex items-center justify-between mb-3">
