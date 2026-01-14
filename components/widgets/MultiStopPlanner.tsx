@@ -1348,17 +1348,47 @@ export default function MultiStopPlanner({
 
           {/* Actions */}
           <div className="p-4 space-y-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-            <div className="flex items-center gap-3">
-              <Clock className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
-              <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>Depart:</span>
-              <input
-                type="datetime-local"
-                value={departureTime.toISOString().slice(0, 16)}
-                onChange={(e) => setDepartureTime(new Date(e.target.value))}
-                className="flex-1 px-2 py-1.5 rounded-lg text-xs"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
-              />
-              
+            <div
+              className="flex items-center gap-3 p-3 rounded-xl"
+              style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
+            >
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: `${accentColor}15`, border: `1px solid ${accentColor}25` }}
+                title="Departure time"
+              >
+                <Clock className="w-4 h-4" style={{ color: accentColor }} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: 'var(--text-muted)' }}>
+                    Depart
+                  </span>
+                  <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    {departureTime.toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+                <input
+                  type="datetime-local"
+                  value={departureTime.toISOString().slice(0, 16)}
+                  onChange={(e) => setDepartureTime(new Date(e.target.value))}
+                  className="w-full mt-1 px-3 py-2 rounded-xl text-sm font-medium outline-none transition-all"
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    boxShadow: '0 1px 0 rgba(255,255,255,0.06) inset',
+                  }}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = `${accentColor}80`;
+                    e.currentTarget.style.boxShadow = `0 0 0 4px ${accentColor}20`;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                    e.currentTarget.style.boxShadow = '0 1px 0 rgba(255,255,255,0.06) inset';
+                  }}
+                />
+              </div>
             </div>
             
             <div className="flex gap-3">
