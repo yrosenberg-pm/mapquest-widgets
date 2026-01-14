@@ -120,26 +120,38 @@ export async function GET(request: NextRequest) {
           const truckWeight = searchParams.get('truckWeight');
           const truckAxles = searchParams.get('truckAxles');
           
-          // Build URL with truck parameters using URL encoding for brackets
-          // HERE API v8 expects: truck[height]=VALUE format
-          let truckParams = '';
-          if (truckHeight) truckParams += `&truck%5Bheight%5D=${truckHeight}`;
-          if (truckWidth) truckParams += `&truck%5Bwidth%5D=${truckWidth}`;
-          if (truckLength) truckParams += `&truck%5Blength%5D=${truckLength}`;
-          if (truckWeight) truckParams += `&truck%5BgrossWeight%5D=${truckWeight}`;
-          if (truckAxles) truckParams += `&truck%5BaxleCount%5D=${truckAxles}`;
+          // Build URL with truck parameters
+          // HERE Routing API v8 uses truck[attribute] format
+          // Using encodeURIComponent for proper bracket encoding
+          const urlParams = new URLSearchParams();
+          urlParams.set('apiKey', HERE_API_KEY!);
+          urlParams.set('origin', routeOrigin);
+          urlParams.set('destination', destination);
+          urlParams.set('transportMode', 'truck');
+          urlParams.set('return', returnParams);
+          urlParams.set('departureTime', departureTime);
           
-          // Also add truck type to ensure proper routing
-          truckParams += `&truck%5Btype%5D=straight`;
+          // Truck dimensions and attributes
+          // Note: HERE v8 uses truck[height] etc. - brackets get URL encoded automatically
+          if (truckHeight) urlParams.set('truck[height]', truckHeight);
+          if (truckWidth) urlParams.set('truck[width]', truckWidth);
+          if (truckLength) urlParams.set('truck[length]', truckLength);
+          if (truckWeight) urlParams.set('truck[grossWeight]', truckWeight);
+          if (truckAxles) urlParams.set('truck[axleCount]', truckAxles);
+          urlParams.set('truck[type]', 'straight');
           
-          url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=truck&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}${truckParams}`;
+          // Add shippedHazardousGoods=none to ensure proper restriction checking
+          urlParams.set('truck[shippedHazardousGoods]', 'none');
+          
+          url = `${ENDPOINTS.routes}?${urlParams.toString()}`;
           
           console.log('[HERE API] Truck routing request:');
-          console.log('  Height:', truckHeight, 'cm');
+          console.log('  Height:', truckHeight, 'cm (', Number(truckHeight) / 30.48, 'ft)');
           console.log('  Width:', truckWidth, 'cm');
           console.log('  Length:', truckLength, 'cm');
-          console.log('  Weight:', truckWeight, 'kg');
+          console.log('  Weight:', truckWeight, 'kg (', Number(truckWeight) / 907.185, 'tons)');
           console.log('  Axles:', truckAxles);
+          console.log('  Full URL params:', urlParams.toString());
         } else {
           url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}`;
         }

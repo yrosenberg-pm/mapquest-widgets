@@ -314,9 +314,22 @@ export default function TruckRouting({
     
     const section = route.sections[0];
     
-    // Log section notices if any
+    // Log section notices if any (these might contain restriction warnings)
     if (section.notices) {
       console.log('[TruckRouting] Section notices:', section.notices);
+      section.notices.forEach((notice: any) => {
+        console.log('[TruckRouting] Notice:', notice.title, '-', notice.code);
+      });
+    }
+    
+    // Log transport info for debugging
+    if (section.transport) {
+      console.log('[TruckRouting] Transport mode:', section.transport.mode);
+    }
+    
+    // Check if there are any truck-related attributes in the response
+    if (section.truck) {
+      console.log('[TruckRouting] Truck info in response:', section.truck);
     }
     
     // Get polyline for map display and decode it
