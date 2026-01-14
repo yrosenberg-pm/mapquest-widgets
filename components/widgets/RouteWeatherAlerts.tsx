@@ -241,14 +241,46 @@ function AutosuggestInput({
       setLoading(true);
       try {
         const atParam = at ? `${at.lat},${at.lng}` : '39.8283,-98.5795';
-        const res = await fetch(`/api/here?endpoint=autosuggest&q=${encodeURIComponent(query)}&at=${encodeURIComponent(atParam)}&limit=6`);
-        const data = await res.json();
-        const list: HereAutosuggestItem[] = Array.isArray(data.items) ? data.items : [];
-        // HERE autosuggest items may provide coordinates in `position` OR `access[0]` depending on resultType
-        const normalized = list.filter(i => {
-          const p = i.position || i.access?.[0];
-          return !!(p && typeof p.lat === 'number' && typeof p.lng === 'number');
-        });
+        // Try HERE Autosuggest first
+        const res = await fetch(
+          `/api/here?endpoint=autosuggest&q=${encodeURIComponent(query)}&at=${encodeURIComponent(atParam)}&limit=6`
+        );
+
+        let normalized: HereAutosuggestItem[] = [];
+
+        if (res.ok) {
+          const data = await res.json();
+          const list: HereAutosuggestItem[] = Array.isArray(data.items) ? data.items : [];
+          // HERE autosuggest items may provide coordinates in `position` OR `access[0]` depending on resultType
+          normalized = list.filter(i => {
+            const p = i.position || i.access?.[0];
+            return !!(p && typeof p.lat === 'number' && typeof p.lng === 'number');
+          });
+        } else {
+          // Many HERE keys don't have Autosuggest enabled; fall back gracefully.
+          const txt = await res.text().catch(() => '');
+          console.warn('[RouteWeatherAlerts] Autosuggest failed, falling back to geocode:', res.status, txt);
+        }
+
+        // Fallback to geocode when autosuggest returns nothing (or failed)
+        if (normalized.length === 0) {
+          const gRes = await fetch(`/api/here?endpoint=geocode&q=${encodeURIComponent(query)}`);
+          if (gRes.ok) {
+            const g = await gRes.json();
+            const gItems = Array.isArray(g.items) ? g.items : [];
+            normalized = gItems
+              .slice(0, 6)
+              .map((it: any) => ({
+                id: it.id,
+                title: it.title,
+                address: it.address,
+                position: it.position,
+                resultType: it.resultType || 'address',
+              }))
+              .filter((i: HereAutosuggestItem) => !!(i.position?.lat && i.position?.lng));
+          }
+        }
+
         setItems(normalized);
         setOpen(normalized.length > 0);
       } catch {
