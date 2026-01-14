@@ -1157,45 +1157,45 @@ export default function MultiStopPlanner({
               </div>
             ) : (
               /* Route Summary View - Clean overview without list */
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {routeResult ? (
                   <>
                     {/* Hero Stats Card */}
                     <div 
-                      className="p-5 rounded-2xl text-center"
+                      className="p-4 rounded-2xl text-center"
                       style={{ 
                         background: `linear-gradient(135deg, ${accentColor}18 0%, ${accentColor}08 100%)`,
                         border: `1px solid ${accentColor}25`,
                       }}
                     >
                       {/* Main Stats - Side by Side */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
                         <div 
-                          className="p-4 rounded-xl"
+                          className="p-3 rounded-xl"
                           style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}
                         >
-                          <div className="flex items-center justify-center gap-2 mb-2">
-                            <Route className="w-4 h-4" style={{ color: accentColor }} />
-                            <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
+                          <div className="flex items-center justify-center gap-2 mb-1.5">
+                            <Route className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                            <span className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
                               Distance
                             </span>
                           </div>
-                          <p className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-main)' }}>
+                          <p className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-main)' }}>
                             {routeResult.totalDistance.toFixed(1)}
-                            <span className="text-sm font-medium ml-1" style={{ color: 'var(--text-muted)' }}>mi</span>
+                            <span className="text-xs font-medium ml-1" style={{ color: 'var(--text-muted)' }}>mi</span>
                           </p>
                         </div>
                         <div 
-                          className="p-4 rounded-xl"
+                          className="p-3 rounded-xl"
                           style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}
                         >
-                          <div className="flex items-center justify-center gap-2 mb-2">
-                            <Clock className="w-4 h-4" style={{ color: accentColor }} />
-                            <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
+                          <div className="flex items-center justify-center gap-2 mb-1.5">
+                            <Clock className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                            <span className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
                               Duration
                             </span>
                           </div>
-                          <p className="text-3xl font-bold tracking-tight" style={{ color: accentColor }}>
+                          <p className="text-2xl font-bold tracking-tight" style={{ color: accentColor }}>
                             {formatTime(routeResult.totalTime)}
                           </p>
                         </div>
@@ -1204,13 +1204,13 @@ export default function MultiStopPlanner({
                       {/* Stats Pills */}
                       <div className="flex items-center justify-center gap-2 flex-wrap">
                         <span 
-                          className="px-3 py-1.5 rounded-full text-xs font-medium"
+                          className="px-2.5 py-1 rounded-full text-[11px] font-medium"
                           style={{ background: 'var(--bg-widget)', color: 'var(--text-secondary)' }}
                         >
                           {validStops.length} stops
                         </span>
                         <span 
-                          className="px-3 py-1.5 rounded-full text-xs font-medium"
+                          className="px-2.5 py-1 rounded-full text-[11px] font-medium"
                           style={{ background: 'var(--bg-widget)', color: 'var(--text-secondary)' }}
                         >
                           {routeResult.legs.length} segments
