@@ -248,6 +248,18 @@ export default function TruckRouting({
     // Convert weight to kg (short tons to kg)
     const weightKg = Math.round(vehicleProfile.weight * 907.185);
 
+    console.log('[TruckRouting] Vehicle profile:', {
+      heightFt: vehicleProfile.height,
+      heightCm,
+      widthFt: vehicleProfile.width,
+      widthCm,
+      lengthFt: vehicleProfile.length,
+      lengthCm,
+      weightTons: vehicleProfile.weight,
+      weightKg,
+      axles: vehicleProfile.axleCount,
+    });
+
     const params = new URLSearchParams({
       endpoint: 'routes',
       origin: `${fromCoords.lat},${fromCoords.lng}`,
@@ -267,7 +279,7 @@ export default function TruckRouting({
       params.append('departureTime', new Date().toISOString());
     }
 
-    console.log('[TruckRouting] HERE request params:', params.toString());
+    console.log('[TruckRouting] HERE request URL:', `/api/here?${params.toString()}`);
     const response = await fetch(`/api/here?${params.toString()}`);
     
     if (!response.ok) {
@@ -277,14 +289,35 @@ export default function TruckRouting({
     }
 
     const data = await response.json();
-    console.log('[TruckRouting] HERE API response:', data);
+    console.log('[TruckRouting] HERE API full response:', JSON.stringify(data, null, 2));
+    
+    // Check for notices (warnings about route)
+    if (data.notices) {
+      console.log('[TruckRouting] HERE API notices:', data.notices);
+    }
     
     if (!data.routes || data.routes.length === 0) {
+      // Check if there's an error message
+      if (data.error) {
+        console.error('[TruckRouting] HERE API error:', data.error);
+        throw new Error(data.error.message || 'Failed to calculate truck route');
+      }
       throw new Error('No truck-safe route found. Try adjusting vehicle dimensions.');
     }
 
     const route = data.routes[0];
+    
+    // Log route notices if any
+    if (route.notices) {
+      console.log('[TruckRouting] Route notices:', route.notices);
+    }
+    
     const section = route.sections[0];
+    
+    // Log section notices if any
+    if (section.notices) {
+      console.log('[TruckRouting] Section notices:', section.notices);
+    }
     
     // Get polyline for map display and decode it
     const encodedPolyline = section.polyline;

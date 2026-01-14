@@ -110,33 +110,38 @@ export async function GET(request: NextRequest) {
 
         // Build the URL with return parameters
         const returnParams = 'polyline,summary,actions,instructions';
-        url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}`;
         
-        // Add truck-specific parameters if transport mode is truck
+        // For truck routing, we need to build the URL carefully with proper parameter encoding
         if (routeTransportMode === 'truck') {
-          // Height in centimeters (convert from feet: 1 ft = 30.48 cm)
+          // Get truck parameters
           const truckHeight = searchParams.get('truckHeight');
-          if (truckHeight) url += `&truck[height]=${truckHeight}`;
-          
-          // Width in centimeters
           const truckWidth = searchParams.get('truckWidth');
-          if (truckWidth) url += `&truck[width]=${truckWidth}`;
-          
-          // Length in centimeters
           const truckLength = searchParams.get('truckLength');
-          if (truckLength) url += `&truck[length]=${truckLength}`;
-          
-          // Gross weight in kilograms (convert from tons: 1 short ton = 907.185 kg)
           const truckWeight = searchParams.get('truckWeight');
-          if (truckWeight) url += `&truck[grossWeight]=${truckWeight}`;
-          
-          // Axle count
           const truckAxles = searchParams.get('truckAxles');
-          if (truckAxles) url += `&truck[axleCount]=${truckAxles}`;
           
-          // Trailer count (optional)
-          const truckTrailers = searchParams.get('truckTrailers');
-          if (truckTrailers) url += `&truck[trailerCount]=${truckTrailers}`;
+          // Build URL with truck parameters using URL encoding for brackets
+          // HERE API v8 expects: truck[height]=VALUE format
+          let truckParams = '';
+          if (truckHeight) truckParams += `&truck%5Bheight%5D=${truckHeight}`;
+          if (truckWidth) truckParams += `&truck%5Bwidth%5D=${truckWidth}`;
+          if (truckLength) truckParams += `&truck%5Blength%5D=${truckLength}`;
+          if (truckWeight) truckParams += `&truck%5BgrossWeight%5D=${truckWeight}`;
+          if (truckAxles) truckParams += `&truck%5BaxleCount%5D=${truckAxles}`;
+          
+          // Also add truck type to ensure proper routing
+          truckParams += `&truck%5Btype%5D=straight`;
+          
+          url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=truck&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}${truckParams}`;
+          
+          console.log('[HERE API] Truck routing request:');
+          console.log('  Height:', truckHeight, 'cm');
+          console.log('  Width:', truckWidth, 'cm');
+          console.log('  Length:', truckLength, 'cm');
+          console.log('  Weight:', truckWeight, 'kg');
+          console.log('  Axles:', truckAxles);
+        } else {
+          url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}`;
         }
         
         console.log('HERE Routes API URL:', url.replace(HERE_API_KEY!, '***'));
