@@ -14,6 +14,7 @@ export { default as CommuteTimeCalculator } from './CommuteTimeCalculator';
 export { default as NHLArenaExplorer } from './NHLArenaExplorer';
 export { default as HereIsolineWidget } from './HereIsolineWidget';
 export { default as TruckRouting } from './TruckRouting';
+export { default as RouteWeatherAlerts } from './RouteWeatherAlerts';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

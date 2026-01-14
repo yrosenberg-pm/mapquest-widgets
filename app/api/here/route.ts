@@ -7,6 +7,7 @@ const ENDPOINTS: Record<string, string> = {
   isoline: 'https://isoline.router.hereapi.com/v8/isolines',
   geocode: 'https://geocode.search.hereapi.com/v1/geocode',
   revgeocode: 'https://revgeocode.search.hereapi.com/v1/revgeocode',
+  autosuggest: 'https://autosuggest.search.hereapi.com/v1/autosuggest',
   routes: 'https://router.hereapi.com/v8/routes',
   // HERE Public Transit API - only returns subway, bus, tram, ferry (no taxi/car)
   transit: 'https://transit.router.hereapi.com/v8/routes',
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
   const endpoint = searchParams.get('endpoint');
 
   // Weather endpoint doesn't need to be in ENDPOINTS map since it's a special case
-  const validEndpoints = [...Object.keys(ENDPOINTS), 'weather'];
+  const validEndpoints = Object.keys(ENDPOINTS);
   if (!endpoint || !validEndpoints.includes(endpoint)) {
     return NextResponse.json({ error: 'Invalid endpoint' }, { status: 400 });
   }
@@ -89,6 +90,22 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Location is required' }, { status: 400 });
         }
         url = `${ENDPOINTS.revgeocode}?apiKey=${HERE_API_KEY}&at=${at}`;
+        break;
+      }
+
+      case 'autosuggest': {
+        const q = searchParams.get('q');
+        // HERE autosuggest prefers a context point: lat,lng
+        const at = searchParams.get('at') || '39.8283,-98.5795';
+        const limit = searchParams.get('limit') || '6';
+
+        if (!q) {
+          return NextResponse.json({ error: 'Query is required' }, { status: 400 });
+        }
+
+        // Autosuggest endpoint
+        // resultTypes keeps it focused on places/addresses
+        url = `${ENDPOINTS.autosuggest}?apiKey=${HERE_API_KEY}&q=${encodeURIComponent(q)}&at=${encodeURIComponent(at)}&limit=${limit}&resultTypes=address,place&lang=en-US`;
         break;
       }
 

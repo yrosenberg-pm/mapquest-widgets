@@ -4,7 +4,7 @@
 import { useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import {
+import { 
   SmartAddressInput,
   StarbucksFinder,
   CitiBikeFinder,
@@ -17,6 +17,7 @@ import {
   InstacartDeliveryETA,
   NHLArenaExplorer,
   HereIsolineWidget,
+  RouteWeatherAlerts,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -105,6 +106,8 @@ export default function WidgetPage() {
         return <DirectionsEmbed {...commonProps} />;
       case 'truck':
         return <TruckRouting {...commonProps} />;
+      case 'route-weather':
+        return <RouteWeatherAlerts {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':

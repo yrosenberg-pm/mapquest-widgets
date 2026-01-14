@@ -21,7 +21,7 @@ import {
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-type WidgetId = 'nhl' | 'address' | 'starbucks' | 'citibike' | 'directions' | 'truck' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'instacart' | 'here-isoline';
+type WidgetId = 'nhl' | 'address' | 'starbucks' | 'citibike' | 'directions' | 'truck' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'instacart' | 'route-weather' | 'here-isoline';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
@@ -35,6 +35,7 @@ const WIDGETS = [
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', category: 'Bigger Bet' },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', category: 'Bigger Bet' },
   { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', category: 'Bigger Bet' },
+  { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route (HERE)', category: 'Bigger Bet' },
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time (HERE API)', category: 'Bigger Bet' },
 ];
 
