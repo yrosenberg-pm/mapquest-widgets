@@ -2,8 +2,9 @@
 'use client';
 
 import { useState, useEffect, useRef, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, ChevronDown, Grid3X3, Link2, Loader2 } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronLeft } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -17,6 +18,7 @@ import {
   NHLArenaExplorer,
   HereIsolineWidget,
   TruckRouting,
+  RouteWeatherAlerts,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -77,8 +79,8 @@ function HomeContent() {
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
   // Customization state
   const [darkMode, setDarkMode] = useState(false);
@@ -107,6 +109,8 @@ function HomeContent() {
         // Only use saved widget if no URL parameter
         if (!urlWidget && prefs.activeWidget) setActiveWidget(prefs.activeWidget);
       }
+      const savedSidebar = localStorage.getItem('widgetSidebarCollapsed');
+      if (savedSidebar !== null) setSidebarCollapsed(savedSidebar === 'true');
     } catch (e) {
       console.error('Failed to load preferences:', e);
     }
@@ -143,20 +147,16 @@ function HomeContent() {
 
   const currentWidget = WIDGETS.find(w => w.id === activeWidget);
 
-  // Close menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    if (!prefsLoaded) return;
+    try {
+      localStorage.setItem('widgetSidebarCollapsed', sidebarCollapsed ? 'true' : 'false');
+    } catch {}
+  }, [prefsLoaded, sidebarCollapsed]);
 
   const handleWidgetSelect = (widgetId: WidgetId) => {
     setActiveWidget(widgetId);
-    setMenuOpen(false);
+    setSidebarMobileOpen(false);
   };
 
   const generateEmbedCode = () => {
@@ -216,6 +216,8 @@ function HomeContent() {
         return <DirectionsEmbed {...commonProps} />;
       case 'truck':
         return <TruckRouting {...commonProps} />;
+      case 'route-weather':
+        return <RouteWeatherAlerts {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':
@@ -245,99 +247,177 @@ function HomeContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" style={{ minHeight: '100vh' }}>
-      <div className="p-2 md:p-6">
-        <div className="max-w-6xl mx-auto">
-        {/* Compact Header with Widget Selector */}
-        <div className="flex items-center justify-between mb-6">
-          {/* Widget Selector Dropdown */}
-          <div className="relative z-50" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 rounded-xl bg-white shadow-lg shadow-gray-200/80 hover:shadow-xl transition-all"
-            >
-              <Grid3X3 className="w-5 h-5 text-gray-500" />
-              <span className="text-sm font-semibold text-gray-900">{currentWidget?.name}</span>
-              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
-            </button>
+    <div className="min-h-screen bg-gray-50 flex" style={{ minHeight: '100vh' }}>
+      {/* Mobile overlay */}
+      {sidebarMobileOpen && (
+        <div className="fixed inset-0 bg-black/40 z-[60] md:hidden" onClick={() => setSidebarMobileOpen(false)} />
+      )}
 
-            {/* Dropdown Menu */}
-            {menuOpen && (
-              <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-xl shadow-2xl shadow-gray-300/50 border border-gray-100 overflow-hidden z-50">
-                <div className="p-2 border-b border-gray-100">
-                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider px-2">Select Widget</p>
-                </div>
-                <div className="max-h-[400px] overflow-y-auto p-2">
-                  {WIDGETS.map((widget) => {
-                    const isActive = activeWidget === widget.id;
-                    return (
-                      <button
-                        key={widget.id}
-                        onClick={() => handleWidgetSelect(widget.id)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                          isActive 
-                            ? 'bg-blue-50 border border-blue-200' 
-                            : 'hover:bg-gray-50'
-                        }`}
-                      >
-                        <div 
-                          className={`w-2 h-2 rounded-full flex-shrink-0`}
-                          style={{ backgroundColor: isActive ? (widget.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
-                            {widget.name}
-                          </div>
-                          <div className="text-xs text-gray-500 truncate">{widget.description}</div>
-                        </div>
-                        {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
+      {/* Sidebar */}
+      <aside
+        className={[
+          'bg-white border-r border-gray-200 flex-shrink-0',
+          sidebarCollapsed ? 'w-[72px]' : 'w-[280px]',
+          'hidden md:flex md:flex-col',
+        ].join(' ')}
+      >
+        <div className="h-14 px-3 flex items-center justify-between border-b border-gray-200">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}12` }}>
+              <span className="text-sm font-bold" style={{ color: accentColor }}>MQ</span>
+            </div>
+            {!sidebarCollapsed && (
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-gray-900 truncate">Widgets</div>
+                <div className="text-[11px] text-gray-500 truncate">Pick a widget</div>
               </div>
             )}
           </div>
-
-          {/* Right Controls - Always Visible */}
-          <div className="flex items-center gap-2">
-            {/* Share/Permalink Button */}
-            <button
-              onClick={copyPermalink}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
-              title="Copy shareable link (embed mode)"
-            >
-              {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
-              <span className="hidden sm:inline text-sm">{copiedLink ? 'Copied!' : 'Share'}</span>
-            </button>
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
-              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
-            >
-              <Settings className="w-4 h-4" />
-              <span className="hidden sm:inline">Customize</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(v => !v)}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+            title={sidebarCollapsed ? 'Expand' : 'Collapse'}
+          >
+            <ChevronLeft className={`w-4 h-4 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} />
+          </button>
         </div>
 
-        {/* Widget Display */}
-        <div className="flex flex-col items-center w-full relative z-10">
-          <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl">
-            {renderWidget()}
-          </div>
-          {activeWidget === 'address' && (
-            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-3`}>
-              Powered by <strong>MapQuest</strong>
+        <nav className="flex-1 overflow-y-auto p-2">
+          {WIDGETS.map((w) => {
+            const isActive = activeWidget === w.id;
+            const href = `/?widget=${w.id}`;
+            return (
+              <Link
+                key={w.id}
+                href={href}
+                onClick={() => handleWidgetSelect(w.id)}
+                className={[
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
+                  isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
+                ].join(' ')}
+              >
+                <div
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: isActive ? (w.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
+                />
+                {!sidebarCollapsed && (
+                  <div className="min-w-0 flex-1">
+                    <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
+                      {w.name}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">{w.description}</div>
+                  </div>
+                )}
+                {!sidebarCollapsed && isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      {/* Mobile drawer */}
+      <aside
+        className={[
+          'fixed top-0 bottom-0 left-0 bg-white border-r border-gray-200 z-[70] w-[280px] md:hidden',
+          sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full',
+          'transition-transform',
+        ].join(' ')}
+      >
+        <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200">
+          <div className="text-sm font-semibold text-gray-900">Widgets</div>
+          <button className="p-2 rounded-lg hover:bg-gray-100 text-gray-600" onClick={() => setSidebarMobileOpen(false)}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <nav className="h-[calc(100%-56px)] overflow-y-auto p-2">
+          {WIDGETS.map((w) => {
+            const isActive = activeWidget === w.id;
+            const href = `/?widget=${w.id}`;
+            return (
+              <Link
+                key={w.id}
+                href={href}
+                onClick={() => handleWidgetSelect(w.id)}
+                className={[
+                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
+                  isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
+                ].join(' ')}
+              >
+                <div
+                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: isActive ? (w.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>{w.name}</div>
+                  <div className="text-xs text-gray-500 truncate">{w.description}</div>
+                </div>
+                {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
+
+      {/* Main */}
+      <div className="flex-1 min-w-0">
+        <div className="p-2 md:p-6">
+          <div className="max-w-6xl mx-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3 min-w-0">
+                <button
+                  className="md:hidden p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
+                  onClick={() => setSidebarMobileOpen(true)}
+                  title="Open widget menu"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-900 truncate">{currentWidget?.name}</div>
+                  <div className="text-xs text-gray-500 truncate">{currentWidget?.description}</div>
+                </div>
+              </div>
+
+              {/* Right Controls */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={copyPermalink}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
+                  title="Copy shareable link (embed mode)"
+                >
+                  {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
+                  <span className="hidden sm:inline text-sm">{copiedLink ? 'Copied!' : 'Share'}</span>
+                </button>
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
+                  title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                >
+                  {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                </button>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span className="hidden sm:inline">Customize</span>
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Widget Display */}
+            <div className="flex flex-col items-center w-full relative z-10">
+              <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl">
+                {renderWidget()}
+              </div>
+              {activeWidget === 'address' && (
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-3`}>
+                  Powered by <strong>MapQuest</strong>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
