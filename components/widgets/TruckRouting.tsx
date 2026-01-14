@@ -621,7 +621,7 @@ export default function TruckRouting({
         </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-96 flex flex-col border-t md:border-t-0 md:border-r overflow-y-auto md:order-1"
+          className="w-full md:w-96 flex flex-col border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header */}
@@ -653,287 +653,260 @@ export default function TruckRouting({
             </div>
           </div>
 
-          {/* Vehicle Profile Section */}
-          <div 
-            className="flex-shrink-0"
-            style={{ borderBottom: '1px solid var(--border-subtle)' }}
-          >
-            <button
-              onClick={() => setShowVehicleSettings(!showVehicleSettings)}
-              className="w-full flex items-center justify-between px-5 py-4 transition-colors"
-              style={{ background: 'transparent' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          {/* Scrollable content (CTA is always visible below) */}
+          <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
+            {/* Vehicle Profile Section */}
+            <div 
+              className="flex-shrink-0"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
-              <div className="flex items-center gap-2">
-                <Settings2 className="w-4 h-4" style={{ color: accentColor }} />
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                  Vehicle Profile
+              <button
+                onClick={() => setShowVehicleSettings(!showVehicleSettings)}
+                className="w-full flex items-center justify-between px-5 py-4 transition-colors"
+                style={{ background: 'transparent' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
+                <div className="flex items-center gap-2">
+                  <Settings2 className="w-4 h-4" style={{ color: accentColor }} />
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                    Vehicle Profile
+                  </span>
+                </div>
+                <span style={{ color: 'var(--text-muted)' }}>
+                  {showVehicleSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </span>
-              </div>
-              <span style={{ color: 'var(--text-muted)' }}>
-                {showVehicleSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </span>
-            </button>
+              </button>
 
-            {showVehicleSettings && (
-              <div className="px-5 pb-5">
-                {/* Vehicle Summary */}
-                <div 
-                  className="p-3 rounded-xl mb-4"
-                  style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}30` }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Truck className="w-4 h-4" style={{ color: accentColor }} />
-                    <span className="text-xs font-semibold" style={{ color: accentColor }}>Current Profile</span>
+              {showVehicleSettings && (
+                <div className="px-5 pb-5">
+                  {/* Vehicle Summary */}
+                  <div 
+                    className="p-3 rounded-xl mb-4"
+                    style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}30` }}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Truck className="w-4 h-4" style={{ color: accentColor }} />
+                      <span className="text-xs font-semibold" style={{ color: accentColor }}>Current Profile</span>
+                    </div>
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L · {vehicle.weight} tons · {vehicle.axleCount} axles
+                    </p>
                   </div>
-                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L · {vehicle.weight} tons · {vehicle.axleCount} axles
-                  </p>
-                </div>
 
-                {/* Vehicle Inputs */}
-                <div className="grid grid-cols-2 gap-3">
-                  <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
-                  <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
-                  <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
-                  <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
-                  <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
-                </div>
-
-                {/* Show Truck Restrictions Toggle */}
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {showTruckRestrictions ? (
-                      <Eye className="w-3.5 h-3.5" style={{ color: accentColor }} />
-                    ) : (
-                      <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-                    )}
-                    <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                      Show restrictions on map
-                    </span>
+                  {/* Vehicle Inputs */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
+                    <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
+                    <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
+                    <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
+                    <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
                   </div>
-                  <button
-                    onClick={() => setShowTruckRestrictions(!showTruckRestrictions)}
-                    className="relative w-10 h-5 rounded-full transition-colors"
+
+                  {/* Show Truck Restrictions Toggle */}
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {showTruckRestrictions ? (
+                        <Eye className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                      ) : (
+                        <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                      )}
+                      <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                        Show restrictions on map
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowTruckRestrictions(!showTruckRestrictions)}
+                      className="relative w-10 h-5 rounded-full transition-colors"
+                      style={{ 
+                        background: showTruckRestrictions ? accentColor : 'var(--border-default)'
+                      }}
+                    >
+                      <div 
+                        className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                        style={{ 
+                          transform: showTruckRestrictions ? 'translateX(22px)' : 'translateX(2px)'
+                        }}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Warning Note */}
+                  <div 
+                    className="flex items-start gap-2 mt-4 p-3 rounded-lg"
+                    style={{ background: 'var(--color-warning-bg)' }}
+                  >
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
+                    <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
+                      Route avoids low bridges, weight-restricted roads, and other truck restrictions based on your vehicle profile.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Address Inputs */}
+            <div 
+              className="p-5 flex-shrink-0"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              <div className="space-y-1">
+                {/* From Input */}
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                     style={{ 
-                      background: showTruckRestrictions ? accentColor : 'var(--border-default)'
+                      background: 'var(--bg-panel)',
+                      border: '2px solid var(--border-default)',
+                      color: 'var(--text-secondary)',
                     }}
                   >
+                    A
+                  </div>
+                  <AddressAutocomplete
+                    value={from}
+                    onChange={setFrom}
+                    onSelect={(result) => {
+                      if (result.lat && result.lng) {
+                        setFromCoords({ lat: result.lat, lng: result.lng });
+                      }
+                    }}
+                    placeholder="Enter origin"
+                    darkMode={darkMode}
+                    inputBg={inputBg}
+                    textColor={textColor}
+                    mutedText={mutedText}
+                    borderColor={borderColor}
+                    className="flex-1"
+                    hideIcon
+                  />
+                </div>
+
+                {/* Connection Line */}
+                <div className="flex items-center gap-3">
+                  <div className="w-8 flex justify-center">
                     <div 
-                      className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                      style={{ 
-                        transform: showTruckRestrictions ? 'translateX(22px)' : 'translateX(2px)'
-                      }}
+                      className="w-0.5 h-2 rounded-full"
+                      style={{ background: 'var(--border-default)' }}
                     />
-                  </button>
+                  </div>
                 </div>
 
-                {/* Warning Note */}
-                <div 
-                  className="flex items-start gap-2 mt-4 p-3 rounded-lg"
-                  style={{ background: 'var(--color-warning-bg)' }}
-                >
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
-                  <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
-                    Route avoids low bridges, weight-restricted roads, and other truck restrictions based on your vehicle profile.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Address Inputs */}
-          <div 
-            className="p-5 flex-shrink-0"
-            style={{ borderBottom: '1px solid var(--border-subtle)' }}
-          >
-            <div className="space-y-1">
-              {/* From Input */}
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ 
-                    background: 'var(--bg-panel)',
-                    border: '2px solid var(--border-default)',
-                    color: 'var(--text-secondary)',
-                  }}
-                >
-                  A
-                </div>
-                <AddressAutocomplete
-                  value={from}
-                  onChange={setFrom}
-                  onSelect={(result) => {
-                    if (result.lat && result.lng) {
-                      setFromCoords({ lat: result.lat, lng: result.lng });
-                    }
-                  }}
-                  placeholder="Enter origin"
-                  darkMode={darkMode}
-                  inputBg={inputBg}
-                  textColor={textColor}
-                  mutedText={mutedText}
-                  borderColor={borderColor}
-                  className="flex-1"
-                  hideIcon
-                />
-              </div>
-
-              {/* Connection Line */}
-              <div className="flex items-center gap-3">
-                <div className="w-8 flex justify-center">
+                {/* To Input */}
+                <div className="flex items-center gap-3">
                   <div 
-                    className="w-0.5 h-2 rounded-full"
-                    style={{ background: 'var(--border-default)' }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                    style={{ 
+                      background: `${accentColor}15`,
+                      border: `2px solid ${accentColor}`,
+                      color: accentColor,
+                    }}
+                  >
+                    B
+                  </div>
+                  <AddressAutocomplete
+                    value={to}
+                    onChange={setTo}
+                    onSelect={(result) => {
+                      if (result.lat && result.lng) {
+                        setToCoords({ lat: result.lat, lng: result.lng });
+                      }
+                    }}
+                    placeholder="Enter destination"
+                    darkMode={darkMode}
+                    inputBg={inputBg}
+                    textColor={textColor}
+                    mutedText={mutedText}
+                    borderColor={borderColor}
+                    className="flex-1"
+                    hideIcon
                   />
                 </div>
               </div>
 
-              {/* To Input */}
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ 
-                    background: `${accentColor}15`,
-                    border: `2px solid ${accentColor}`,
-                    color: accentColor,
-                  }}
-                >
-                  B
-                </div>
-                <AddressAutocomplete
-                  value={to}
-                  onChange={setTo}
-                  onSelect={(result) => {
-                    if (result.lat && result.lng) {
-                      setToCoords({ lat: result.lat, lng: result.lng });
-                    }
-                  }}
-                  placeholder="Enter destination"
-                  darkMode={darkMode}
-                  inputBg={inputBg}
-                  textColor={textColor}
-                  mutedText={mutedText}
-                  borderColor={borderColor}
-                  className="flex-1"
-                  hideIcon
-                />
-              </div>
-            </div>
-
-            {/* Departure Time */}
-            <div className="mt-4 relative">
-              <button
-                onClick={() => setShowDepartureOptions(!showDepartureOptions)}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
-                style={{
-                  background: 'var(--bg-panel)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4" style={{ color: accentColor }} />
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>
-                    {formatDepartureTime(departureTime)}
-                  </span>
-                </div>
-                <ChevronDown 
-                  className={`w-4 h-4 transition-transform ${showDepartureOptions ? 'rotate-180' : ''}`} 
-                  style={{ color: 'var(--text-muted)' }} 
-                />
-              </button>
-
-              {showDepartureOptions && (
-                <div 
-                  className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20"
+              {/* Departure Time */}
+              <div className="mt-4 relative">
+                <button
+                  onClick={() => setShowDepartureOptions(!showDepartureOptions)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
                   style={{
-                    background: 'var(--bg-widget)',
+                    background: 'var(--bg-panel)',
                     border: '1px solid var(--border-subtle)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   }}
                 >
-                  <button
-                    onClick={() => { setDepartureTime('now'); setShowDepartureOptions(false); }}
-                    className="w-full px-3 py-2.5 text-left text-sm transition-colors"
-                    style={{ 
-                      background: departureTime === 'now' ? `${accentColor}15` : 'transparent',
-                      color: departureTime === 'now' ? accentColor : 'var(--text-main)',
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4" style={{ color: accentColor }} />
+                    <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>
+                      {formatDepartureTime(departureTime)}
+                    </span>
+                  </div>
+                  <ChevronDown 
+                    className={`w-4 h-4 transition-transform ${showDepartureOptions ? 'rotate-180' : ''}`} 
+                    style={{ color: 'var(--text-muted)' }} 
+                  />
+                </button>
+
+                {showDepartureOptions && (
+                  <div 
+                    className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-40"
+                    style={{
+                      background: 'var(--bg-widget)',
+                      border: '1px solid var(--border-subtle)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                     }}
                   >
-                    Leave now
-                  </button>
-                  {[15, 30, 60].map((mins) => {
-                    const time = new Date(Date.now() + mins * 60000);
-                    const label = mins < 60 ? `In ${mins} minutes` : 'In 1 hour';
-                    return (
-                      <button
-                        key={mins}
-                        onClick={() => { setDepartureTime(time); setShowDepartureOptions(false); }}
-                        className="w-full px-3 py-2.5 text-left text-sm transition-colors"
-                        style={{ color: 'var(--text-main)' }}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                  <div 
-                    className="px-3 py-2.5"
-                    style={{ borderTop: '1px solid var(--border-subtle)' }}
-                  >
-                    <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
-                      Custom time
-                    </label>
-                    <input
-                      type="datetime-local"
-                      min={new Date().toISOString().slice(0, 16)}
-                      className="w-full px-2 py-1.5 rounded-lg text-sm"
-                      style={{
-                        background: 'var(--bg-input)',
-                        border: '1px solid var(--border-subtle)',
-                        color: 'var(--text-main)',
+                    <button
+                      onClick={() => { setDepartureTime('now'); setShowDepartureOptions(false); }}
+                      className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                      style={{ 
+                        background: departureTime === 'now' ? `${accentColor}15` : 'transparent',
+                        color: departureTime === 'now' ? accentColor : 'var(--text-main)',
                       }}
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          setDepartureTime(new Date(e.target.value));
-                          setShowDepartureOptions(false);
-                        }
-                      }}
-                    />
+                    >
+                      Leave now
+                    </button>
+                    {[15, 30, 60].map((mins) => {
+                      const time = new Date(Date.now() + mins * 60000);
+                      const label = mins < 60 ? `In ${mins} minutes` : 'In 1 hour';
+                      return (
+                        <button
+                          key={mins}
+                          onClick={() => { setDepartureTime(time); setShowDepartureOptions(false); }}
+                          className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                          style={{ color: 'var(--text-main)' }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                    <div 
+                      className="px-3 py-2.5"
+                      style={{ borderTop: '1px solid var(--border-subtle)' }}
+                    >
+                      <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
+                        Custom time
+                      </label>
+                      <input
+                        type="datetime-local"
+                        min={new Date().toISOString().slice(0, 16)}
+                        className="w-full px-2 py-1.5 rounded-lg text-sm"
+                        style={{
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-subtle)',
+                          color: 'var(--text-main)',
+                        }}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            setDepartureTime(new Date(e.target.value));
+                            setShowDepartureOptions(false);
+                          }
+                        }}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-
-            {/* Calculate Button */}
-            <button
-              onClick={calculateRoute}
-              disabled={loading || !from.trim() || !to.trim()}
-              className="prism-btn prism-btn-primary w-full mt-5"
-              style={{ 
-                background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
-                boxShadow: `0 4px 12px ${accentColor}40`,
-              }}
-            >
-              {loading ? (
-                <><Loader2 className="w-4 h-4 prism-spinner" /> Calculating Truck Route...</>
-              ) : (
-                <><Navigation className="w-4 h-4" /> Get Truck Route</>
-              )}
-            </button>
-
-            {error && (
-              <p 
-                className="mt-3 text-sm font-medium px-3 py-2 rounded-lg"
-                style={{ 
-                  color: 'var(--color-error)', 
-                  background: 'var(--color-error-bg)' 
-                }}
-              >
-                {error}
-              </p>
-            )}
-          </div>
 
           {/* Route Summary */}
           {route && (
@@ -1089,6 +1062,43 @@ export default function TruckRouting({
               )}
             </div>
           )}
+          </div>
+
+          {/* Footer CTA (always visible) */}
+          <div
+            className="p-5 flex-shrink-0"
+            style={{
+              borderTop: '1px solid var(--border-subtle)',
+              background: 'var(--bg-panel)',
+            }}
+          >
+            <button
+              onClick={calculateRoute}
+              disabled={loading || !from.trim() || !to.trim()}
+              className="prism-btn prism-btn-primary w-full"
+              style={{ 
+                background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                boxShadow: `0 8px 20px ${accentColor}40`,
+              }}
+            >
+              {loading ? (
+                <><Loader2 className="w-4 h-4 prism-spinner" /> Calculating Truck Route...</>
+              ) : (
+                <><Navigation className="w-4 h-4" /> Get Truck Route</>
+              )}
+            </button>
+
+            {error && (
+              <p 
+                className="mt-3 text-sm font-medium px-3 py-2 rounded-lg"
+                style={{ 
+                  color: 'var(--color-error)', 
+                  background: 'var(--color-error-bg)' 
+                }}
+              >
+                {error}
+              </p>
+            )}
         </div>
 
       </div>
