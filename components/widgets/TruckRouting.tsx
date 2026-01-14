@@ -1010,16 +1010,7 @@ export default function TruckRouting({
                 </div>
                 )}
               </div>
-            ) : (
-              <div className="flex-1 min-h-0 flex items-center justify-center px-6 text-center">
-                <div>
-                  <Truck className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-                    Enter origin and destination to calculate a truck-safe route
-                  </p>
-                </div>
-              </div>
-            )}
+            ) : null}
           </div>
 
           {/* Footer CTA (always visible) */}
