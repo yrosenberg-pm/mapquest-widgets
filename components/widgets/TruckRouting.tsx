@@ -681,9 +681,6 @@ export default function TruckRouting({
                       <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
                         {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L · {vehicle.weight} tons · {vehicle.axleCount} axles
                       </p>
-                      <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ background: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}25` }}>
-                        Truck safe
-                      </span>
                     </div>
 
                     {/* Vehicle Inputs */}
@@ -916,16 +913,6 @@ export default function TruckRouting({
               
               {/* Route Tags */}
               <div className="flex flex-wrap gap-2 mt-3">
-                <span 
-                  className="text-xs font-medium px-2.5 py-1 rounded-full flex items-center gap-1"
-                  style={{ 
-                    background: `${accentColor}15`, 
-                    color: accentColor 
-                  }}
-                >
-                  <Truck className="w-3 h-3" />
-                  Truck Safe
-                </span>
                 {route.hasHighway && (
                   <span 
                     className="text-xs font-medium px-2.5 py-1 rounded-full"
