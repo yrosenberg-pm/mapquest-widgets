@@ -626,7 +626,7 @@ export default function TruckRouting({
         >
           {/* Header */}
           <div 
-            className="p-5 flex-shrink-0"
+            className="p-4 flex-shrink-0"
             style={{ 
               borderBottom: '1px solid var(--border-subtle)',
               background: 'var(--bg-panel)',
@@ -653,104 +653,92 @@ export default function TruckRouting({
             </div>
           </div>
 
-          {/* Scrollable content (CTA is always visible below) */}
-          <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
-            {/* Vehicle Profile Section */}
-            <div 
-              className="flex-shrink-0"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <button
-                onClick={() => setShowVehicleSettings(!showVehicleSettings)}
-                className="w-full flex items-center justify-between px-5 py-4 transition-colors"
-                style={{ background: 'transparent' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                <div className="flex items-center gap-2">
-                  <Settings2 className="w-4 h-4" style={{ color: accentColor }} />
-                  <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                    Vehicle Profile
+          {/* Body: keep inputs visible; make results scroll when needed */}
+          <div className="flex-1 min-h-0 flex flex-col">
+            {/* Controls (no scrolling) */}
+            <div className="p-4 space-y-3 flex-shrink-0" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
+              {/* Vehicle Profile Section */}
+              <div className="rounded-2xl" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+                <button
+                  onClick={() => setShowVehicleSettings(!showVehicleSettings)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors"
+                  style={{ background: 'transparent' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <div className="flex items-center gap-2">
+                    <Settings2 className="w-4 h-4" style={{ color: accentColor }} />
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                      Vehicle Profile
+                    </span>
+                  </div>
+                  <span style={{ color: 'var(--text-muted)' }}>
+                    {showVehicleSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </span>
-                </div>
-                <span style={{ color: 'var(--text-muted)' }}>
-                  {showVehicleSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </span>
-              </button>
+                </button>
 
-              {showVehicleSettings && (
-                <div className="px-5 pb-5">
-                  {/* Vehicle Summary */}
-                  <div 
-                    className="p-3 rounded-xl mb-4"
-                    style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}30` }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Truck className="w-4 h-4" style={{ color: accentColor }} />
-                      <span className="text-xs font-semibold" style={{ color: accentColor }}>Current Profile</span>
-                    </div>
-                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L · {vehicle.weight} tons · {vehicle.axleCount} axles
-                    </p>
-                  </div>
-
-                  {/* Vehicle Inputs */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
-                    <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
-                    <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
-                    <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
-                    <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
-                  </div>
-
-                  {/* Show Truck Restrictions Toggle */}
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {showTruckRestrictions ? (
-                        <Eye className="w-3.5 h-3.5" style={{ color: accentColor }} />
-                      ) : (
-                        <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
-                      )}
-                      <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
-                        Show restrictions on map
+                {showVehicleSettings && (
+                  <div className="px-4 pb-4">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                        {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L · {vehicle.weight} tons · {vehicle.axleCount} axles
+                      </p>
+                      <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ background: `${accentColor}12`, color: accentColor, border: `1px solid ${accentColor}25` }}>
+                        Truck safe
                       </span>
                     </div>
-                    <button
-                      onClick={() => setShowTruckRestrictions(!showTruckRestrictions)}
-                      className="relative w-10 h-5 rounded-full transition-colors"
-                      style={{ 
-                        background: showTruckRestrictions ? accentColor : 'var(--border-default)'
-                      }}
-                    >
-                      <div 
-                        className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+
+                    {/* Vehicle Inputs */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
+                      <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
+                      <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
+                      <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
+                      <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
+                    </div>
+
+                    {/* Show Truck Restrictions Toggle */}
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {showTruckRestrictions ? (
+                          <Eye className="w-3.5 h-3.5" style={{ color: accentColor }} />
+                        ) : (
+                          <EyeOff className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+                        )}
+                        <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                          Show restrictions on map
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => setShowTruckRestrictions(!showTruckRestrictions)}
+                        className="relative w-10 h-5 rounded-full transition-colors"
                         style={{ 
-                          transform: showTruckRestrictions ? 'translateX(22px)' : 'translateX(2px)'
+                          background: showTruckRestrictions ? accentColor : 'var(--border-default)'
                         }}
-                      />
-                    </button>
-                  </div>
+                      >
+                        <div 
+                          className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                          style={{ 
+                            transform: showTruckRestrictions ? 'translateX(22px)' : 'translateX(2px)'
+                          }}
+                        />
+                      </button>
+                    </div>
 
-                  {/* Warning Note */}
-                  <div 
-                    className="flex items-start gap-2 mt-4 p-3 rounded-lg"
-                    style={{ background: 'var(--color-warning-bg)' }}
-                  >
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
-                    <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
-                      Route avoids low bridges, weight-restricted roads, and other truck restrictions based on your vehicle profile.
-                    </p>
+                    {/* Compact warning */}
+                    <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--color-warning-bg)' }}>
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
+                      <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
+                        Avoids low bridges and restricted roads using your vehicle profile.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            {/* Address Inputs */}
-            <div 
-              className="p-5 flex-shrink-0"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <div className="space-y-1">
+              {/* Address Inputs */}
+              <div className="rounded-2xl p-4" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+                <div className="space-y-1">
                 {/* From Input */}
                 <div className="flex items-center gap-3">
                   <div 
@@ -825,7 +813,7 @@ export default function TruckRouting({
               </div>
 
               {/* Departure Time */}
-              <div className="mt-4 relative">
+              <div className="mt-3 relative">
                 <button
                   onClick={() => setShowDepartureOptions(!showDepartureOptions)}
                   className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
@@ -906,7 +894,12 @@ export default function TruckRouting({
                   </div>
                 )}
               </div>
+              </div>
             </div>
+
+            {/* Results (scroll only when route exists) */}
+            {route ? (
+              <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
 
           {/* Route Summary */}
           {route && (
@@ -989,12 +982,12 @@ export default function TruckRouting({
             </div>
           )}
 
-          {/* Turn-by-Turn */}
-          {route && route.steps.length > 0 && (
-            <div className="flex-1 flex flex-col min-h-0">
+                {/* Turn-by-Turn */}
+                {route.steps.length > 0 && (
+                  <div className="flex flex-col">
               <button
                 onClick={() => setStepsExpanded(!stepsExpanded)}
-                className="flex items-center justify-between px-5 py-4 flex-shrink-0 transition-colors"
+                className="flex items-center justify-between px-4 py-3 transition-colors"
                 style={{ background: 'transparent' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -1018,15 +1011,12 @@ export default function TruckRouting({
                 </div>
               </button>
 
-              {stepsExpanded && (
-                <div 
-                  className="flex-1 overflow-y-auto prism-scrollbar"
-                  style={{ borderTop: '1px solid var(--border-subtle)', maxHeight: '200px' }}
-                >
+                  {stepsExpanded && (
+                    <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   {route.steps.map((step, index) => (
                     <div 
                       key={index} 
-                      className="flex items-start gap-3 px-5 py-4"
+                      className="flex items-start gap-3 px-4 py-3"
                       style={{ borderBottom: '1px solid var(--border-subtle)' }}
                     >
                       <div
@@ -1058,15 +1048,26 @@ export default function TruckRouting({
                       </div>
                     </div>
                   ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 min-h-0 flex items-center justify-center px-6 text-center">
+                <div>
+                  <Truck className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.35 }} />
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+                    Enter origin and destination to calculate a truck-safe route
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer CTA (always visible) */}
           <div
-            className="p-5 flex-shrink-0"
+            className="p-4 flex-shrink-0"
             style={{
               borderTop: '1px solid var(--border-subtle)',
               background: 'var(--bg-panel)',
