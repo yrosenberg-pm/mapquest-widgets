@@ -140,8 +140,8 @@ export async function GET(request: NextRequest) {
           if (truckAxles) urlParams.set('truck[axleCount]', truckAxles);
           urlParams.set('truck[type]', 'straight');
           
-          // Add shippedHazardousGoods=none to ensure proper restriction checking
-          urlParams.set('truck[shippedHazardousGoods]', 'none');
+          // Don't include shippedHazardousGoods if not carrying hazmat
+          // The API will still check dimensional restrictions
           
           url = `${ENDPOINTS.routes}?${urlParams.toString()}`;
           
