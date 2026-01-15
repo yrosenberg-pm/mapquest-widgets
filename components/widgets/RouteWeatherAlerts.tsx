@@ -18,6 +18,7 @@ import {
   Thermometer,
   Wind,
   AlertTriangle,
+  Link2,
 } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
 
@@ -60,6 +61,7 @@ type WeatherObservation = {
 
 type ForecastDay = {
   dayOfWeek?: string;
+  dayOfMonth?: string;
   highTemperature?: string | number;
   lowTemperature?: string | number;
   description?: string;
@@ -92,6 +94,7 @@ type RouteAlert = {
   detail?: string;
   timeWindow?: string;
   milesAt?: number;
+  url?: string;
   lat: number;
   lng: number;
 };
@@ -113,6 +116,24 @@ function severityStyles(sev: Severity) {
     default:
       return { bg: '#3b82f615', border: '#3b82f640', text: '#3b82f6' };
   }
+}
+
+function formatMiles(n: number) {
+  return new Intl.NumberFormat('en-US').format(Math.round(n));
+}
+
+function formatAlertTimeWindow(startTime?: string, endTime?: string) {
+  if (!startTime && !endTime) return undefined;
+  const fmt = (iso?: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+  const s = fmt(startTime);
+  const e = fmt(endTime);
+  if (s && e) return `${s} → ${e}`;
+  return s || e || undefined;
 }
 
 function toNumber(v: unknown): number | null {
@@ -302,10 +323,136 @@ function formatHereHourlyLabel(x: any): string {
   return String(raw);
 }
 
+function extractHourlyHourKey(x: any): { key: string; dt: Date } | null {
+  const raw =
+    x?.localTime ??
+    x?.localtime ??
+    x?.validTimeLocal ??
+    x?.validTimeUtc ??
+    x?.utcTime ??
+    x?.time ??
+    x?.timestamp ??
+    null;
+
+  const now = new Date();
+
+  const mk = (dt: Date) => {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const d = String(dt.getDate()).padStart(2, '0');
+    const hh = String(dt.getHours()).padStart(2, '0');
+    return { key: `${y}-${m}-${d} ${hh}`, dt };
+  };
+
+  if (raw == null) return null;
+
+  // ISO timestamp
+  if (typeof raw === 'string' && /T/.test(raw)) {
+    const dt = new Date(raw);
+    if (!Number.isNaN(dt.getTime())) return mk(dt);
+  }
+
+  // yyyymmddhhmm(ss)
+  if (typeof raw === 'string' && /^\d{12,14}$/.test(raw)) {
+    const y = Number(raw.slice(0, 4));
+    const m = Number(raw.slice(4, 6)) - 1;
+    const d = Number(raw.slice(6, 8));
+    const hh = Number(raw.slice(8, 10));
+    const mm = Number(raw.slice(10, 12));
+    const dt = new Date(y, m, d, hh, mm);
+    if (!Number.isNaN(dt.getTime())) return mk(dt);
+  }
+
+  // MMDDHHMMSS (10 digits)
+  if (typeof raw === 'string' && /^\d{10}$/.test(raw)) {
+    const mm = Number(raw.slice(0, 2)) - 1;
+    const dd = Number(raw.slice(2, 4));
+    const hh = Number(raw.slice(4, 6));
+    const min = Number(raw.slice(6, 8));
+    const dt = new Date(now.getFullYear(), mm, dd, hh, min);
+    if (!Number.isNaN(dt.getTime())) return mk(dt);
+  }
+
+  // HHMM numeric-ish
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  if (Number.isFinite(n) && n >= 0 && n <= 2359) {
+    const hh = Math.floor(n / 100);
+    const min = n % 100;
+    const dt = new Date(now);
+    dt.setHours(hh, min, 0, 0);
+    return mk(dt);
+  }
+
+  return null;
+}
+
 function formatTempNoDecimals(v: unknown): string {
   const n = toNumber(v);
   if (n === null) return '--';
   return String(Math.round(n));
+}
+
+function extractDayOfMonth(x: any): string | undefined {
+  const raw =
+    x?.localTime ??
+    x?.utcTime ??
+    x?.validTimeLocal ??
+    x?.validTimeUtc ??
+    x?.date ??
+    x?.forecastTime ??
+    x?.time ??
+    null;
+
+  if (!raw) return undefined;
+
+  // ISO timestamp
+  if (typeof raw === 'string' && /T/.test(raw)) {
+    const dt = new Date(raw);
+    if (!Number.isNaN(dt.getTime())) return String(dt.getDate());
+  }
+
+  // yyyymmddhhmm(ss) or yyyymmdd
+  if (typeof raw === 'string' && /^\d{8,14}$/.test(raw)) {
+    const d = Number(raw.slice(6, 8));
+    if (Number.isFinite(d) && d >= 1 && d <= 31) return String(d);
+  }
+
+  return undefined;
+}
+
+function extractDateKey(x: any): string | undefined {
+  const raw =
+    x?.localTime ??
+    x?.utcTime ??
+    x?.validTimeLocal ??
+    x?.validTimeUtc ??
+    x?.date ??
+    x?.forecastTime ??
+    x?.time ??
+    null;
+
+  if (!raw) return undefined;
+
+  // ISO timestamp
+  if (typeof raw === 'string' && /T/.test(raw)) {
+    const dt = new Date(raw);
+    if (!Number.isNaN(dt.getTime())) {
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const d = String(dt.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  // yyyymmddhhmm(ss) or yyyymmdd
+  if (typeof raw === 'string' && /^\d{8,14}$/.test(raw)) {
+    const y = raw.slice(0, 4);
+    const m = raw.slice(4, 6);
+    const d = raw.slice(6, 8);
+    return `${y}-${m}-${d}`;
+  }
+
+  return undefined;
 }
 
 function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -407,16 +554,19 @@ function AutosuggestInput({
   const debounceRef = useRef<number | null>(null);
   const requestIdRef = useRef(0);
   const selectionLockRef = useRef(false);
+  const lastSelectedQueryRef = useRef<string | null>(null);
 
   useEffect(() => setQuery(value), [value]);
   useEffect(() => {
     // Force-close suggestions after a search is run
     selectionLockRef.current = true;
+    // Treat the current value as "selected" so autosuggest won't reopen until the user types.
+    lastSelectedQueryRef.current = value;
     setOpen(false);
     setItems([]);
     window.setTimeout(() => {
       selectionLockRef.current = false;
-    }, 300);
+    }, 800);
   }, [closeToken]);
 
   useEffect(() => {
@@ -431,6 +581,15 @@ function AutosuggestInput({
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     requestIdRef.current += 1;
     const myReqId = requestIdRef.current;
+
+    // If the query matches the last selected item, don't re-run autosuggest (prevents reopen)
+    if (lastSelectedQueryRef.current && query.trim() === lastSelectedQueryRef.current.trim()) {
+      setLoading(false);
+      setItems([]);
+      setOpen(false);
+      return;
+    }
+
     if (query.trim().length < 3) {
       setItems([]);
       setOpen(false);
@@ -510,10 +669,12 @@ function AutosuggestInput({
         <input
           value={query}
           onChange={(e) => {
+            lastSelectedQueryRef.current = null;
             setQuery(e.target.value);
             onChange(e.target.value);
           }}
           onFocus={() => !selectionLockRef.current && items.length > 0 && setOpen(true)}
+          onBlur={() => setOpen(false)}
           placeholder={placeholder}
           className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium outline-none transition-all"
           style={{ background: bgInput, border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
@@ -539,9 +700,12 @@ function AutosuggestInput({
                 onClick={() => {
                   if (!pos) return;
                   selectionLockRef.current = true;
+                  // Invalidate any in-flight autosuggest request to prevent reopen
+                  requestIdRef.current += 1;
                   onSelect({ label: labelText, lat: pos.lat, lng: pos.lng });
                   setQuery(labelText);
                   onChange(labelText);
+                  lastSelectedQueryRef.current = labelText;
                   setOpen(false);
                   setItems([]);
                   // Give any in-flight request time to settle without reopening the dropdown
@@ -703,37 +867,91 @@ export default function RouteWeatherAlerts({
         dd?.dailyForecasts?.forecastLocation?.[0]?.forecast ||
         findForecastArrayDeep(dd);
 
-      setForecastDays(
-        (Array.isArray(days) ? days : [])
-          .slice(0, 7)
-          .map((x: any) => {
-            const temps = extractDailyTemps(x);
-            return {
-              dayOfWeek: x?.dayOfWeek || x?.weekday || x?.day || x?.weekDay || x?.name,
-              highTemperature: temps.high ?? x?.highTemperature,
-              lowTemperature: temps.low ?? x?.lowTemperature,
-              description: x?.description || x?.skyDescription || x?.forecastDescription,
-              iconName: x?.iconName || x?.icon,
-              precipitationProbability:
-                x?.precipitationProbability ??
-                x?.precipitationProbabilityDay ??
-                x?.precipitationProbabilityNight ??
-                x?.rainFall ??
-                x?.precipChance,
-            };
-          })
-      );
+      // Some HERE payloads include multiple entries per day (e.g., day/night).
+      // Group by calendar date so the UI shows sequential dates (15, 16, 17, ...).
+      const rawDays = Array.isArray(days) ? days : [];
+      const grouped: ForecastDay[] = [];
+      const byKey = new Map<string, ForecastDay>();
+
+      for (const x of rawDays) {
+        const key = extractDateKey(x) || `${x?.dayOfWeek || x?.weekday || x?.day || x?.weekDay || x?.name || 'day'}-${grouped.length}`;
+        const temps = extractDailyTemps(x);
+        const next: ForecastDay = {
+          dayOfWeek: x?.dayOfWeek || x?.weekday || x?.day || x?.weekDay || x?.name,
+          dayOfMonth: extractDayOfMonth(x),
+          highTemperature: temps.high ?? x?.highTemperature,
+          lowTemperature: temps.low ?? x?.lowTemperature,
+          description: x?.description || x?.skyDescription || x?.forecastDescription,
+          iconName: x?.iconName || x?.icon,
+          precipitationProbability:
+            x?.precipitationProbability ??
+            x?.precipitationProbabilityDay ??
+            x?.precipitationProbabilityNight ??
+            x?.rainFall ??
+            x?.precipChance,
+        };
+
+        const existing = byKey.get(key);
+        if (!existing) {
+          byKey.set(key, next);
+          grouped.push(next);
+        } else {
+          // Merge temps if we got separate entries for the same day.
+          const hi = pickFirstNumber(existing.highTemperature, next.highTemperature);
+          const lo = pickFirstNumber(existing.lowTemperature, next.lowTemperature);
+          const hiMerged = pickFirstNumber(
+            typeof existing.highTemperature === 'number' ? existing.highTemperature : hi,
+            typeof next.highTemperature === 'number' ? next.highTemperature : hi
+          );
+          const loMerged = pickFirstNumber(
+            typeof existing.lowTemperature === 'number' ? existing.lowTemperature : lo,
+            typeof next.lowTemperature === 'number' ? next.lowTemperature : lo
+          );
+          existing.highTemperature =
+            existing.highTemperature === undefined ? next.highTemperature : Math.max(toNumber(existing.highTemperature) ?? -Infinity, toNumber(next.highTemperature) ?? -Infinity);
+          existing.lowTemperature =
+            existing.lowTemperature === undefined ? next.lowTemperature : Math.min(toNumber(existing.lowTemperature) ?? Infinity, toNumber(next.lowTemperature) ?? Infinity);
+          // Keep first description/icon (usually daytime) to avoid flicker.
+          if (!existing.dayOfMonth && next.dayOfMonth) existing.dayOfMonth = next.dayOfMonth;
+        }
+
+        if (grouped.length >= 14) break; // safety cap
+      }
+
+      setForecastDays(grouped.slice(0, 7));
 
       const hours = h?.hourlyForecasts?.forecastLocation?.forecast || h?.hourlyForecasts?.forecastLocation?.[0]?.forecast || [];
-      setForecastHours(
-        (Array.isArray(hours) ? hours : []).slice(0, 36).map((x: any) => ({
+      // De-dupe to one entry per hour (some feeds include multiple entries per hour).
+      const rawHours = Array.isArray(hours) ? hours : [];
+      const byHour = new Map<string, { dt: Date; x: any }>();
+      for (const x of rawHours) {
+        const k = extractHourlyHourKey(x);
+        if (!k) continue;
+        const existing = byHour.get(k.key);
+        if (!existing) {
+          byHour.set(k.key, { dt: k.dt, x });
+          continue;
+        }
+        // Prefer the entry that has a real temperature value
+        const curTemp = toNumber(existing.x?.temperature);
+        const nextTemp = toNumber(x?.temperature);
+        if (curTemp === null && nextTemp !== null) {
+          byHour.set(k.key, { dt: k.dt, x });
+        }
+      }
+
+      const uniqueHours = Array.from(byHour.values())
+        .sort((a, b) => a.dt.getTime() - b.dt.getTime())
+        .slice(0, 36)
+        .map(({ x }) => ({
           localTime: formatHereHourlyLabel(x),
           temperature: x.temperature,
           description: x.description,
           iconName: x.iconName,
           precipitationProbability: x.precipitationProbability,
-        }))
-      );
+        }));
+
+      setForecastHours(uniqueHours);
       setLoadingWeather(false);
 
       // Route polyline
@@ -772,22 +990,20 @@ export default function RouteWeatherAlerts({
         const list: AlertItem[] = aJson?.alerts?.alerts || aJson?.alerts || aJson?.warning || aJson?.warnings || [];
         const arr = Array.isArray(list) ? list : [];
         for (const a of arr) {
-          const title = a.headline || a.type || a.description || 'Weather Alert';
+          // Prefer the descriptive event text as the title (often the most human-friendly)
+          const title = a.description || a.headline || a.type || 'Weather Alert';
           const key = `${title}`.toLowerCase();
           if (seen.has(key)) continue;
           seen.add(key);
           const sev = severityFromTitle(title);
-          const timeWindow =
-            a.startTime || a.endTime
-              ? `${a.startTime ? new Date(a.startTime).toLocaleString() : ''}${a.endTime ? ` → ${new Date(a.endTime).toLocaleString()}` : ''}`
-              : undefined;
+          const timeWindow = formatAlertTimeWindow(a.startTime, a.endTime);
           found.push({
             key,
             title,
             severity: sev,
-            detail: a.description,
             timeWindow,
             milesAt: sp.milesAt,
+            url: a.url,
             lat: sp.lat,
             lng: sp.lng,
           });
@@ -812,7 +1028,7 @@ export default function RouteWeatherAlerts({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col md:flex-row md:h-[780px]">
+      <div className="flex flex-col md:flex-row md:h-[820px]">
         {/* Left panel */}
         <div className="w-full md:w-[520px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -832,7 +1048,11 @@ export default function RouteWeatherAlerts({
               label="Starting point"
               placeholder="Enter a starting address"
               value={startText}
-              onChange={(v) => setStartText(v)}
+              onChange={(v) => {
+                setStartText(v);
+                // If user edits text after selecting, discard previous coordinates so runAll re-geocodes.
+                if (start) setStart(null);
+              }}
               onSelect={(sel) => {
                 setStart(sel);
                 setStartText(sel.label);
@@ -846,7 +1066,11 @@ export default function RouteWeatherAlerts({
               label="Destination"
               placeholder="Enter a destination"
               value={destText}
-              onChange={(v) => setDestText(v)}
+              onChange={(v) => {
+                setDestText(v);
+                // If user edits text after selecting, discard previous coordinates so runAll re-geocodes.
+                if (dest) setDest(null);
+              }}
               onSelect={(sel) => {
                 setDest(sel);
                 setDestText(sel.label);
@@ -1004,7 +1228,7 @@ export default function RouteWeatherAlerts({
                   {forecastDays.slice(0, 7).map((d, i) => (
                     <div key={i} className="rounded-xl p-2 text-center" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
                       <div className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
-                        {(d.dayOfWeek || '').slice(0, 3) || '—'}
+                        {d.dayOfMonth || (d.dayOfWeek || '').slice(0, 3) || '—'}
                       </div>
                       <div className="mt-0.5 flex items-center justify-center" style={{ color: accentColor }}>
                         <div className="scale-90">
@@ -1051,11 +1275,7 @@ export default function RouteWeatherAlerts({
                 <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
                   Route Weather Alerts
                 </div>
-                {routeMiles ? (
-                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    ~{routeMiles.toFixed(0)} mi
-                  </div>
-                ) : null}
+                {/* Intentionally no numeric badge here (it was confusing in UI) */}
               </div>
 
               {!start || !dest ? (
@@ -1074,35 +1294,72 @@ export default function RouteWeatherAlerts({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {alerts.slice(0, 2).map((a) => {
+                  {/* Sized so ~2 alerts are visible; additional alerts scroll */}
+                  <div className="max-h-[160px] overflow-y-auto prism-scrollbar pr-1">
+                    <div className="space-y-2">
+                      {alerts.map((a) => {
                     const s = severityStyles(a.severity);
                     return (
-                      <div key={a.key} className="p-3 rounded-xl" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
+                      <div key={a.key} className="p-2 rounded-xl" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <div className="text-sm font-semibold" style={{ color: s.text }}>
+                            <div
+                              className="text-sm font-semibold"
+                              style={{
+                                color: s.text,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 1,
+                                WebkitBoxOrient: 'vertical' as any,
+                                overflow: 'hidden',
+                              }}
+                            >
                               {a.title}
                             </div>
-                            <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
-                              {a.milesAt ? `Near mile ${a.milesAt} of your route` : 'Along your route'}
+                            <div
+                              className="text-xs mt-1"
+                              style={{
+                                color: 'var(--text-secondary)',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: 320,
+                              }}
+                              title={`${
+                                routeMiles != null && a.milesAt != null
+                                  ? `${formatMiles(Math.max(0, routeMiles - a.milesAt))} miles from destination`
+                                  : 'Along your route'
+                              }${a.timeWindow ? ` · ${a.timeWindow}` : ''}`}
+                            >
+                              {routeMiles != null && a.milesAt != null
+                                ? `${formatMiles(Math.max(0, routeMiles - a.milesAt))} miles from destination`
+                                : 'Along your route'}
                               {a.timeWindow ? ` · ${a.timeWindow}` : ''}
                             </div>
                           </div>
-                          <span className="text-[10px] font-semibold px-2 py-1 rounded-full" style={{ background: '#00000010', color: s.text }}>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#00000010', color: s.text }}>
                             {a.severity.toUpperCase()}
                           </span>
                         </div>
-                        {a.detail ? (
-                          <div className="text-xs mt-2" style={{ color: 'var(--text-secondary)' }}>
-                            {a.detail}
-                          </div>
+                        {a.url ? (
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold"
+                            style={{ color: 'var(--text-secondary)' }}
+                          >
+                            <Link2 className="w-3.5 h-3.5" />
+                            View details
+                          </a>
                         ) : null}
                       </div>
                     );
-                  })}
+                      })}
+                    </div>
+                  </div>
                   {alerts.length > 2 && (
                     <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      +{alerts.length - 2} more alerts found (zoom map for markers)
+                      Scroll to view all alerts
                     </div>
                   )}
                 </div>

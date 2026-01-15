@@ -21,6 +21,17 @@ interface Stop {
   geocoded?: boolean;
   duration: number;
   eta?: Date;
+  // Optional delivery window (local time)
+  windowEnabled?: boolean;
+  windowStart?: string; // HH:MM
+  windowEnd?: string; // HH:MM
+  // Computed scheduling fields (based on departure time + route travel + stop duration + wait)
+  arrivalTime?: Date; // raw arrival before waiting
+  departureAt?: Date; // when leaving this stop
+  windowStatus?: 'on-time' | 'tight' | 'early-wait' | 'late' | 'no-window';
+  buffer?: number; // minutes until window closes (from service start)
+  waitTime?: number; // minutes waiting if early
+  lateBy?: number; // minutes late if missed
 }
 
 interface LegInfo {
@@ -86,12 +97,10 @@ export default function MultiStopPlanner({
     routeType: 'fastest' | 'shortest'; 
     avoidHighways: boolean; 
     avoidTolls: boolean;
-    deliveryWindowStart: string;
-    deliveryWindowEnd: string;
-    stopDuration: number;
   }>>({});
   const [highlightedSegment, setHighlightedSegment] = useState<number | null>(null);
   const [showDeparturePicker, setShowDeparturePicker] = useState(false);
+  const [openWindowStopId, setOpenWindowStopId] = useState<string | null>(null);
 
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const departurePickerRef = useRef<HTMLDivElement | null>(null);
@@ -148,6 +157,7 @@ export default function MultiStopPlanner({
     setShowMoreMenu(false);
     setSidebarView('stops');
     setSegmentSettings({});
+    setOpenWindowStopId(null);
   };
 
   const updateStop = (id: string, address: string, lat?: number, lng?: number) => {
@@ -163,22 +173,108 @@ export default function MultiStopPlanner({
 
   const updateStopDetails = (id: string, updates: Partial<Stop>) => {
     setStops(stops.map(s => s.id === id ? { ...s, ...updates } : s));
-    if (routeResult && updates.duration !== undefined) {
+    if (routeResult) {
       calculateETAs(stops.map(s => s.id === id ? { ...s, ...updates } : s), routeResult);
     }
   };
 
+  const parseTimeToMinutes = (t: string): number | null => {
+    const parts = t.split(':').map(Number);
+    if (parts.length < 2) return null;
+    const [h, m] = parts;
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+    return h * 60 + m;
+  };
+
+  const addMinutes = (d: Date, mins: number) => new Date(d.getTime() + mins * 60 * 1000);
+
+  const timeOnDepartureDate = (minsFromMidnight: number): Date => {
+    const base = new Date(departureTime);
+    base.setHours(0, 0, 0, 0);
+    return addMinutes(base, minsFromMidnight);
+  };
+
   const calculateETAs = (stopsToCalc: Stop[], result: RouteResult) => {
-    let currentTime = new Date(departureTime);
-    const updatedStops = stopsToCalc.map((stop, index) => {
-      if (index > 0 && result.legs[index - 1]) {
-        currentTime = new Date(currentTime.getTime() + result.legs[index - 1].time * 60 * 1000);
+    // Only compute ETAs for geocoded stops, in route order.
+    const geocoded = stopsToCalc.filter(s => s.lat !== undefined && s.lng !== undefined);
+    if (geocoded.length < 1) {
+      setStops(stopsToCalc.map(s => ({ ...s, eta: undefined, arrivalTime: undefined, departureAt: undefined, windowStatus: undefined, buffer: undefined, waitTime: undefined, lateBy: undefined })));
+      return;
+    }
+
+    let current = new Date(departureTime);
+    const computedById = new Map<string, Partial<Stop>>();
+    let legIdx = 0;
+
+    for (let i = 0; i < geocoded.length; i++) {
+      const stop = geocoded[i];
+      if (i > 0 && result.legs[legIdx]) {
+        current = addMinutes(current, result.legs[legIdx].time);
+        legIdx += 1;
       }
-      const eta = new Date(currentTime);
-      currentTime = new Date(currentTime.getTime() + stop.duration * 60 * 1000);
-      return { ...stop, eta };
+
+      const arrivalTime = new Date(current);
+
+      // Window logic
+      let windowStatus: Stop['windowStatus'] = stop.windowEnabled ? 'on-time' : 'no-window';
+      let waitTime = 0;
+      let lateBy = 0;
+      let buffer: number | undefined = undefined;
+
+      let serviceStart = new Date(arrivalTime);
+
+      if (stop.windowEnabled && stop.windowStart && stop.windowEnd) {
+        const startMin = parseTimeToMinutes(stop.windowStart);
+        const endMin = parseTimeToMinutes(stop.windowEnd);
+        if (startMin !== null && endMin !== null) {
+          const windowStart = timeOnDepartureDate(startMin);
+          const windowEnd = timeOnDepartureDate(endMin);
+
+          if (arrivalTime < windowStart) {
+            waitTime = Math.round((windowStart.getTime() - arrivalTime.getTime()) / 60000);
+            serviceStart = windowStart;
+            windowStatus = 'early-wait';
+          } else {
+            serviceStart = arrivalTime;
+          }
+
+          if (serviceStart > windowEnd) {
+            lateBy = Math.round((serviceStart.getTime() - windowEnd.getTime()) / 60000);
+            windowStatus = 'late';
+          } else {
+            buffer = Math.round((windowEnd.getTime() - serviceStart.getTime()) / 60000);
+            if (windowStatus !== 'early-wait') {
+              windowStatus = buffer <= 10 ? 'tight' : 'on-time';
+            }
+          }
+        }
+      }
+
+      const eta = new Date(serviceStart);
+      const departureAt = addMinutes(serviceStart, stop.duration);
+      current = new Date(departureAt);
+
+      computedById.set(stop.id, {
+        arrivalTime,
+        eta,
+        departureAt,
+        windowStatus,
+        buffer,
+        waitTime: waitTime || undefined,
+        lateBy: lateBy || undefined,
+      });
+    }
+
+    const merged = stopsToCalc.map(s => {
+      const computed = computedById.get(s.id);
+      if (!computed) {
+        return { ...s, eta: undefined, arrivalTime: undefined, departureAt: undefined, windowStatus: undefined, buffer: undefined, waitTime: undefined, lateBy: undefined };
+      }
+      return { ...s, ...computed };
     });
-    setStops(updatedStops);
+
+    setStops(merged);
   };
 
 
@@ -209,6 +305,7 @@ export default function MultiStopPlanner({
     // Clear route result - user needs to click "Recalculate" or "Optimize" to update
     setRouteResult(null);
     setOriginalRoute(null);
+    setOpenWindowStopId(null);
   };
 
   const resetDragState = () => {
@@ -312,12 +409,59 @@ export default function MultiStopPlanner({
     // Build distance matrix using actual route calculations
     const distanceMatrix = await buildDistanceMatrix(stopsToOptimize);
     
-    const getTotalTime = (indices: number[]): number => {
-      let total = 0;
-      for (let i = 0; i < indices.length - 1; i++) {
-        total += distanceMatrix[indices[i]][indices[i + 1]];
+    const scoreOrder = (indices: number[]) => {
+      // Score includes travel + stop duration + wait + window penalties.
+      let current = new Date(departureTime);
+      let travel = 0;
+      let stopTime = 0;
+      let waitTotal = 0;
+      let latePenalty = 0;
+      let tightPenalty = 0;
+
+      for (let i = 0; i < indices.length; i++) {
+        const idx = indices[i];
+        const stop = stopsToOptimize[idx];
+        if (i > 0) {
+          const prev = indices[i - 1];
+          const legMins = distanceMatrix[prev][idx];
+          travel += legMins;
+          current = addMinutes(current, legMins);
+        }
+
+        const arrival = new Date(current);
+        let serviceStart = new Date(arrival);
+        let wait = 0;
+        let lateBy = 0;
+        let buffer: number | null = null;
+
+        if (stop.windowEnabled && stop.windowStart && stop.windowEnd) {
+          const startMin = parseTimeToMinutes(stop.windowStart);
+          const endMin = parseTimeToMinutes(stop.windowEnd);
+          if (startMin !== null && endMin !== null) {
+            const ws = timeOnDepartureDate(startMin);
+            const we = timeOnDepartureDate(endMin);
+            if (arrival < ws) {
+              wait = (ws.getTime() - arrival.getTime()) / 60000;
+              serviceStart = ws;
+            }
+            if (serviceStart > we) {
+              lateBy = (serviceStart.getTime() - we.getTime()) / 60000;
+            } else {
+              buffer = (we.getTime() - serviceStart.getTime()) / 60000;
+            }
+          }
+        }
+
+        waitTotal += wait;
+        stopTime += stop.duration;
+        if (lateBy > 0) latePenalty += lateBy;
+        if (buffer !== null && buffer <= 10) tightPenalty += 1;
+
+        current = addMinutes(serviceStart, stop.duration);
       }
-      return total;
+
+      const score = travel + stopTime + waitTotal * 2 + latePenalty * 10000 + tightPenalty * 25;
+      return { score, latePenalty, waitTotal, travel, stopTime, tightPenalty };
     };
 
     // Keep first stop fixed (starting point), optimize the rest
@@ -342,14 +486,24 @@ export default function MultiStopPlanner({
 
       const allPermutations = permute(restIndices);
       let bestOrder = restIndices;
-      let bestTime = Infinity;
+      let bestScore = Infinity;
+      let bestLate = Infinity;
 
       for (const perm of allPermutations) {
         const fullRoute = [0, ...perm]; // 0 is the first stop (fixed)
-        const time = getTotalTime(fullRoute);
-        if (time < bestTime) {
-          bestTime = time;
+        const s = scoreOrder(fullRoute);
+        // Prefer feasible (no late) routes; otherwise pick least-late then best score.
+        const late = s.latePenalty;
+        if (late === 0 && (bestLate !== 0 || s.score < bestScore)) {
+          bestLate = 0;
+          bestScore = s.score;
           bestOrder = perm;
+        } else if (late > 0 && bestLate !== 0) {
+          if (late < bestLate || (late === bestLate && s.score < bestScore)) {
+            bestLate = late;
+            bestScore = s.score;
+            bestOrder = perm;
+          }
         }
       }
 
@@ -365,12 +519,14 @@ export default function MultiStopPlanner({
     while (remaining.size > 0) {
       const current = optimizedIndices[optimizedIndices.length - 1];
       let bestNext = -1;
-      let bestTime = Infinity;
+      let bestScore = Infinity;
       
       for (const next of remaining) {
-        const time = distanceMatrix[current][next];
-        if (time < bestTime) {
-          bestTime = time;
+        // Greedy: evaluate immediate candidate using scoring (includes window pressure)
+        const candidate = [...optimizedIndices, next];
+        const s = scoreOrder(candidate);
+        if (s.score < bestScore) {
+          bestScore = s.score;
           bestNext = next;
         }
       }
@@ -440,7 +596,6 @@ export default function MultiStopPlanner({
       
       if (!orderChanged) {
         console.log('ℹ️ Route order is already optimal!');
-        setError('Route order is already optimal - no changes needed.');
         setOptimizing(false);
         return;
       }
@@ -522,10 +677,41 @@ export default function MultiStopPlanner({
       // Shuffle and pick 5 stops
       const shuffled = laStops.sort(() => Math.random() - 0.5);
       const selectedStops = shuffled.slice(0, 5);
+
+      // Set departure time to the next 8:00 AM so windows/presets make sense in the demo.
+      const nextEight = new Date();
+      nextEight.setHours(8, 0, 0, 0);
+      if (nextEight.getTime() < Date.now()) {
+        nextEight.setDate(nextEight.getDate() + 1);
+      }
+      setDepartureTime(nextEight);
+
+      // Prefill durations + windows to illustrate how scheduling works.
+      // Keep start flexible; add windows for subsequent stops.
+      const demoStopsWithWindows: Stop[] = selectedStops.map((s, idx) => {
+        if (idx === 0) return { ...s, duration: 0, windowEnabled: false, windowStart: '', windowEnd: '' };
+        const presets = [
+          { start: '08:30', end: '10:30', duration: 15 }, // early-ish
+          { start: '11:30', end: '13:30', duration: 20 }, // midday
+          { start: '14:00', end: '16:00', duration: 10 }, // afternoon
+          { start: '17:00', end: '18:15', duration: 25 }, // tighter
+        ];
+        const p = presets[(idx - 1) % presets.length];
+        return {
+          ...s,
+          duration: p.duration,
+          windowEnabled: true,
+          windowStart: p.start,
+          windowEnd: p.end,
+        };
+      });
       
-      setStops(selectedStops);
+      setStops(demoStopsWithWindows);
       setRouteResult(null);
       setOriginalRoute(null);
+      setHighlightedSegment(null);
+      // Reset per-segment settings (delivery windows/durations live only on Stops now)
+      setSegmentSettings({});
       // Map will auto-center on LA based on the new stops
     } catch { setError('Failed to add demo stops'); }
     finally { setLoading(false); }
@@ -573,6 +759,7 @@ export default function MultiStopPlanner({
     setError(null);
     setSidebarView('stops');
     setSegmentSettings({});
+    setOpenWindowStopId(null);
   };
 
   const formatTime = (minutes: number) => {
@@ -582,6 +769,14 @@ export default function MultiStopPlanner({
   };
 
   const validStops = stops.filter(s => s.lat && s.lng);
+  const routeTotals = (() => {
+    const driveTime = routeResult?.totalTime ?? 0;
+    const stopTime = validStops.reduce((sum, s) => sum + (s.duration || 0), 0);
+    const waitTime = validStops.reduce((sum, s) => sum + (s.waitTime || 0), 0);
+    const total = driveTime + stopTime + waitTime;
+    const conflicts = validStops.filter(s => s.windowStatus === 'late');
+    return { driveTime, stopTime, waitTime, total, conflictCount: conflicts.length };
+  })();
   const mapCenter = validStops.length > 0
     ? { lat: validStops.reduce((sum, s) => sum + s.lat!, 0) / validStops.length, lng: validStops.reduce((sum, s) => sum + s.lng!, 0) / validStops.length }
     : { lat: 39.8283, lng: -98.5795 };
@@ -837,6 +1032,124 @@ export default function MultiStopPlanner({
                           )}
                         </div>
                       </div>
+
+                      {/* Stop meta row (compact): duration, window, ETA */}
+                      <div className="mt-1.5 pl-7 pr-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0 whitespace-nowrap">
+                            <select
+                              value={stop.duration}
+                              onChange={(e) => updateStopDetails(stop.id, { duration: parseInt(e.target.value) })}
+                              className="px-2 py-1 rounded-lg text-[11px] font-semibold"
+                              style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
+                              title="Duration at stop"
+                            >
+                              <option value={0}>Dwell 0m</option>
+                              <option value={5}>Dwell 5m</option>
+                              <option value={10}>Dwell 10m</option>
+                              <option value={15}>Dwell 15m</option>
+                              <option value={20}>Dwell 20m</option>
+                              <option value={30}>Dwell 30m</option>
+                              <option value={45}>Dwell 45m</option>
+                              <option value={60}>Dwell 60m</option>
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!stop.windowEnabled) {
+                                  updateStopDetails(stop.id, {
+                                    windowEnabled: true,
+                                    windowStart: stop.windowStart || '09:00',
+                                    windowEnd: stop.windowEnd || '11:00',
+                                  });
+                                  setOpenWindowStopId(stop.id);
+                                } else {
+                                  setOpenWindowStopId((prev) => (prev === stop.id ? null : stop.id));
+                                }
+                              }}
+                              className="text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors"
+                              style={{
+                                background: stop.windowEnabled ? `${accentColor}15` : 'var(--bg-panel)',
+                                border: `1px solid ${stop.windowEnabled ? `${accentColor}35` : 'var(--border-subtle)'}`,
+                                color: stop.windowEnabled ? accentColor : 'var(--text-muted)',
+                              }}
+                              title={stop.windowEnabled ? 'Edit delivery window' : 'Add delivery window'}
+                            >
+                              {stop.windowEnabled
+                                ? `${stop.windowStart && stop.windowEnd ? `${stop.windowStart}–${stop.windowEnd}` : 'Set window'}`
+                                : 'Add delivery window'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Delivery window dropdown */}
+                        {stop.windowEnabled && openWindowStopId === stop.id && (
+                          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                            <div
+                              className="p-2 rounded-xl"
+                              style={{
+                                background: 'var(--bg-widget)',
+                                border: '1px solid var(--border-subtle)',
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                                  Delivery window
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateStopDetails(stop.id, { windowEnabled: false, windowStart: '', windowEnd: '' });
+                                      setOpenWindowStopId(null);
+                                    }}
+                                    className="text-[10px] font-semibold px-2 py-1 rounded-lg"
+                                    style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
+                                  >
+                                    Remove
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenWindowStopId(null)}
+                                    className="text-[10px] font-semibold px-2 py-1 rounded-lg"
+                                    style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}25`, color: accentColor }}
+                                  >
+                                    Done
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                                    Open
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={stop.windowStart || ''}
+                                    onChange={(e) => updateStopDetails(stop.id, { windowStart: e.target.value })}
+                                    className="w-full mt-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold"
+                                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                                    Close
+                                  </label>
+                                  <input
+                                    type="time"
+                                    value={stop.windowEnd || ''}
+                                    onChange={(e) => updateStopDetails(stop.id, { windowEnd: e.target.value })}
+                                    className="w-full mt-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold"
+                                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -881,9 +1194,6 @@ export default function MultiStopPlanner({
                           routeType: 'fastest' as const, 
                           avoidHighways: false, 
                           avoidTolls: false,
-                          deliveryWindowStart: '',
-                          deliveryWindowEnd: '',
-                          stopDuration: toStop?.duration || 0,
                         };
                         const settings = { ...defaultSettings, ...segmentSettings[index] };
                         
@@ -967,83 +1277,47 @@ export default function MultiStopPlanner({
                                 </p>
                               </div>
 
-                              {/* Delivery Window & Stop Duration */}
-                              <div className="space-y-2 mb-3" onClick={(e) => e.stopPropagation()}>
-                                <label className="text-[10px] font-semibold uppercase tracking-wider block" style={{ color: accentColor }}>
-                                  Delivery Window
-                                </label>
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <label className="text-[9px] font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
-                                      Earliest
-                                    </label>
-                                    <input
-                                      type="time"
-                                      value={settings.deliveryWindowStart}
-                                      onChange={(e) => setSegmentSettings(prev => ({ 
-                                        ...prev, 
-                                        [index]: { ...settings, deliveryWindowStart: e.target.value } 
-                                      }))}
-                                      className="w-full px-2 py-1.5 rounded-lg text-[11px]"
-                                      style={{ 
-                                        background: 'var(--bg-widget)', 
-                                        border: '1px solid var(--border-subtle)', 
-                                        color: 'var(--text-main)' 
-                                      }}
-                                    />
+                              {/* Arrival + buffer/wait/late (moved from Stops list) */}
+                              {toStop?.eta && (
+                                <div
+                                  className="px-2.5 py-2 rounded-lg mb-3"
+                                  style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                                      Arrival
+                                    </span>
+                                    <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                                      {toStop.eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
                                   </div>
-                                  <div>
-                                    <label className="text-[9px] font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
-                                      Latest
-                                    </label>
-                                    <input
-                                      type="time"
-                                      value={settings.deliveryWindowEnd}
-                                      onChange={(e) => setSegmentSettings(prev => ({ 
-                                        ...prev, 
-                                        [index]: { ...settings, deliveryWindowEnd: e.target.value } 
-                                      }))}
-                                      className="w-full px-2 py-1.5 rounded-lg text-[11px]"
-                                      style={{ 
-                                        background: 'var(--bg-widget)', 
-                                        border: '1px solid var(--border-subtle)', 
-                                        color: 'var(--text-main)' 
-                                      }}
-                                    />
-                                  </div>
+
+                                  {toStop.windowEnabled && toStop.windowStart && toStop.windowEnd ? (
+                                    toStop.windowStatus === 'late' ? (
+                                      <div className="mt-1 text-[11px] font-semibold" style={{ color: 'var(--color-error)' }}>
+                                        ❌ {toStop.lateBy ? `${Math.round(toStop.lateBy)}m late` : 'Late'} · closes {toStop.windowEnd}
+                                      </div>
+                                    ) : toStop.windowStatus === 'early-wait' ? (
+                                      <div className="mt-1 text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                                        ⏳ Arrive {toStop.arrivalTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · wait {Math.round(toStop.waitTime || 0)}m · opens {toStop.windowStart}
+                                      </div>
+                                    ) : toStop.windowStatus === 'tight' ? (
+                                      <div className="mt-1 text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                                        ⚠️ {toStop.buffer !== undefined ? `${toStop.buffer}m buffer` : 'Tight window'} · closes {toStop.windowEnd}
+                                      </div>
+                                    ) : (
+                                      <div className="mt-1 text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                                        ✅ {toStop.buffer !== undefined ? `${toStop.buffer}m buffer` : 'On time'} · closes {toStop.windowEnd}
+                                      </div>
+                                    )
+                                  ) : (
+                                    <div className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                      No delivery window
+                                    </div>
+                                  )}
                                 </div>
-                                
-                                {/* Stop Duration */}
-                                <div>
-                                  <label className="text-[9px] font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
-                                    Duration at Stop
-                                  </label>
-                                  <select
-                                    value={settings.stopDuration}
-                                    onChange={(e) => setSegmentSettings(prev => ({ 
-                                      ...prev, 
-                                      [index]: { ...settings, stopDuration: parseInt(e.target.value) } 
-                                    }))}
-                                    className="w-full px-2 py-1.5 rounded-lg text-[11px]"
-                                    style={{ 
-                                      background: 'var(--bg-widget)', 
-                                      border: '1px solid var(--border-subtle)', 
-                                      color: 'var(--text-main)' 
-                                    }}
-                                  >
-                                    <option value={0}>No stop time</option>
-                                    <option value={5}>5 minutes</option>
-                                    <option value={10}>10 minutes</option>
-                                    <option value={15}>15 minutes</option>
-                                    <option value={20}>20 minutes</option>
-                                    <option value={30}>30 minutes</option>
-                                    <option value={45}>45 minutes</option>
-                                    <option value={60}>1 hour</option>
-                                    <option value={90}>1.5 hours</option>
-                                    <option value={120}>2 hours</option>
-                                  </select>
-                                </div>
-                              </div>
+                              )}
 
                               {/* Route Options */}
                               <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
@@ -1118,55 +1392,6 @@ export default function MultiStopPlanner({
                                 </div>
                               </div>
                             </div>
-                            
-                            {/* ETA Warning if outside delivery window */}
-                            {toStop?.eta && settings.deliveryWindowStart && settings.deliveryWindowEnd && (() => {
-                              const eta = toStop.eta;
-                              const etaMinutes = eta.getHours() * 60 + eta.getMinutes();
-                              const [startH, startM] = settings.deliveryWindowStart.split(':').map(Number);
-                              const [endH, endM] = settings.deliveryWindowEnd.split(':').map(Number);
-                              const startMinutes = startH * 60 + startM;
-                              const endMinutes = endH * 60 + endM;
-                              const isOutside = etaMinutes < startMinutes || etaMinutes > endMinutes;
-                              const isTight = !isOutside && (etaMinutes > endMinutes - 15);
-                              
-                              if (isOutside) {
-                                return (
-                                  <div 
-                                    className="px-3 py-2 flex items-center gap-2"
-                                    style={{ background: '#ef444415', borderTop: '1px solid #ef444430' }}
-                                  >
-                                    <AlertTriangle className="w-3.5 h-3.5" style={{ color: '#ef4444' }} />
-                                    <span className="text-[10px] font-medium" style={{ color: '#ef4444' }}>
-                                      ETA {eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} is outside delivery window
-                                    </span>
-                                  </div>
-                                );
-                              } else if (isTight) {
-                                return (
-                                  <div 
-                                    className="px-3 py-2 flex items-center gap-2"
-                                    style={{ background: '#f59e0b15', borderTop: '1px solid #f59e0b30' }}
-                                  >
-                                    <Clock className="w-3.5 h-3.5" style={{ color: '#f59e0b' }} />
-                                    <span className="text-[10px] font-medium" style={{ color: '#f59e0b' }}>
-                                      ETA {eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - cutting it close!
-                                    </span>
-                                  </div>
-                                );
-                              }
-                              return (
-                                <div 
-                                  className="px-3 py-2 flex items-center gap-2"
-                                  style={{ background: '#22c55e10', borderTop: '1px solid #22c55e20' }}
-                                >
-                                  <Check className="w-3.5 h-3.5" style={{ color: '#22c55e' }} />
-                                  <span className="text-[10px] font-medium" style={{ color: '#22c55e' }}>
-                                    ETA {eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - within window
-                                  </span>
-                                </div>
-                              );
-                            })()}
                           </div>
                         );
                       })}
@@ -1223,7 +1448,7 @@ export default function MultiStopPlanner({
                             </span>
                           </div>
                           <p className="text-2xl font-bold tracking-tight" style={{ color: accentColor }}>
-                            {formatTime(routeResult.totalTime)}
+                            {formatTime(routeTotals.total)}
                           </p>
                         </div>
                       </div>
@@ -1242,6 +1467,22 @@ export default function MultiStopPlanner({
                         >
                           {routeResult.legs.length} segments
                         </span>
+                        {routeTotals.waitTime > 0 && (
+                          <span
+                            className="px-2.5 py-1 rounded-full text-[11px] font-medium"
+                            style={{ background: 'var(--bg-widget)', color: '#3b82f6' }}
+                          >
+                            {Math.round(routeTotals.waitTime)}m waiting
+                          </span>
+                        )}
+                        {routeTotals.conflictCount > 0 && (
+                          <span
+                            className="px-2.5 py-1 rounded-full text-[11px] font-medium"
+                            style={{ background: '#ef444415', color: '#ef4444' }}
+                          >
+                            ⚠️ {routeTotals.conflictCount} conflict{routeTotals.conflictCount === 1 ? '' : 's'}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -1366,12 +1607,6 @@ export default function MultiStopPlanner({
               </div>
             )}
           </div>
-
-          {error && (
-            <div className="mx-4 mb-4 p-3 rounded-xl text-sm" style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)' }}>
-              {error}
-            </div>
-          )}
 
           {/* Actions */}
           <div className="p-4 space-y-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
@@ -1554,6 +1789,15 @@ export default function MultiStopPlanner({
                 </button>
               )}
             </div>
+
+            {error && (
+              <div
+                className="px-3 py-2 rounded-xl text-[12px] font-medium"
+                style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)' }}
+              >
+                {error}
+              </div>
+            )}
           </div>
         </div>
 

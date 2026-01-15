@@ -618,7 +618,7 @@ export default function TruckRouting({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col md:flex-row md:h-[750px]">
+      <div className="flex flex-col md:flex-row md:h-[835px]">
         {/* Map - shown first on mobile */}
         <div className="h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap

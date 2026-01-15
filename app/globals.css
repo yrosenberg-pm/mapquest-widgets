@@ -26,6 +26,14 @@ body {
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Desktop readability: apply a consistent 10% scale-up across widgets (mirrors common browser zoom usage).
+   Using root font-size scales Tailwind's rem-based sizing without breaking fixed-width widget layouts. */
+@media (min-width: 768px) {
+  html {
+    font-size: 110%;
+  }
+}
+
 /* Hide scrollbar but keep scrolling functionality */
 .hide-scrollbar {
   -ms-overflow-style: none;  /* IE and Edge */

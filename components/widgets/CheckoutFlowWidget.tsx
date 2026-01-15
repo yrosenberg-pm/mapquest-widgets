@@ -139,6 +139,39 @@ function deliveryEstimateLabel(state: string) {
   return dt.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+async function geocodeRooftopFirst(query: string) {
+  // Prefer rooftop/point-level accuracy for map pin placement.
+  // We intentionally do this here (widget-level) without changing API proxy logic.
+  const res = await fetch(`/api/mapquest?endpoint=geocoding&location=${encodeURIComponent(query)}&maxResults=5`);
+  if (!res.ok) return null;
+  const data = await res.json();
+  const locations: any[] = data?.results?.[0]?.locations || [];
+  if (!Array.isArray(locations) || locations.length === 0) return null;
+
+  const rank = (loc: any) => {
+    const quality = String(loc?.geocodeQuality || '').toUpperCase();
+    const qCode = String(loc?.geocodeQualityCode || '').toUpperCase();
+    // Known strongest indicators (best effort heuristic)
+    if (quality === 'POINT') return 0;
+    if (qCode.startsWith('P1AAA')) return 0; // commonly rooftop/point for MapQuest
+    if (quality === 'ADDRESS') return 1;
+    if (qCode.startsWith('P1')) return 1;
+    if (quality.includes('STREET')) return 2;
+    return 3;
+  };
+
+  const best = [...locations].sort((a, b) => rank(a) - rank(b))[0];
+  const lat = best?.latLng?.lat ?? best?.displayLatLng?.lat;
+  const lng = best?.latLng?.lng ?? best?.displayLatLng?.lng;
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+
+  return {
+    ...best,
+    lat,
+    lng,
+  };
+}
+
 function ValidationIndicator({ state }: { state: ValidationState }) {
   if (state === 'verifying') return <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} />;
   if (state === 'verified') return <CheckCircle2 className="w-4 h-4" style={{ color: 'var(--color-success, #10B981)' }} />;
@@ -283,7 +316,8 @@ export default function CheckoutFlowWidget({
     const original = formatSuggested(sourceFields);
     setValidation({ state: 'verifying', original });
 
-    const loc = await geocode(addressToLine(original));
+    // Rooftop-first for more accurate map pin placement
+    const loc = await geocodeRooftopFirst(addressToLine(original));
     if (!loc || !loc.lat || !loc.lng) {
       setValidation({
         state: 'invalid',
@@ -362,7 +396,7 @@ export default function CheckoutFlowWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col md:flex-row md:h-[740px]">
+      <div className="flex flex-col md:flex-row md:h-[805px]">
         {/* Left: Shipping form */}
         <div className="w-full md:flex-1 border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
