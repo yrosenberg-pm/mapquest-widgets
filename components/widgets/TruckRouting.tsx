@@ -202,6 +202,7 @@ export default function TruckRouting({
   const [showDepartureOptions, setShowDepartureOptions] = useState(false);
   const [useHereRouting, setUseHereRouting] = useState(true); // Default to HERE for better truck routing
   const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | undefined>(undefined);
+  const [demoMode, setDemoMode] = useState(false);
 
   // Vehicle profile state
   const [vehicle, setVehicle] = useState<VehicleProfile>({
@@ -427,10 +428,28 @@ export default function TruckRouting({
     };
   };
 
-  const calculateRoute = async () => {
-    if (!from.trim() || !to.trim()) {
+  const DEMO_FROM = '126 S Gregson St, Durham, NC 27701';
+  const DEMO_TO = '310 S Gregson St, Durham, NC 27701';
+
+  const calculateRoute = async (opts?: { from?: string; to?: string; applyInputs?: boolean }) => {
+    const fromValue = (opts?.from ?? from).trim();
+    const toValue = (opts?.to ?? to).trim();
+
+    if (!fromValue || !toValue) {
       setError('Please enter both start and destination');
       return;
+    }
+
+    // If we're applying demo (or any override) inputs, update UI state first.
+    if (opts?.applyInputs) {
+      if (typeof opts.from === 'string') setFrom(opts.from);
+      if (typeof opts.to === 'string') setTo(opts.to);
+      setFromCoords(null);
+      setToCoords(null);
+      setRoute(null);
+      setRoutePolyline(undefined);
+      setStepsExpanded(false);
+      setError(null);
     }
 
     setLoading(true);
@@ -439,8 +458,8 @@ export default function TruckRouting({
 
     try {
       const [fromResult, toResult] = await Promise.all([
-        geocode(from),
-        geocode(to),
+        geocode(fromValue),
+        geocode(toValue),
       ]);
 
       if (!fromResult?.lat || !fromResult?.lng) {
@@ -705,6 +724,28 @@ export default function TruckRouting({
 
               {/* Address Inputs */}
               <div className="rounded-2xl p-4" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
+                    Route
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDemoMode(true);
+                      calculateRoute({ from: DEMO_FROM, to: DEMO_TO, applyInputs: true });
+                    }}
+                    disabled={loading}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                    style={{
+                      background: loading ? 'var(--bg-panel)' : `${accentColor}15`,
+                      border: `1px solid ${loading ? 'var(--border-subtle)' : `${accentColor}35`}`,
+                      color: loading ? 'var(--text-muted)' : accentColor,
+                    }}
+                    title="Load demo addresses and calculate a truck-safe route"
+                  >
+                    Load Durham demo
+                  </button>
+                </div>
                 <div className="space-y-1">
                 {/* From Input */}
                 <div className="flex items-center gap-3">
@@ -720,7 +761,10 @@ export default function TruckRouting({
                   </div>
                   <AddressAutocomplete
                     value={from}
-                    onChange={setFrom}
+                    onChange={(v) => {
+                      if (demoMode) setDemoMode(false);
+                      setFrom(v);
+                    }}
                     onSelect={(result) => {
                       if (result.lat && result.lng) {
                         setFromCoords({ lat: result.lat, lng: result.lng });
@@ -734,6 +778,7 @@ export default function TruckRouting({
                     borderColor={borderColor}
                     className="flex-1"
                     hideIcon
+                    readOnly={demoMode}
                   />
                 </div>
 
@@ -761,7 +806,10 @@ export default function TruckRouting({
                   </div>
                   <AddressAutocomplete
                     value={to}
-                    onChange={setTo}
+                    onChange={(v) => {
+                      if (demoMode) setDemoMode(false);
+                      setTo(v);
+                    }}
                     onSelect={(result) => {
                       if (result.lat && result.lng) {
                         setToCoords({ lat: result.lat, lng: result.lng });
@@ -775,6 +823,7 @@ export default function TruckRouting({
                     borderColor={borderColor}
                     className="flex-1"
                     hideIcon
+                    readOnly={demoMode}
                   />
                 </div>
               </div>
@@ -1022,7 +1071,7 @@ export default function TruckRouting({
             }}
           >
             <button
-              onClick={calculateRoute}
+              onClick={() => calculateRoute()}
               disabled={loading || !from.trim() || !to.trim()}
               className="prism-btn prism-btn-primary w-full"
               style={{ 

@@ -132,6 +132,30 @@ function pickFirstNumber(...vals: unknown[]): number | null {
   return null;
 }
 
+function collectTempNumbersDeep(obj: any, maxDepth = 4): number[] {
+  const out: number[] = [];
+  const seen = new Set<any>();
+  const queue: Array<{ v: any; d: number }> = [{ v: obj, d: 0 }];
+  while (queue.length) {
+    const { v, d } = queue.shift()!;
+    if (!v || typeof v !== 'object') continue;
+    if (seen.has(v)) continue;
+    seen.add(v);
+    if (d > maxDepth) continue;
+
+    for (const [k, val] of Object.entries(v)) {
+      // Only consider values under temperature-ish keys to avoid picking humidity/wind/etc.
+      if (/temp|temperature|high|low|max|min/i.test(k)) {
+        const n = toNumber(val);
+        if (n !== null) out.push(n);
+      }
+      if (val && typeof val === 'object') queue.push({ v: val, d: d + 1 });
+    }
+  }
+  // Filter to a plausible Fahrenheit range (keeps us from picking timestamps)
+  return out.filter((n) => n >= -80 && n <= 160);
+}
+
 function findForecastArrayDeep(obj: any, maxDepth = 6): any[] {
   // Find the first array that looks like a daily forecast array.
   const seen = new Set<any>();
@@ -140,10 +164,13 @@ function findForecastArrayDeep(obj: any, maxDepth = 6): any[] {
   const looksLikeForecastItem = (it: any) => {
     if (!it || typeof it !== 'object') return false;
     const keys = Object.keys(it);
-    return (
-      keys.some(k => /dayOfWeek|weekday|day/i.test(k)) &&
-      keys.some(k => /high|low|max|min|temperature/i.test(k))
-    );
+    // Avoid picking hourly arrays (often contain localTime)
+    if (keys.some(k => /localTime/i.test(k))) return false;
+    const hasDay = keys.some(k => /dayOfWeek|weekday|day/i.test(k));
+    const hasHiLo =
+      keys.some(k => /highTemperature|lowTemperature|highTemp|lowTemp/i.test(k)) ||
+      (keys.some(k => /max/i.test(k)) && keys.some(k => /min/i.test(k)));
+    return hasDay && hasHiLo;
   };
 
   while (queue.length) {
@@ -163,15 +190,31 @@ function findForecastArrayDeep(obj: any, maxDepth = 6): any[] {
 }
 
 function extractDailyTemps(x: any): { high: number | null; low: number | null } {
+  // Some payloads provide a combined string like "78/62"
+  const combined = typeof x?.temperature === 'string' ? x.temperature : typeof x?.temp === 'string' ? x.temp : null;
+  if (combined && combined.includes('/')) {
+    const parts = combined.split('/').map(p => pickFirstNumber(p));
+    const nums = parts.filter((n): n is number => n !== null);
+    if (nums.length >= 2) {
+      return { high: Math.max(nums[0], nums[1]), low: Math.min(nums[0], nums[1]) };
+    }
+  }
+
   // Try common flat keys first
   const high = pickFirstNumber(
     x?.highTemperature,
+    x?.highTemperature?.value,
     x?.highTemperatureF,
     x?.temperatureHigh,
     x?.temperatureMax,
     x?.maxTemperature,
     x?.highTemp,
     x?.high,
+    // Common HERE shapes: day/night segments
+    x?.daySegment?.temperature,
+    x?.daySegment?.temperature?.value,
+    x?.day?.temperature,
+    x?.day?.temperature?.value,
     x?.temperature?.high,
     x?.temperature?.max,
     x?.temp?.high,
@@ -179,18 +222,90 @@ function extractDailyTemps(x: any): { high: number | null; low: number | null } 
   );
   const low = pickFirstNumber(
     x?.lowTemperature,
+    x?.lowTemperature?.value,
     x?.lowTemperatureF,
     x?.temperatureLow,
     x?.temperatureMin,
     x?.minTemperature,
     x?.lowTemp,
     x?.low,
+    x?.nightSegment?.temperature,
+    x?.nightSegment?.temperature?.value,
+    x?.night?.temperature,
+    x?.night?.temperature?.value,
     x?.temperature?.low,
     x?.temperature?.min,
     x?.temp?.low,
     x?.temp?.min
   );
-  return { high, low };
+  if (high !== null || low !== null) return { high, low };
+
+  // Fallback: collect any temperature-like numeric values inside the object and use max/min.
+  const temps = collectTempNumbersDeep(x);
+  if (temps.length >= 2) return { high: Math.max(...temps), low: Math.min(...temps) };
+  if (temps.length === 1) return { high: temps[0], low: temps[0] };
+  return { high: null, low: null };
+}
+
+function formatHereHourlyLabel(x: any): string {
+  const raw =
+    x?.localTime ??
+    x?.localtime ??
+    x?.validTimeLocal ??
+    x?.validTimeUtc ??
+    x?.utcTime ??
+    x?.time ??
+    x?.timestamp ??
+    null;
+
+  if (raw == null) return '—';
+
+  // ISO timestamp
+  if (typeof raw === 'string' && /T/.test(raw)) {
+    const dt = new Date(raw);
+    if (!Number.isNaN(dt.getTime())) return dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  // yyyymmddhhmm(ss)
+  if (typeof raw === 'string' && /^\d{12,14}$/.test(raw)) {
+    const y = Number(raw.slice(0, 4));
+    const m = Number(raw.slice(4, 6)) - 1;
+    const d = Number(raw.slice(6, 8));
+    const hh = Number(raw.slice(8, 10));
+    const mm = Number(raw.slice(10, 12));
+    const dt = new Date(y, m, d, hh, mm);
+    if (!Number.isNaN(dt.getTime())) return dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  // MMDDHHMMSS (e.g., 1001142026 -> 10/01 14:20:26). We only show time-of-day.
+  if (typeof raw === 'string' && /^\d{10}$/.test(raw)) {
+    const hh = Number(raw.slice(4, 6));
+    const mm = Number(raw.slice(6, 8));
+    if (Number.isFinite(hh) && Number.isFinite(mm) && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+      const dt = new Date();
+      dt.setHours(hh, mm, 0, 0);
+      return dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+  }
+
+  // HHMM as number/string (e.g., 1300, "0730")
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  if (Number.isFinite(n) && n >= 0 && n <= 2359) {
+    const hh = Math.floor(n / 100);
+    const mm = n % 100;
+    const dt = new Date();
+    dt.setHours(hh, mm, 0, 0);
+    return dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  // Last resort: show as string
+  return String(raw);
+}
+
+function formatTempNoDecimals(v: unknown): string {
+  const n = toNumber(v);
+  if (n === null) return '--';
+  return String(Math.round(n));
 }
 
 function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -272,6 +387,7 @@ function AutosuggestInput({
   accentColor,
   darkMode,
   at,
+  closeToken,
 }: {
   label: string;
   placeholder: string;
@@ -281,6 +397,7 @@ function AutosuggestInput({
   accentColor: string;
   darkMode: boolean;
   at?: { lat: number; lng: number };
+  closeToken: number;
 }) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
@@ -288,8 +405,19 @@ function AutosuggestInput({
   const [items, setItems] = useState<HereAutosuggestItem[]>([]);
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<number | null>(null);
+  const requestIdRef = useRef(0);
+  const selectionLockRef = useRef(false);
 
   useEffect(() => setQuery(value), [value]);
+  useEffect(() => {
+    // Force-close suggestions after a search is run
+    selectionLockRef.current = true;
+    setOpen(false);
+    setItems([]);
+    window.setTimeout(() => {
+      selectionLockRef.current = false;
+    }, 300);
+  }, [closeToken]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -301,6 +429,8 @@ function AutosuggestInput({
 
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    requestIdRef.current += 1;
+    const myReqId = requestIdRef.current;
     if (query.trim().length < 3) {
       setItems([]);
       setOpen(false);
@@ -350,13 +480,16 @@ function AutosuggestInput({
           }
         }
 
+        // Ignore late responses after a selection or if a newer request is in flight
+        if (requestIdRef.current !== myReqId) return;
+        if (selectionLockRef.current) return;
         setItems(normalized);
         setOpen(normalized.length > 0);
       } catch {
         setItems([]);
         setOpen(false);
       } finally {
-        setLoading(false);
+        if (requestIdRef.current === myReqId) setLoading(false);
       }
     }, 250);
     return () => {
@@ -380,7 +513,7 @@ function AutosuggestInput({
             setQuery(e.target.value);
             onChange(e.target.value);
           }}
-          onFocus={() => items.length > 0 && setOpen(true)}
+          onFocus={() => !selectionLockRef.current && items.length > 0 && setOpen(true)}
           placeholder={placeholder}
           className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium outline-none transition-all"
           style={{ background: bgInput, border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
@@ -405,9 +538,16 @@ function AutosuggestInput({
                 style={{ color: 'var(--text-main)' }}
                 onClick={() => {
                   if (!pos) return;
+                  selectionLockRef.current = true;
                   onSelect({ label: labelText, lat: pos.lat, lng: pos.lng });
                   setQuery(labelText);
+                  onChange(labelText);
                   setOpen(false);
+                  setItems([]);
+                  // Give any in-flight request time to settle without reopening the dropdown
+                  window.setTimeout(() => {
+                    selectionLockRef.current = false;
+                  }, 500);
                 }}
               >
                 <span className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${accentColor}12`, color: accentColor }}>
@@ -463,6 +603,7 @@ export default function RouteWeatherAlerts({
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
   const [runError, setRunError] = useState<string | null>(null);
+  const [closeToken, setCloseToken] = useState(0);
 
   const mapCenter = useMemo(() => {
     const pt = dest || start;
@@ -503,6 +644,7 @@ export default function RouteWeatherAlerts({
   };
 
   const runAll = async () => {
+    setCloseToken(t => t + 1);
     setRunError(null);
     setObs(null);
     setForecastDays([]);
@@ -585,7 +727,7 @@ export default function RouteWeatherAlerts({
       const hours = h?.hourlyForecasts?.forecastLocation?.forecast || h?.hourlyForecasts?.forecastLocation?.[0]?.forecast || [];
       setForecastHours(
         (Array.isArray(hours) ? hours : []).slice(0, 36).map((x: any) => ({
-          localTime: x.localTime,
+          localTime: formatHereHourlyLabel(x),
           temperature: x.temperature,
           description: x.description,
           iconName: x.iconName,
@@ -672,7 +814,7 @@ export default function RouteWeatherAlerts({
     >
       <div className="flex flex-col md:flex-row md:h-[780px]">
         {/* Left panel */}
-        <div className="w-full md:w-[460px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="w-full md:w-[520px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <div className="flex items-center justify-between">
               <div>
@@ -698,6 +840,7 @@ export default function RouteWeatherAlerts({
               accentColor={accentColor}
               darkMode={darkMode}
               at={dest || undefined}
+              closeToken={closeToken}
             />
             <AutosuggestInput
               label="Destination"
@@ -711,6 +854,7 @@ export default function RouteWeatherAlerts({
               accentColor={accentColor}
               darkMode={darkMode}
               at={start || undefined}
+              closeToken={closeToken}
             />
           </div>
 
@@ -868,28 +1012,32 @@ export default function RouteWeatherAlerts({
                         </div>
                       </div>
                       <div className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-main)' }}>
-                        {toNumber(d.highTemperature) ?? '--'}/{toNumber(d.lowTemperature) ?? '--'}
+                        {formatTempNoDecimals(d.highTemperature)}/{formatTempNoDecimals(d.lowTemperature)}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {forecastHours.slice(0, 6).map((h, i) => (
-                    <div key={i} className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
+                <div className="flex gap-2 overflow-x-auto prism-scrollbar pb-1">
+                  {forecastHours.slice(0, 18).map((h, i) => (
+                    <div
+                      key={i}
+                      className="rounded-xl p-3 flex-shrink-0"
+                      style={{ width: 150, background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
+                    >
                       <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
-                          {(h.localTime || '').slice(-5) || '—'}
+                        <div className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-muted)' }} title={h.localTime || ''}>
+                          {h.localTime || '—'}
                         </div>
                         <div style={{ color: accentColor }}>
                           <WeatherIcon desc={h.description || ''} />
                         </div>
                       </div>
                       <div className="text-sm font-bold mt-1" style={{ color: 'var(--text-main)' }}>
-                        {toNumber(h.temperature) ?? '--'}°F
+                        {formatTempNoDecimals(h.temperature)}°F
                       </div>
                       <div className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                        {toNumber(h.precipitationProbability) ?? 0}% precip
+                        {Math.round(toNumber(h.precipitationProbability) ?? 0)}% precip
                       </div>
                     </div>
                   ))}

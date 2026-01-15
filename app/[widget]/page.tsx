@@ -18,6 +18,7 @@ import {
   NHLArenaExplorer,
   HereIsolineWidget,
   RouteWeatherAlerts,
+  CheckoutFlowWidget,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -36,6 +37,7 @@ const VALID_WIDGETS = [
   'delivery',
   'instacart',
   'isoline',
+  'checkout',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -108,6 +110,8 @@ export default function WidgetPage() {
         return <TruckRouting {...commonProps} />;
       case 'route-weather':
         return <RouteWeatherAlerts {...commonProps} />;
+      case 'checkout':
+        return <CheckoutFlowWidget {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':

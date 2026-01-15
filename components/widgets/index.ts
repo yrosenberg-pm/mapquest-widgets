@@ -15,6 +15,7 @@ export { default as NHLArenaExplorer } from './NHLArenaExplorer';
 export { default as HereIsolineWidget } from './HereIsolineWidget';
 export { default as TruckRouting } from './TruckRouting';
 export { default as RouteWeatherAlerts } from './RouteWeatherAlerts';
+export { default as CheckoutFlowWidget } from './CheckoutFlowWidget';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

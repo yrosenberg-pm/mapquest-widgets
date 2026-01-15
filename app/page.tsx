@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronLeft } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -19,11 +19,26 @@ import {
   HereIsolineWidget,
   TruckRouting,
   RouteWeatherAlerts,
+  CheckoutFlowWidget,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-type WidgetId = 'nhl' | 'address' | 'starbucks' | 'citibike' | 'directions' | 'truck' | 'service' | 'neighborhood' | 'multistop' | 'delivery' | 'instacart' | 'route-weather' | 'here-isoline';
+type WidgetId =
+  | 'nhl'
+  | 'address'
+  | 'starbucks'
+  | 'citibike'
+  | 'directions'
+  | 'truck'
+  | 'service'
+  | 'neighborhood'
+  | 'multistop'
+  | 'delivery'
+  | 'instacart'
+  | 'route-weather'
+  | 'here-isoline'
+  | 'checkout';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
@@ -38,7 +53,8 @@ const WIDGETS = [
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', category: 'Bigger Bet' },
   { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', category: 'Bigger Bet' },
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', category: 'Bigger Bet' },
-  { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time (HERE API)', category: 'Bigger Bet' },
+  { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', category: 'Bigger Bet' },
+  { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', category: 'Quick Win' },
 ];
 
 const ACCENT_COLORS = [
@@ -79,7 +95,6 @@ function HomeContent() {
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
   // Customization state
@@ -109,8 +124,6 @@ function HomeContent() {
         // Only use saved widget if no URL parameter
         if (!urlWidget && prefs.activeWidget) setActiveWidget(prefs.activeWidget);
       }
-      const savedSidebar = localStorage.getItem('widgetSidebarCollapsed');
-      if (savedSidebar !== null) setSidebarCollapsed(savedSidebar === 'true');
     } catch (e) {
       console.error('Failed to load preferences:', e);
     }
@@ -146,13 +159,6 @@ function HomeContent() {
   }, [prefsLoaded, darkMode, accentColor, customColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo, activeWidget]);
 
   const currentWidget = WIDGETS.find(w => w.id === activeWidget);
-
-  useEffect(() => {
-    if (!prefsLoaded) return;
-    try {
-      localStorage.setItem('widgetSidebarCollapsed', sidebarCollapsed ? 'true' : 'false');
-    } catch {}
-  }, [prefsLoaded, sidebarCollapsed]);
 
   const handleWidgetSelect = (widgetId: WidgetId) => {
     setActiveWidget(widgetId);
@@ -218,6 +224,8 @@ function HomeContent() {
         return <TruckRouting {...commonProps} />;
       case 'route-weather':
         return <RouteWeatherAlerts {...commonProps} />;
+      case 'checkout':
+        return <CheckoutFlowWidget {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':
@@ -257,7 +265,7 @@ function HomeContent() {
       <aside
         className={[
           'bg-white border-r border-gray-200 flex-shrink-0',
-          sidebarCollapsed ? 'w-[72px]' : 'w-[280px]',
+          'w-[280px]',
           'hidden md:flex md:flex-col',
         ].join(' ')}
       >
@@ -266,21 +274,11 @@ function HomeContent() {
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}12` }}>
               <span className="text-sm font-bold" style={{ color: accentColor }}>MQ</span>
             </div>
-            {!sidebarCollapsed && (
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-gray-900 truncate">Widgets</div>
-                <div className="text-[11px] text-gray-500 truncate">Pick a widget</div>
-              </div>
-            )}
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-gray-900 truncate">Widgets</div>
+              <div className="text-[11px] text-gray-500 truncate">Pick a widget</div>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setSidebarCollapsed(v => !v)}
-            className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-            title={sidebarCollapsed ? 'Expand' : 'Collapse'}
-          >
-            <ChevronLeft className={`w-4 h-4 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} />
-          </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-2">
@@ -301,15 +299,13 @@ function HomeContent() {
                   className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: isActive ? (w.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
                 />
-                {!sidebarCollapsed && (
-                  <div className="min-w-0 flex-1">
-                    <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
-                      {w.name}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate">{w.description}</div>
+                <div className="min-w-0 flex-1">
+                  <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
+                    {w.name}
                   </div>
-                )}
-                {!sidebarCollapsed && isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+                  <div className="text-xs text-gray-500 truncate">{w.description}</div>
+                </div>
+                {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
               </Link>
             );
           })}

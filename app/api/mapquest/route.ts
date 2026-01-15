@@ -44,7 +44,8 @@ export async function GET(request: NextRequest) {
         const q = searchParams.get('q');
         const limit = searchParams.get('limit') || '6';
         // MapQuest Search API v3 prediction endpoint format
-        url = `${ENDPOINTS.searchahead}?key=${MAPQUEST_KEY}&q=${encodeURIComponent(q || '')}&limit=${limit}&collection=address,adminArea`;
+        // Include POIs so users can type things like "Empire State Building" across all widgets.
+        url = `${ENDPOINTS.searchahead}?key=${MAPQUEST_KEY}&q=${encodeURIComponent(q || '')}&limit=${limit}&collection=address,adminArea,poi`;
         break;
       }
 

@@ -159,7 +159,7 @@ export default function HereIsolineWidget({
         }
         
         if (response.status === 500 && errorData.error?.includes('not configured')) {
-          throw new Error('HERE API is not configured. Please add your HERE_API_KEY to the environment.');
+          throw new Error('Isoline service is not configured. Please add the required server API key.');
         }
 
         throw new Error(errorData.error || 'Failed to calculate reachable area');
