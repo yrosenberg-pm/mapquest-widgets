@@ -108,7 +108,8 @@ export default function MultiStopPlanner({
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
-  const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+  // In dark mode the input bg is also gray-700, so we need a lighter border to keep fields visible.
+  const borderColor = darkMode ? 'border-gray-500/60' : 'border-gray-200';
 
   const pad2 = (n: number) => n.toString().padStart(2, '0');
   const departureDateValue = `${departureTime.getFullYear()}-${pad2(departureTime.getMonth() + 1)}-${pad2(departureTime.getDate())}`;

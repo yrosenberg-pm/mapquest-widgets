@@ -337,11 +337,14 @@ function extractHourlyHourKey(x: any): { key: string; dt: Date } | null {
   const now = new Date();
 
   const mk = (dt: Date) => {
-    const y = dt.getFullYear();
-    const m = String(dt.getMonth() + 1).padStart(2, '0');
-    const d = String(dt.getDate()).padStart(2, '0');
-    const hh = String(dt.getHours()).padStart(2, '0');
-    return { key: `${y}-${m}-${d} ${hh}`, dt };
+    // Normalize to "on the dot" so labels are 4:00, 5:00, etc.
+    const normalized = new Date(dt);
+    normalized.setMinutes(0, 0, 0);
+    const y = normalized.getFullYear();
+    const m = String(normalized.getMonth() + 1).padStart(2, '0');
+    const d = String(normalized.getDate()).padStart(2, '0');
+    const hh = String(normalized.getHours()).padStart(2, '0');
+    return { key: `${y}-${m}-${d} ${hh}`, dt: normalized };
   };
 
   if (raw == null) return null;
@@ -940,11 +943,22 @@ export default function RouteWeatherAlerts({
         }
       }
 
-      const uniqueHours = Array.from(byHour.values())
-        .sort((a, b) => a.dt.getTime() - b.dt.getTime())
-        .slice(0, 36)
-        .map(({ x }) => ({
-          localTime: formatHereHourlyLabel(x),
+      const sortedHours = Array.from(byHour.values()).sort((a, b) => a.dt.getTime() - b.dt.getTime());
+      // Only show hours for the first available forecast day (prevents spilling into the next day).
+      const first = sortedHours[0]?.dt;
+      const dayKey = first
+        ? `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(first.getDate()).padStart(2, '0')}`
+        : null;
+
+      const uniqueHours = sortedHours
+        .filter(({ dt }) => {
+          if (!dayKey) return true;
+          const k = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+          return k === dayKey;
+        })
+        .slice(0, 24)
+        .map(({ dt, x }) => ({
+          localTime: dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
           temperature: x.temperature,
           description: x.description,
           iconName: x.iconName,
@@ -1021,16 +1035,16 @@ export default function RouteWeatherAlerts({
 
   return (
     <div
-      className="prism-widget w-full md:w-[1100px]"
+      className="prism-widget w-full md:w-[1260px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col md:flex-row md:h-[820px]">
+      <div className="flex flex-col md:flex-row md:h-[870px]">
         {/* Left panel */}
-        <div className="w-full md:w-[520px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="w-full md:w-[630px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <div className="flex items-center justify-between">
               <div>
@@ -1243,7 +1257,7 @@ export default function RouteWeatherAlerts({
                 </div>
               ) : (
                 <div className="flex gap-2 overflow-x-auto prism-scrollbar pb-1">
-                  {forecastHours.slice(0, 18).map((h, i) => (
+                  {forecastHours.slice(0, 24).map((h, i) => (
                     <div
                       key={i}
                       className="rounded-xl p-3 flex-shrink-0"
