@@ -99,6 +99,13 @@ function HomeContent() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+
+  // iPad/tablet-friendly auto-scaling for widgets so they fit the available width.
+  const widgetViewportRef = useRef<HTMLDivElement | null>(null);
+  const widgetMeasureRef = useRef<HTMLDivElement | null>(null);
+  const [widgetScale, setWidgetScale] = useState(1);
+  const [scaledHeight, setScaledHeight] = useState<number | null>(null);
 
   // Customization state
   const [darkMode, setDarkMode] = useState(false);
@@ -124,6 +131,7 @@ function HomeContent() {
         if (prefs.brandingMode) setBrandingMode(prefs.brandingMode);
         if (prefs.companyName) setCompanyName(prefs.companyName);
         if (prefs.companyLogo) setCompanyLogo(prefs.companyLogo);
+        if (prefs.sidebarHidden !== undefined) setSidebarHidden(!!prefs.sidebarHidden);
         // Only use saved widget if no URL parameter
         if (!urlWidget && prefs.activeWidget) setActiveWidget(prefs.activeWidget);
       }
@@ -154,17 +162,55 @@ function HomeContent() {
         companyName,
         companyLogo,
         activeWidget,
+        sidebarHidden,
       };
       localStorage.setItem('widgetPreferences', JSON.stringify(prefs));
     } catch (e) {
       console.error('Failed to save preferences:', e);
     }
-  }, [prefsLoaded, darkMode, accentColor, customColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo, activeWidget]);
+  }, [prefsLoaded, darkMode, accentColor, customColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo, activeWidget, sidebarHidden]);
+
+  // Recompute widget scale to fit the available width (especially useful on iPad/tablet).
+  useEffect(() => {
+    const recompute = () => {
+      const viewport = widgetViewportRef.current;
+      const measured = widgetMeasureRef.current;
+      if (!viewport || !measured) return;
+
+      // Natural (unscaled) dimensions
+      const naturalWidth = measured.scrollWidth || measured.offsetWidth;
+      const naturalHeight = measured.scrollHeight || measured.offsetHeight;
+      const availableWidth = viewport.clientWidth;
+      if (!naturalWidth || !availableWidth) return;
+
+      const nextScale = Math.min(1, availableWidth / naturalWidth);
+      setWidgetScale(nextScale);
+      setScaledHeight(Math.round(naturalHeight * nextScale));
+    };
+
+    // Run after layout
+    const raf = window.requestAnimationFrame(recompute);
+    window.addEventListener('resize', recompute);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recompute) : null;
+    if (ro && widgetViewportRef.current) ro.observe(widgetViewportRef.current);
+    if (ro && widgetMeasureRef.current) ro.observe(widgetMeasureRef.current);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', recompute);
+      ro?.disconnect();
+    };
+  }, [activeWidget, sidebarHidden, darkMode, accentColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo]);
 
   const currentWidget = WIDGETS.find(w => w.id === activeWidget);
 
   const handleWidgetSelect = (widgetId: WidgetId) => {
     setActiveWidget(widgetId);
+    setSidebarMobileOpen(false);
+  };
+
+  const toggleSidebarHidden = () => {
+    setSidebarHidden((v) => !v);
     setSidebarMobileOpen(false);
   };
 
@@ -252,8 +298,29 @@ function HomeContent() {
   if (embedMode) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
-        <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl">
-          {renderWidget()}
+        <div className="w-full flex justify-center" ref={widgetViewportRef}>
+          <div
+            className="w-full"
+            style={{
+              height: scaledHeight != null ? `${scaledHeight}px` : undefined,
+              transition: 'height 180ms ease',
+            }}
+          >
+            <div
+              className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
+              ref={widgetMeasureRef}
+              style={{
+                transform: widgetScale < 1 ? `scale(${widgetScale})` : undefined,
+                transformOrigin: 'top center',
+                transition: 'transform 180ms ease',
+                width: 'fit-content',
+                marginLeft: 'auto',
+                marginRight: 'auto',
+              }}
+            >
+              {renderWidget()}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -261,61 +328,87 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex" style={{ minHeight: '100vh' }}>
+      {/* Desktop sticky tab to re-open the menu when hidden (iPad friendly) */}
+      {sidebarHidden && (
+        <button
+          type="button"
+          onClick={toggleSidebarHidden}
+          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-[80] items-center gap-2 pl-2 pr-3 py-2 rounded-r-2xl bg-white text-gray-700 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all border border-gray-200 border-l-0"
+          title="Show menu"
+        >
+          <Menu className="w-4 h-4" />
+          <span className="text-xs font-semibold tracking-wide">Menu</span>
+        </button>
+      )}
+
       {/* Mobile overlay */}
       {sidebarMobileOpen && (
         <div className="fixed inset-0 bg-black/40 z-[60] md:hidden" onClick={() => setSidebarMobileOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={[
-          'bg-white border-r border-gray-200 flex-shrink-0',
-          'w-[280px]',
-          'hidden md:flex md:flex-col',
-        ].join(' ')}
-      >
-        <div className="h-14 px-3 flex items-center justify-between border-b border-gray-200">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}12` }}>
-              <span className="text-sm font-bold" style={{ color: accentColor }}>MQ</span>
+      {/* Sidebar (desktop) */}
+      {!sidebarHidden && (
+        <aside
+          className={[
+            'bg-white border-r border-gray-200 flex-shrink-0',
+            'w-[280px]',
+            'hidden md:flex md:flex-col',
+            // Keep the left menu fixed to the viewport and let the list itself scroll.
+            'h-screen sticky top-0',
+          ].join(' ')}
+        >
+          <div className="h-14 px-3 flex items-center justify-between border-b border-gray-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}12` }}>
+                <span className="text-sm font-bold" style={{ color: accentColor }}>MQ</span>
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-gray-900 truncate">Widgets</div>
+                <div className="text-[11px] text-gray-500 truncate">Pick a widget</div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-gray-900 truncate">Widgets</div>
-              <div className="text-[11px] text-gray-500 truncate">Pick a widget</div>
-            </div>
-          </div>
-        </div>
 
-        <nav className="flex-1 min-h-0 overflow-y-auto p-2 prism-scrollbar">
-          {WIDGETS.map((w) => {
-            const isActive = activeWidget === w.id;
-            const href = `/?widget=${w.id}`;
-            return (
-              <Link
-                key={w.id}
-                href={href}
-                onClick={() => handleWidgetSelect(w.id)}
-                className={[
-                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
-                  isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
-                ].join(' ')}
-              >
-                <div
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: isActive ? (w.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
-                    {w.name}
+            <button
+              type="button"
+              className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+              onClick={toggleSidebarHidden}
+              title="Hide menu"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <nav className="flex-1 min-h-0 overflow-y-auto p-2 prism-scrollbar">
+            {WIDGETS.map((w) => {
+              const isActive = activeWidget === w.id;
+              const href = `/?widget=${w.id}`;
+              return (
+                <Link
+                  key={w.id}
+                  href={href}
+                  onClick={() => handleWidgetSelect(w.id)}
+                  className={[
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
+                    isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
+                  ].join(' ')}
+                >
+                  <div
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: isActive ? (w.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
+                      {w.name}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">{w.description}</div>
                   </div>
-                  <div className="text-xs text-gray-500 truncate">{w.description}</div>
-                </div>
-                {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-              </Link>
-            );
-          })}
-        </nav>
-      </aside>
+                  {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+                </Link>
+              );
+            })}
+          </nav>
+        </aside>
+      )}
 
       {/* Mobile drawer */}
       <aside
@@ -367,6 +460,7 @@ function HomeContent() {
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3 min-w-0">
+                {/* Menu button: mobile drawer only (desktop uses the sticky left tab when hidden) */}
                 <button
                   className="md:hidden p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
                   onClick={() => setSidebarMobileOpen(true)}
@@ -407,10 +501,29 @@ function HomeContent() {
               </div>
             </div>
 
-            {/* Widget Display */}
-            <div className="flex flex-col items-center w-full relative z-10">
-              <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl">
-                {renderWidget()}
+            {/* Widget Display (auto-scales on iPad/tablet to prevent clipping) */}
+            <div className="flex flex-col items-center w-full relative z-10" ref={widgetViewportRef}>
+              <div
+                className="w-full"
+                style={{
+                  height: scaledHeight != null ? `${scaledHeight}px` : undefined,
+                  transition: 'height 180ms ease',
+                }}
+              >
+                <div
+                  className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
+                  ref={widgetMeasureRef}
+                  style={{
+                    transform: widgetScale < 1 ? `scale(${widgetScale})` : undefined,
+                    transformOrigin: 'top center',
+                    transition: 'transform 180ms ease',
+                    width: 'fit-content',
+                    marginLeft: 'auto',
+                    marginRight: 'auto',
+                  }}
+                >
+                  {renderWidget()}
+                </div>
               </div>
               {activeWidget === 'address' && (
                 <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-3`}>

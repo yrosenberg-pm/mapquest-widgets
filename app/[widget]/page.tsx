@@ -2,7 +2,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { 
   SmartAddressInput,
@@ -51,6 +51,12 @@ export default function WidgetPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  // Auto-scale widgets to fit on iPad/tablet (prevents horizontal clipping for wide widgets).
+  const widgetViewportRef = useRef<HTMLDivElement | null>(null);
+  const widgetMeasureRef = useRef<HTMLDivElement | null>(null);
+  const [widgetScale, setWidgetScale] = useState(1);
+  const [scaledHeight, setScaledHeight] = useState<number | null>(null);
+
   // Load dark mode preference
   useEffect(() => {
     try {
@@ -64,6 +70,33 @@ export default function WidgetPage() {
     }
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const recompute = () => {
+      const viewport = widgetViewportRef.current;
+      const measured = widgetMeasureRef.current;
+      if (!viewport || !measured) return;
+      const naturalWidth = measured.scrollWidth || measured.offsetWidth;
+      const naturalHeight = measured.scrollHeight || measured.offsetHeight;
+      const availableWidth = viewport.clientWidth;
+      if (!naturalWidth || !availableWidth) return;
+      const nextScale = Math.min(1, availableWidth / naturalWidth);
+      setWidgetScale(nextScale);
+      setScaledHeight(Math.round(naturalHeight * nextScale));
+    };
+
+    const raf = window.requestAnimationFrame(recompute);
+    window.addEventListener('resize', recompute);
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(recompute) : null;
+    if (ro && widgetViewportRef.current) ro.observe(widgetViewportRef.current);
+    if (ro && widgetMeasureRef.current) ro.observe(widgetMeasureRef.current);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', recompute);
+      ro?.disconnect();
+    };
+  }, [widgetId, darkMode]);
 
   // Check if valid widget
   const isValidWidget = VALID_WIDGETS.includes(widgetId as WidgetId);
@@ -135,8 +168,29 @@ export default function WidgetPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
-      <div className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl">
-        {renderWidget()}
+      <div className="w-full flex justify-center" ref={widgetViewportRef}>
+        <div
+          className="w-full"
+          style={{
+            height: scaledHeight != null ? `${scaledHeight}px` : undefined,
+            transition: 'height 180ms ease',
+          }}
+        >
+          <div
+            className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
+            ref={widgetMeasureRef}
+            style={{
+              transform: widgetScale < 1 ? `scale(${widgetScale})` : undefined,
+              transformOrigin: 'top center',
+              transition: 'transform 180ms ease',
+              width: 'fit-content',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}
+          >
+            {renderWidget()}
+          </div>
+        </div>
       </div>
     </div>
   );
