@@ -177,16 +177,19 @@ function HomeContent() {
       const measured = widgetMeasureRef.current;
       if (!viewport || !measured) return;
 
-      // Natural (unscaled) dimensions
-      const naturalWidth = measured.scrollWidth || measured.offsetWidth;
-      const naturalHeight = measured.scrollHeight || measured.offsetHeight;
+      // Natural (unscaled) dimensions (offset* is not affected by CSS transforms)
+      const naturalWidth = measured.offsetWidth;
+      const naturalHeight = measured.offsetHeight;
       const availableWidth = viewport.clientWidth;
       if (!naturalWidth || !availableWidth) return;
 
-      // iPad/tablet: keep things ~30% smaller so wide widgets look "neat" (not edge-to-edge).
+      // Presentation sizing caps:
+      // - Tablet/iPad: keep widgets significantly smaller for demos.
+      // - Desktop: only cap the *largest* widgets so they always fit the frame, and don't grow when the menu is collapsed.
       const isTablet = window.matchMedia?.('(min-width: 768px) and (max-width: 1024px)').matches ?? false;
-      // Current iPad/tablet demo target: 20% smaller than the previous 0.70 cap.
-      const cap = isTablet ? 0.56 : 1;
+      const isLargeDesktop = window.matchMedia?.('(min-width: 1025px)').matches ?? true;
+      const isBigWidget = activeWidget === 'route-weather' || activeWidget === 'checkout' || activeWidget === 'heatmap';
+      const cap = isTablet ? 0.56 : isLargeDesktop && isBigWidget ? 0.9 : 1;
       const nextScale = Math.min(cap, availableWidth / naturalWidth);
       setWidgetScale(nextScale);
       setScaledHeight(Math.round(naturalHeight * nextScale));
@@ -304,7 +307,7 @@ function HomeContent() {
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
         <div className="w-full flex justify-center" ref={widgetViewportRef}>
           <div
-            className="w-full"
+            className="w-full relative"
             style={{
               height: scaledHeight != null ? `${scaledHeight}px` : undefined,
               transition: 'height 180ms ease',
@@ -314,12 +317,13 @@ function HomeContent() {
               className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
               ref={widgetMeasureRef}
               style={{
-                transform: widgetScale < 1 ? `scale(${widgetScale})` : undefined,
+                position: 'absolute',
+                top: 0,
+                left: '50%',
+                transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
                 transformOrigin: 'top center',
                 transition: 'transform 180ms ease',
                 width: 'fit-content',
-                marginLeft: 'auto',
-                marginRight: 'auto',
               }}
             >
               {renderWidget()}
@@ -460,7 +464,7 @@ function HomeContent() {
       {/* Main */}
       <div className="flex-1 min-w-0">
         <div className="p-2 md:p-6">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-[1400px] mx-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3 min-w-0">
@@ -508,7 +512,7 @@ function HomeContent() {
             {/* Widget Display (auto-scales on iPad/tablet to prevent clipping) */}
             <div className="flex flex-col items-center w-full relative z-10" ref={widgetViewportRef}>
               <div
-                className="w-full"
+                className="w-full relative"
                 style={{
                   height: scaledHeight != null ? `${scaledHeight}px` : undefined,
                   transition: 'height 180ms ease',
@@ -518,12 +522,13 @@ function HomeContent() {
                   className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
                   ref={widgetMeasureRef}
                   style={{
-                    transform: widgetScale < 1 ? `scale(${widgetScale})` : undefined,
+                    position: 'absolute',
+                    top: 0,
+                    left: '50%',
+                    transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
                     transformOrigin: 'top center',
                     transition: 'transform 180ms ease',
                     width: 'fit-content',
-                    marginLeft: 'auto',
-                    marginRight: 'auto',
                   }}
                 >
                   {renderWidget()}

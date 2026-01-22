@@ -77,16 +77,17 @@ export default function WidgetPage() {
       const measured = widgetMeasureRef.current;
       if (!viewport || !measured) return;
       const naturalWidth = measured.scrollWidth || measured.offsetWidth;
-      const naturalHeight = measured.scrollHeight || measured.offsetHeight;
       const availableWidth = viewport.clientWidth;
       if (!naturalWidth || !availableWidth) return;
-      // iPad/tablet: keep things ~30% smaller so widgets present cleanly for demos.
+      // Presentation sizing caps:
+      // - Tablet/iPad: keep widgets significantly smaller for demos.
+      // - Desktop: cap the largest widgets so they fit cleanly in the frame.
       const isTablet = window.matchMedia?.('(min-width: 768px) and (max-width: 1024px)').matches ?? false;
-      // Current iPad/tablet demo target: 20% smaller than the previous 0.70 cap.
-      const cap = isTablet ? 0.56 : 1;
+      const isLargeDesktop = window.matchMedia?.('(min-width: 1025px)').matches ?? true;
+      const isBigWidget = widgetId === 'route-weather' || widgetId === 'checkout' || widgetId === 'heatmap';
+      const cap = isTablet ? 0.56 : isLargeDesktop && isBigWidget ? 0.9 : 1;
       const nextScale = Math.min(cap, availableWidth / naturalWidth);
       setWidgetScale(nextScale);
-      setScaledHeight(Math.round(naturalHeight * nextScale));
     };
 
     const raf = window.requestAnimationFrame(recompute);
@@ -101,6 +102,18 @@ export default function WidgetPage() {
       ro?.disconnect();
     };
   }, [widgetId, darkMode]);
+
+  // Use the actual rendered (scaled) height so we don't reserve extra space below the widget.
+  useEffect(() => {
+    const measure = () => {
+      const el = widgetMeasureRef.current;
+      if (!el) return;
+      const h = el.getBoundingClientRect().height;
+      if (h > 0) setScaledHeight(Math.ceil(h));
+    };
+    const raf = window.requestAnimationFrame(measure);
+    return () => window.cancelAnimationFrame(raf);
+  }, [widgetScale, widgetId]);
 
   // Check if valid widget
   const isValidWidget = VALID_WIDGETS.includes(widgetId as WidgetId);
@@ -174,7 +187,7 @@ export default function WidgetPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
       <div className="w-full flex justify-center" ref={widgetViewportRef}>
         <div
-          className="w-full"
+          className="w-full relative"
           style={{
             height: scaledHeight != null ? `${scaledHeight}px` : undefined,
             transition: 'height 180ms ease',
@@ -184,12 +197,13 @@ export default function WidgetPage() {
             className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
             ref={widgetMeasureRef}
             style={{
-              transform: widgetScale < 1 ? `scale(${widgetScale})` : undefined,
+              position: 'absolute',
+              top: 0,
+              left: '50%',
+              transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
               transformOrigin: 'top center',
               transition: 'transform 180ms ease',
               width: 'fit-content',
-              marginLeft: 'auto',
-              marginRight: 'auto',
             }}
           >
             {renderWidget()}
