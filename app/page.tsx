@@ -185,7 +185,8 @@ function HomeContent() {
 
       // iPad/tablet: keep things ~30% smaller so wide widgets look "neat" (not edge-to-edge).
       const isTablet = window.matchMedia?.('(min-width: 768px) and (max-width: 1024px)').matches ?? false;
-      const cap = isTablet ? 0.7 : 1;
+      // Current iPad/tablet demo target: 20% smaller than the previous 0.70 cap.
+      const cap = isTablet ? 0.56 : 1;
       const nextScale = Math.min(cap, availableWidth / naturalWidth);
       setWidgetScale(nextScale);
       setScaledHeight(Math.round(naturalHeight * nextScale));
