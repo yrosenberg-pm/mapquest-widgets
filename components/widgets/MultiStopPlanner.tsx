@@ -687,30 +687,23 @@ export default function MultiStopPlanner({
       }
       setDepartureTime(nextEight);
 
-      // Prefill durations + windows to illustrate how scheduling works.
-      // Keep start flexible; add windows for subsequent stops.
-      const demoStopsWithWindows: Stop[] = selectedStops.map((s, idx) => {
-        if (idx === 0) return { ...s, duration: 0, windowEnabled: false, windowStart: '', windowEnd: '' };
-        const presets = [
-          { start: '08:30', end: '10:30', duration: 15 }, // early-ish
-          { start: '11:30', end: '13:30', duration: 20 }, // midday
-          { start: '14:00', end: '16:00', duration: 10 }, // afternoon
-          { start: '17:00', end: '18:15', duration: 25 }, // tighter
-        ];
-        const p = presets[(idx - 1) % presets.length];
+      // Prefill durations only (no delivery windows in demo stops).
+      const demoStops: Stop[] = selectedStops.map((s, idx) => {
+        const durations = [0, 15, 20, 10, 25];
         return {
           ...s,
-          duration: p.duration,
-          windowEnabled: true,
-          windowStart: p.start,
-          windowEnd: p.end,
+          duration: durations[idx] ?? 0,
+          windowEnabled: false,
+          windowStart: '',
+          windowEnd: '',
         };
       });
       
-      setStops(demoStopsWithWindows);
+      setStops(demoStops);
       setRouteResult(null);
       setOriginalRoute(null);
       setHighlightedSegment(null);
+      setOpenWindowStopId(null);
       // Reset per-segment settings (delivery windows/durations live only on Stops now)
       setSegmentSettings({});
       // Map will auto-center on LA based on the new stops
