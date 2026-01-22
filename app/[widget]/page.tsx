@@ -80,7 +80,10 @@ export default function WidgetPage() {
       const naturalHeight = measured.scrollHeight || measured.offsetHeight;
       const availableWidth = viewport.clientWidth;
       if (!naturalWidth || !availableWidth) return;
-      const nextScale = Math.min(1, availableWidth / naturalWidth);
+      // iPad/tablet: keep things ~30% smaller so widgets present cleanly for demos.
+      const isTablet = window.matchMedia?.('(min-width: 768px) and (max-width: 1024px)').matches ?? false;
+      const cap = isTablet ? 0.7 : 1;
+      const nextScale = Math.min(cap, availableWidth / naturalWidth);
       setWidgetScale(nextScale);
       setScaledHeight(Math.round(naturalHeight * nextScale));
     };

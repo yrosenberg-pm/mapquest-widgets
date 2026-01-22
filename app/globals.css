@@ -28,7 +28,8 @@ body {
 
 /* Desktop readability: apply a consistent 10% scale-up across widgets (mirrors common browser zoom usage).
    Using root font-size scales Tailwind's rem-based sizing without breaking fixed-width widget layouts. */
-@media (min-width: 768px) {
+/* Apply the 10% bump only on desktop (exclude iPad/tablet widths) */
+@media (min-width: 1025px) {
   html {
     font-size: 110%;
   }
