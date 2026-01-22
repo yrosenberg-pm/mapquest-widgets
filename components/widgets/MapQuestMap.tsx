@@ -19,6 +19,8 @@ interface MapCircle {
   radius: number;
   color?: string;
   fillOpacity?: number;
+  strokeWeight?: number;
+  strokeOpacity?: number;
 }
 
 interface MapPolygon {
@@ -699,8 +701,8 @@ export default function MapQuestMap({
         color: circle.color || accentColor,
         fillColor: circle.color || accentColor,
         fillOpacity: circle.fillOpacity ?? 0.15,
-        weight: 2,
-        opacity: 0.5,
+        weight: circle.strokeWeight ?? 2,
+        opacity: circle.strokeOpacity ?? 0.5,
       }).addTo(circlesLayerRef.current);
     });
   }, [circles, accentColor, mapReady]);

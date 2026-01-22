@@ -19,6 +19,7 @@ import {
   HereIsolineWidget,
   RouteWeatherAlerts,
   CheckoutFlowWidget,
+  HeatmapDensity,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -37,6 +38,7 @@ const VALID_WIDGETS = [
   'delivery',
   'instacart',
   'isoline',
+  'heatmap',
   'checkout',
 ] as const;
 
@@ -110,6 +112,8 @@ export default function WidgetPage() {
         return <TruckRouting {...commonProps} />;
       case 'route-weather':
         return <RouteWeatherAlerts {...commonProps} />;
+      case 'heatmap':
+        return <HeatmapDensity {...commonProps} />;
       case 'checkout':
         return <CheckoutFlowWidget {...commonProps} />;
       case 'service':

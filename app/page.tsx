@@ -20,6 +20,7 @@ import {
   TruckRouting,
   RouteWeatherAlerts,
   CheckoutFlowWidget,
+  HeatmapDensity,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -38,7 +39,8 @@ type WidgetId =
   | 'instacart'
   | 'route-weather'
   | 'here-isoline'
-  | 'checkout';
+  | 'checkout'
+  | 'heatmap';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
@@ -55,6 +57,7 @@ const WIDGETS = [
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', category: 'Bigger Bet' },
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', category: 'Bigger Bet' },
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', category: 'Quick Win' },
+  { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', category: 'Bigger Bet' },
 ];
 
 const ACCENT_COLORS = [
@@ -226,6 +229,8 @@ function HomeContent() {
         return <RouteWeatherAlerts {...commonProps} />;
       case 'checkout':
         return <CheckoutFlowWidget {...commonProps} />;
+      case 'heatmap':
+        return <HeatmapDensity {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':
@@ -281,7 +286,7 @@ function HomeContent() {
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-2">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-2 prism-scrollbar">
           {WIDGETS.map((w) => {
             const isActive = activeWidget === w.id;
             const href = `/?widget=${w.id}`;
@@ -326,7 +331,7 @@ function HomeContent() {
             <X className="w-4 h-4" />
           </button>
         </div>
-        <nav className="h-[calc(100%-56px)] overflow-y-auto p-2">
+        <nav className="h-[calc(100%-56px)] overflow-y-auto p-2 prism-scrollbar">
           {WIDGETS.map((w) => {
             const isActive = activeWidget === w.id;
             const href = `/?widget=${w.id}`;
