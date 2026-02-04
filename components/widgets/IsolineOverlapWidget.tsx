@@ -57,6 +57,64 @@ function toTurfPolygon(coords: { lat: number; lng: number }[]) {
   return turf.polygon([lngLat]);
 }
 
+function asPolygonFeatures(f: Feature<Polygon | MultiPolygon>): Feature<Polygon>[] {
+  if (f.geometry.type === 'Polygon') return [f as unknown as Feature<Polygon>];
+  const coords = (f.geometry as MultiPolygon).coordinates || [];
+  return coords.map((polyCoords) => turf.polygon(polyCoords) as unknown as Feature<Polygon>);
+}
+
+function cleanPolyFeature(f: Feature<Polygon | MultiPolygon>): Feature<Polygon | MultiPolygon> {
+  // Turf operations can be sensitive to minor self-intersections / duplicate points.
+  // cleanCoords reduces vertex noise; rewind normalizes winding order.
+  let out: any = f;
+  try {
+    out = turf.cleanCoords(out);
+  } catch {
+    // ignore
+  }
+  try {
+    out = turf.rewind(out, { reverse: false });
+  } catch {
+    // ignore
+  }
+  return out as Feature<Polygon | MultiPolygon>;
+}
+
+function intersectRobust(
+  aIn: Feature<Polygon | MultiPolygon>,
+  bIn: Feature<Polygon | MultiPolygon>
+): Feature<Polygon | MultiPolygon> | null {
+  const a = cleanPolyFeature(aIn);
+  const b = cleanPolyFeature(bIn);
+
+  const aPolys = asPolygonFeatures(a);
+  const bPolys = asPolygonFeatures(b);
+
+  const pieces: Feature<Polygon | MultiPolygon>[] = [];
+  for (const pa of aPolys) {
+    for (const pb of bPolys) {
+      try {
+        const r = (turf as any).intersect(pa, pb) as Feature<Polygon | MultiPolygon> | null;
+        if (r) pieces.push(r);
+      } catch {
+        // ignore topo errors and keep trying other pieces
+      }
+    }
+  }
+  if (pieces.length === 0) return null;
+
+  // Union pieces back together (if union fails, fall back to the first piece).
+  let acc: any = pieces[0];
+  for (let i = 1; i < pieces.length; i++) {
+    try {
+      acc = (turf as any).union(acc, pieces[i]);
+    } catch {
+      // ignore
+    }
+  }
+  return acc as Feature<Polygon | MultiPolygon>;
+}
+
 function fmtSqMi(areaSqMi: number) {
   if (areaSqMi < 1) return `${areaSqMi.toFixed(2)} sq mi`;
   if (areaSqMi < 10) return `${areaSqMi.toFixed(1)} sq mi`;
@@ -371,8 +429,8 @@ export default function IsolineOverlapWidget({
           acc = poly as unknown as Feature<Polygon | MultiPolygon>;
           continue;
         }
-        // Turf v7+ intersect accepts two features; if it returns null => no overlap.
-        const next = (turf as any).intersect(acc, poly) as Feature<Polygon | MultiPolygon> | null;
+        // Robust intersect (handles MultiPolygons + minor geometry issues).
+        const next = intersectRobust(acc, poly as unknown as Feature<Polygon | MultiPolygon>);
         if (!next) {
           acc = null;
           break;
@@ -479,11 +537,18 @@ export default function IsolineOverlapWidget({
       });
     }
     if (overlapPolygonCoords) {
+      // Halo stroke for visibility
       out.push({
         coordinates: overlapPolygonCoords,
-        color: '#0EA5E9',
-        fillOpacity: 0.45,
-        strokeWidth: 3,
+        color: '#ffffff',
+        fillOpacity: 0,
+        strokeWidth: 7,
+      });
+      out.push({
+        coordinates: overlapPolygonCoords,
+        color: '#0EA5E9', // bright cyan
+        fillOpacity: 0.62,
+        strokeWidth: 4,
         onClick: () => {
           onOverlapClick();
         },
@@ -497,7 +562,7 @@ export default function IsolineOverlapWidget({
     return first ? { lat: first.lat!, lng: first.lng! } : { lat: 39.8283, lng: -98.5795 };
   }, [locations]);
 
-  const showNoOverlap = canCompute && Object.keys(loadingIds).every((k) => !loadingIds[k]) && !overlapStats.hasOverlap;
+  // Intentionally do not show an explicit "no overlap" callout; overlap can be visually inspected on the map.
 
   return (
     <div
@@ -724,12 +789,6 @@ export default function IsolineOverlapWidget({
                   </div>
                 )}
               </div>
-
-              {showNoOverlap && (
-                <div className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                  No overlap found. Try increasing travel times or switching to driving.
-                </div>
-              )}
 
               {overlapStats.hasOverlap && overlapStats.center && (
                 <button
