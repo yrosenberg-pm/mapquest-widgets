@@ -652,7 +652,7 @@ export default function IsolineOverlapWidget({
                 style={{ height: 36, paddingInline: 10 }}
                 title={locations.length >= 5 ? 'Max 5 locations' : 'Add a location'}
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-5 h-5" />
                 <span className="text-sm">Add</span>
               </button>
             </div>
