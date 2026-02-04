@@ -141,6 +141,7 @@ export default function IsolineOverlapWidget({
   const [polygonsById, setPolygonsById] = useState<Record<string, { coords: { lat: number; lng: number }[] }>>({});
   const [loadingIds, setLoadingIds] = useState<Record<string, boolean>>({});
   const [geocodingIds, setGeocodingIds] = useState<Record<string, boolean>>({});
+  const [meetingSpotLoading, setMeetingSpotLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overlapStats, setOverlapStats] = useState<OverlapStats>({ hasOverlap: false });
 
@@ -148,6 +149,7 @@ export default function IsolineOverlapWidget({
   const abortRef = useRef<AbortController | null>(null);
   const geocodeTimersRef = useRef<Record<string, any>>({});
   const skipNextAutoGeocodeRef = useRef<Record<string, boolean>>({});
+  const meetingSpotAbortRef = useRef<AbortController | null>(null);
 
   // Decode HERE flexible polyline (copied from HereIsolineWidget for reuse)
   const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
@@ -452,6 +454,41 @@ export default function IsolineOverlapWidget({
       overlapGeoRef.current = null;
     }
   }, [canCompute, locations, polygonsById]);
+
+  // Auto-resolve the overlap centroid to a display address (ideal meeting spot).
+  useEffect(() => {
+    const center = overlapStats.center;
+    if (!overlapStats.hasOverlap || !center) {
+      setMeetingSpotLoading(false);
+      setOverlapStats((s) => ({ ...s, centerAddress: undefined }));
+      if (meetingSpotAbortRef.current) meetingSpotAbortRef.current.abort();
+      return;
+    }
+
+    if (meetingSpotAbortRef.current) meetingSpotAbortRef.current.abort();
+    const ac = new AbortController();
+    meetingSpotAbortRef.current = ac;
+
+    setMeetingSpotLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        // reverseGeocode doesn't accept a signal; we can still abort the state update below.
+        const rev = await reverseGeocode(center.lat, center.lng);
+        if (ac.signal.aborted) return;
+        const label = rev
+          ? [rev.street, rev.adminArea5, rev.adminArea3, rev.postalCode].filter(Boolean).join(', ')
+          : undefined;
+        setOverlapStats((s) => ({ ...s, centerAddress: label }));
+      } finally {
+        if (!ac.signal.aborted) setMeetingSpotLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      ac.abort();
+      clearTimeout(t);
+    };
+  }, [overlapStats.hasOverlap, overlapStats.center?.lat, overlapStats.center?.lng]);
 
   const overlapPolygonCoords = useMemo(() => {
     const f = overlapGeoRef.current;
@@ -767,6 +804,35 @@ export default function IsolineOverlapWidget({
                 );
               })}
             </div>
+
+            {/* Ideal meeting spot (read-only) */}
+            {overlapStats.hasOverlap && overlapStats.center && (
+              <div
+                className="mt-3 p-3 rounded-xl"
+                style={{ background: 'var(--bg-panel)', border: `1px solid var(--border-subtle)` }}
+              >
+                <div className="flex items-start gap-2">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5"
+                    style={{ background: '#7C3AED' }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
+                      Ideal meeting spot
+                    </div>
+                    <div className="text-sm mt-0.5" style={{ color: 'var(--text-main)' }}>
+                      {meetingSpotLoading
+                        ? 'Looking up address…'
+                        : (overlapStats.centerAddress || 'Address unavailable')}
+                    </div>
+                    <div className="text-[11px] font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
+                      {overlapStats.center.lat.toFixed(5)}, {overlapStats.center.lng.toFixed(5)}
+                    </div>
+                  </div>
+                  <MapPin className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: 'var(--text-muted)' }} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
