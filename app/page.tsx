@@ -60,7 +60,7 @@ const WIDGETS = [
   { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', category: 'Bigger Bet' },
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', category: 'Bigger Bet' },
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', category: 'Bigger Bet' },
-  { id: 'isoline-overlap' as WidgetId, name: 'Isoline Overlap', description: 'Find overlap zones across multiple origins', category: 'Bigger Bet' },
+  { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Overlap isochrones across multiple origins', category: 'Bigger Bet' },
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', category: 'Quick Win' },
   { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', category: 'Bigger Bet' },
   { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', category: 'Bigger Bet' },

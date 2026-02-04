@@ -603,7 +603,7 @@ export default function IsolineOverlapWidget({
                 </div>
                 <div className="min-w-0">
                   <h3 className="font-bold truncate" style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-                    Isoline Overlap
+                    Isochrone Visualizer
                   </h3>
                   <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                     Add 2–5 places and find the overlap zone
