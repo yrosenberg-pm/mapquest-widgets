@@ -528,7 +528,8 @@ export default function IsolineOverlapWidget({
       out.push({
         coordinates: poly,
         color: loc.color,
-        fillOpacity: 0.22,
+        // Keep base isolines slightly more transparent so overlap stands out clearly.
+        fillOpacity: 0.16,
         strokeWidth: 2,
       });
     }
@@ -542,9 +543,11 @@ export default function IsolineOverlapWidget({
       });
       out.push({
         coordinates: overlapPolygonCoords,
-        color: '#A855F7', // vivid purple
-        fillOpacity: 0.62,
-        strokeWidth: 4,
+        // Use a *different* purple than any location color in COLORS so it reads as "intersection"
+        // even when a location isoline is also purple.
+        color: '#7C3AED', // violet-600
+        fillOpacity: 0.72,
+        strokeWidth: 5,
         onClick: () => {
           onOverlapClick();
         },
