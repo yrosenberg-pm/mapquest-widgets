@@ -12,6 +12,10 @@ const ENDPOINTS: Record<string, string> = {
   routematrix: 'https://www.mapquestapi.com/directions/v2/routematrix',
   optimizedroute: 'https://www.mapquestapi.com/directions/v2/optimizedroute',
   traffic: 'https://www.mapquestapi.com/traffic/v2/incidents',
+  // Isoline API (v1): driving / walking / bicycling
+  isoline_driving: 'https://www.mapquestapi.com/isolines/v1/driving',
+  isoline_walking: 'https://www.mapquestapi.com/isolines/v1/walking',
+  isoline_bicycling: 'https://www.mapquestapi.com/isolines/v1/bicycling',
 };
 
 export async function GET(request: NextRequest) {
@@ -187,6 +191,29 @@ export async function GET(request: NextRequest) {
       case 'traffic': {
         const boundingBox = searchParams.get('boundingBox');
         url = `${ENDPOINTS.traffic}?key=${MAPQUEST_KEY}&boundingBox=${boundingBox}&filters=incidents,construction`;
+        break;
+      }
+
+      case 'isoline': {
+        const origin = searchParams.get('origin'); // "lat,lng"
+        const timeMinutes = searchParams.get('timeMinutes') || searchParams.get('time') || searchParams.get('contour') || searchParams.get('contours');
+        const mode = (searchParams.get('mode') || 'driving').toLowerCase(); // driving|walking|bicycling
+        const generalize = searchParams.get('generalize') || '0';
+
+        const isolineEndpoint =
+          mode === 'walking'
+            ? ENDPOINTS.isoline_walking
+            : mode === 'bicycling' || mode === 'bicycle' || mode === 'bike'
+              ? ENDPOINTS.isoline_bicycling
+              : ENDPOINTS.isoline_driving;
+
+        // Note: MapQuest Isoline API supports `origin` and `contours` (minutes) for time-based isolines.
+        // We keep this proxy permissive and pass through common parameters.
+        url = `${isolineEndpoint}?key=${MAPQUEST_KEY}`
+          + `&origin=${encodeURIComponent(origin || '')}`
+          + (timeMinutes ? `&contours=${encodeURIComponent(timeMinutes)}` : '')
+          + `&generalize=${encodeURIComponent(generalize)}`
+          + `&polygons=true`;
         break;
       }
 

@@ -58,6 +58,73 @@ export async function reverseGeocode(lat: number, lng: number): Promise<Geocoded
   }
 }
 
+// ============ ISOLINES ============
+
+export type IsolineMode = 'driving' | 'walking' | 'bicycling';
+
+export interface IsolineResultPolygon {
+  coordinates: { lat: number; lng: number }[];
+}
+
+// Returns one or more polygons (some responses can include multiple).
+export async function getIsoline(
+  origin: { lat: number; lng: number },
+  timeMinutes: number,
+  mode: IsolineMode = 'driving'
+): Promise<IsolineResultPolygon[]> {
+  try {
+    const params = new URLSearchParams({
+      endpoint: 'isoline',
+      origin: `${origin.lat},${origin.lng}`,
+      timeMinutes: String(timeMinutes),
+      mode,
+    });
+
+    const res = await fetch(`${API_BASE}?${params.toString()}`);
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => '');
+      console.error('Isoline API error:', res.status, res.statusText, errorText);
+      return [];
+    }
+    const data = await res.json();
+
+    // The Isoline API response shape can vary; try the most common locations for polygons.
+    const polygons =
+      data?.results?.[0]?.polygons ||
+      data?.polygons ||
+      data?.result?.polygons ||
+      [];
+
+    if (!Array.isArray(polygons) || polygons.length === 0) return [];
+
+    const out: IsolineResultPolygon[] = [];
+    for (const p of polygons) {
+      const latLngs =
+        p?.latLngs ||
+        p?.latLngCollection ||
+        p?.latLng ||
+        p?.shape ||
+        [];
+
+      if (!Array.isArray(latLngs) || latLngs.length < 3) continue;
+
+      const coords: { lat: number; lng: number }[] = [];
+      for (const pt of latLngs) {
+        const lat = typeof pt?.lat === 'number' ? pt.lat : (typeof pt?.latitude === 'number' ? pt.latitude : undefined);
+        const lng = typeof pt?.lng === 'number' ? pt.lng : (typeof pt?.lon === 'number' ? pt.lon : (typeof pt?.longitude === 'number' ? pt.longitude : undefined));
+        if (typeof lat === 'number' && typeof lng === 'number') coords.push({ lat, lng });
+      }
+
+      if (coords.length >= 3) out.push({ coordinates: coords });
+    }
+
+    return out;
+  } catch (err) {
+    console.error('Isoline request failed:', err);
+    return [];
+  }
+}
+
 // ============ SEARCH AHEAD (Autocomplete) ============
 
 interface SearchAheadResult {

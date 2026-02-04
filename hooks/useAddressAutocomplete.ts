@@ -32,6 +32,7 @@ export function useAddressAutocomplete(
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [isFocused, setIsFocused] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const justSelectedRef = useRef(false);
 
@@ -41,6 +42,13 @@ export function useAddressAutocomplete(
     // Skip search if disabled
     if (disabled) {
       setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
+
+    // If the input isn't focused, never pop the dropdown open (prevents "ghost dropdown"
+    // when switching tabs / remounting components).
+    if (!isFocused) {
       setIsOpen(false);
       return;
     }
@@ -65,7 +73,8 @@ export function useAddressAutocomplete(
         setSuggestions(results);
         
         if (results && results.length > 0) {
-          setIsOpen(true);
+          // Only open suggestions while focused.
+          setIsOpen(isFocused);
         } else {
           setIsOpen(false);
         }
@@ -82,7 +91,7 @@ export function useAddressAutocomplete(
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [value, minChars, maxSuggestions, disabled]);
+  }, [value, minChars, maxSuggestions, disabled, isFocused]);
 
   const handleSelect = (suggestion: any) => {
     const addressResult: AddressResult = {
@@ -133,6 +142,17 @@ export function useAddressAutocomplete(
     setHighlightedIndex(-1);
   };
 
+  const handleFocus = () => {
+    if (disabled) return;
+    setIsFocused(true);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    setIsOpen(false);
+    setHighlightedIndex(-1);
+  };
+
   return {
     suggestions,
     loading,
@@ -141,6 +161,8 @@ export function useAddressAutocomplete(
     handleSelect,
     handleKeyDown,
     closeDropdown,
+    handleFocus,
+    handleBlur,
   };
 }
 

@@ -9,12 +9,16 @@ const ENDPOINTS: Record<string, string> = {
   revgeocode: 'https://revgeocode.search.hereapi.com/v1/revgeocode',
   autosuggest: 'https://autosuggest.search.hereapi.com/v1/autosuggest',
   routes: 'https://router.hereapi.com/v8/routes',
+  // HERE Search API (Places/POI)
+  discover: 'https://discover.search.hereapi.com/v1/discover',
   // HERE Public Transit API - only returns subway, bus, tram, ferry (no taxi/car)
   transit: 'https://transit.router.hereapi.com/v8/routes',
   // HERE Destination Weather API
   weather: 'https://weather.ls.hereapi.com/weather/1.0/report.json',
   // HERE Fleet Telematics - Truck Restrictions
   truckrestrictions: 'https://fleet.ls.hereapi.com/2/overlays.json',
+  // EV charging (we'll try dedicated EV endpoints first, then fall back to Search/Discover)
+  evchargers: 'https://ev-chargepoints.search.hereapi.com/v1/chargepoints',
 };
 
 export async function GET(request: NextRequest) {
@@ -107,6 +111,138 @@ export async function GET(request: NextRequest) {
         // resultTypes keeps it focused on places/addresses
         url = `${ENDPOINTS.autosuggest}?apiKey=${HERE_API_KEY}&q=${encodeURIComponent(q)}&at=${encodeURIComponent(at)}&limit=${limit}&resultTypes=address,place&lang=en-US`;
         break;
+      }
+
+      case 'evchargers': {
+        const at = searchParams.get('at'); // lat,lng
+        const radiusMeters = searchParams.get('radiusMeters'); // meters
+        const radiusMiles = searchParams.get('radiusMiles'); // miles
+        // HERE EV/Search endpoints typically cap limit to [1, 100]
+        const limitRaw = searchParams.get('limit') || '100';
+        const limitNum = Math.max(1, Math.min(100, Math.round(Number(limitRaw) || 100)));
+        const limit = String(limitNum);
+        const q = searchParams.get('q') || 'ev charging station';
+
+        if (!at) {
+          return NextResponse.json({ error: 'Location (at) is required' }, { status: 400 });
+        }
+
+        const [lat, lng] = at.split(',').map(Number);
+        if ([lat, lng].some((v) => Number.isNaN(v))) {
+          return NextResponse.json({ error: 'Invalid at format' }, { status: 400 });
+        }
+
+        const rMetersRaw =
+          radiusMeters != null
+            ? Number(radiusMeters)
+            : radiusMiles != null
+              ? Number(radiusMiles) * 1609.34
+              : 16093; // default ~10 miles
+
+        const rMeters = Math.max(500, Math.min(80000, Math.round(rMetersRaw))); // cap 0.5km..80km
+
+        // Try the EV Charge Points endpoint first (if the account has entitlement),
+        // but fall back to HERE Search/Discover (EV charging POIs) if it fails.
+        const candidates: string[] = [];
+        const attempts: Array<{ url: string; status: number; errorSnippet?: string }> = [];
+
+        // Candidate 1: EV Charge Points (commonly used host)
+        {
+          const u = new URL('https://ev-chargepoints.search.hereapi.com/v1/chargepoints');
+          u.searchParams.set('apiKey', HERE_API_KEY!);
+          u.searchParams.set('at', `${lat},${lng}`);
+          u.searchParams.set('radius', String(rMeters));
+          u.searchParams.set('limit', limit);
+          candidates.push(u.toString());
+        }
+
+        // Candidate 2: Alternative EV stations path (some docs/tenants use this)
+        {
+          const u = new URL('https://ev-chargepoints.search.hereapi.com/v1/ev/stations');
+          u.searchParams.set('apiKey', HERE_API_KEY!);
+          u.searchParams.set('at', `${lat},${lng}`);
+          u.searchParams.set('radius', String(rMeters));
+          u.searchParams.set('limit', limit);
+          candidates.push(u.toString());
+        }
+
+        // Candidate 3: EV Charge Points API v3 (if enabled on account; exact URL depends on tenant/product)
+        // We try a couple of common patterns; if your account is enabled you'll see 200s here, otherwise 401/403/404.
+        {
+          const u = new URL('https://ev-chargepoints.hereapi.com/v3/chargepoints');
+          u.searchParams.set('apiKey', HERE_API_KEY!);
+          u.searchParams.set('at', `${lat},${lng}`);
+          u.searchParams.set('radius', String(rMeters));
+          u.searchParams.set('limit', limit);
+          candidates.push(u.toString());
+        }
+        {
+          const u = new URL('https://ev-chargepoints.hereapi.com/v3/stations');
+          u.searchParams.set('apiKey', HERE_API_KEY!);
+          u.searchParams.set('at', `${lat},${lng}`);
+          u.searchParams.set('radius', String(rMeters));
+          u.searchParams.set('limit', limit);
+          candidates.push(u.toString());
+        }
+
+        // Candidate 3: HERE Search/Discover fallback (EV charging POIs)
+        {
+          const u = new URL(ENDPOINTS.discover);
+          u.searchParams.set('apiKey', HERE_API_KEY!);
+          // NOTE: HERE Search APIs treat these as mutually exclusive: only one of `at` OR `in=*` is allowed.
+          // For radius queries, prefer `in=circle:*` and omit `at`.
+          u.searchParams.set('in', `circle:${lat},${lng};r=${rMeters}`);
+          u.searchParams.set('q', q);
+          u.searchParams.set('limit', limit);
+          u.searchParams.set('lang', 'en-US');
+          candidates.push(u.toString());
+        }
+
+        let lastErrText = '';
+        for (const candidateUrl of candidates) {
+          try {
+            const resp = await fetch(candidateUrl);
+            if (!resp.ok) {
+              lastErrText = await resp.text().catch(() => '');
+              attempts.push({
+                url: candidateUrl.replace(HERE_API_KEY!, '***'),
+                status: resp.status,
+                errorSnippet: lastErrText.slice(0, 400),
+              });
+              continue;
+            }
+            const data = await resp.json();
+            return NextResponse.json(
+              {
+                ...data,
+                __debug: {
+                  providerUrl: candidateUrl.replace(HERE_API_KEY!, '***'),
+                  radiusMeters: rMeters,
+                  attempts,
+                },
+              },
+              { headers: { 'Cache-Control': 'public, max-age=120' } }
+            );
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            lastErrText = message;
+            attempts.push({
+              url: candidateUrl.replace(HERE_API_KEY!, '***'),
+              status: 0,
+              errorSnippet: message.slice(0, 400),
+            });
+            continue;
+          }
+        }
+
+        return NextResponse.json(
+          {
+            error: 'HERE EV charger search failed',
+            details: lastErrText,
+            __debug: { attempts, radiusMeters: rMeters },
+          },
+          { status: 502 }
+        );
       }
 
       case 'routes': {

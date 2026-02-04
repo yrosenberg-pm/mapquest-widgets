@@ -47,6 +47,8 @@ export default function AddressAutocomplete({
     handleSelect,
     handleKeyDown,
     closeDropdown,
+    handleFocus,
+    handleBlur,
   } = useAddressAutocomplete(value, onChange, { onSelect, disabled: readOnly });
 
   useEffect(() => {
@@ -81,11 +83,8 @@ export default function AddressAutocomplete({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={() => {
-            if (value.length >= 3 && suggestions.length > 0) {
-              // Suggestions will be shown by the hook
-            }
-          }}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
           placeholder={placeholder}
           className={`w-full ${hideIcon ? 'pl-3' : 'pl-10'} pr-10 py-2.5 text-sm ${bg} ${text} rounded-lg border ${border} focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
         />

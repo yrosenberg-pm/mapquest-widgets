@@ -19,6 +19,7 @@ import {
   HereIsolineWidget,
   RouteWeatherAlerts,
   CheckoutFlowWidget,
+  EVChargingPlanner,
   HeatmapDensity,
 } from '@/components/widgets';
 
@@ -40,6 +41,7 @@ const VALID_WIDGETS = [
   'isoline',
   'heatmap',
   'checkout',
+  'ev-charging',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -166,6 +168,8 @@ export default function WidgetPage() {
         return <HeatmapDensity {...commonProps} />;
       case 'checkout':
         return <CheckoutFlowWidget {...commonProps} />;
+      case 'ev-charging':
+        return <EVChargingPlanner {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':

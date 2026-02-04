@@ -17,6 +17,7 @@ export { default as TruckRouting } from './TruckRouting';
 export { default as RouteWeatherAlerts } from './RouteWeatherAlerts';
 export { default as CheckoutFlowWidget } from './CheckoutFlowWidget';
 export { default as HeatmapDensity } from './HeatmapDensity';
+export { default as EVChargingPlanner } from './EVChargingPlanner';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

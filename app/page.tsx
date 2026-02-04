@@ -21,6 +21,7 @@ import {
   RouteWeatherAlerts,
   CheckoutFlowWidget,
   HeatmapDensity,
+  EVChargingPlanner,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -40,7 +41,8 @@ type WidgetId =
   | 'route-weather'
   | 'here-isoline'
   | 'checkout'
-  | 'heatmap';
+  | 'heatmap'
+  | 'ev-charging';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
@@ -58,6 +60,7 @@ const WIDGETS = [
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', category: 'Bigger Bet' },
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', category: 'Quick Win' },
   { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', category: 'Bigger Bet' },
+  { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', category: 'Bigger Bet' },
 ];
 
 const ACCENT_COLORS = [
@@ -284,6 +287,8 @@ function HomeContent() {
         return <CheckoutFlowWidget {...commonProps} />;
       case 'heatmap':
         return <HeatmapDensity {...commonProps} />;
+      case 'ev-charging':
+        return <EVChargingPlanner {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
       case 'neighborhood':

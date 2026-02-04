@@ -10,6 +10,7 @@ interface MapMarker {
   type?: 'home' | 'poi' | 'default';
   iconUrl?: string;
   iconSize?: [number, number];
+  zIndexOffset?: number;
   onClick?: () => void;
 }
 
@@ -567,8 +568,17 @@ export default function MapQuestMap({
         `;
       }
       
-      // Higher zIndexOffset for home markers to always be on top
-      const zIndexOffset = type === 'home' ? 1000 : marker.iconUrl ? 500 : type === 'poi' ? 0 : 500;
+      // Higher zIndexOffset for home markers to always be on top (unless caller overrides)
+      const zIndexOffset =
+        typeof marker.zIndexOffset === 'number'
+          ? marker.zIndexOffset
+          : type === 'home'
+            ? 1000
+            : marker.iconUrl
+              ? 500
+              : type === 'poi'
+                ? 0
+                : 500;
       
       // Custom icon markers don't get shadow, others do
       const markerClassName = marker.iconUrl 
