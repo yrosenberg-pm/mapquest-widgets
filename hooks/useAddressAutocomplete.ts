@@ -49,6 +49,36 @@ export function useAddressAutocomplete(
   const justSelectedRef = useRef(false);
   const requestSeqRef = useRef(0);
 
+  const buildFullAddressString = (suggestion: any) => {
+    const base = String(suggestion?.displayString || suggestion?.name || '').trim();
+    const street = String(suggestion?.street || '').trim();
+    const city = String(suggestion?.city || '').trim();
+    const state = String(suggestion?.state || suggestion?.stateCode || '').trim();
+    const postalCode = String(suggestion?.postalCode || '').trim();
+    const country = String(suggestion?.country || '').trim();
+
+    // If displayString already looks like a full address, keep it.
+    const looksFull =
+      base.includes(',') &&
+      (/\b[A-Z]{2}\b/.test(base) || /\d{5}(-\d{4})?/.test(base) || base.toLowerCase().includes('usa'));
+    if (looksFull) return base;
+
+    // Otherwise build from parts (best-effort)
+    const primary = street || base;
+    const cityStateZip =
+      [city || null, state || null].filter(Boolean).join(', ')
+        + (postalCode ? `${(city || state) ? ' ' : ''}${postalCode}` : '');
+
+    const parts = [
+      primary || null,
+      cityStateZip.trim() || null,
+      country || null,
+    ].filter(Boolean) as string[];
+
+    const full = parts.join(', ').replace(/\s+/g, ' ').trim();
+    return full || base;
+  };
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     
@@ -113,8 +143,9 @@ export function useAddressAutocomplete(
   }, [value, minChars, minAlnumChars, maxSuggestions, debounceMs, disabled, isFocused]);
 
   const handleSelect = (suggestion: any) => {
+    const fullDisplayString = buildFullAddressString(suggestion);
     const addressResult: AddressResult = {
-      displayString: suggestion.displayString || suggestion.name || '',
+      displayString: fullDisplayString,
       street: suggestion.street,
       city: suggestion.city,
       state: suggestion.state || suggestion.stateCode,
@@ -128,7 +159,7 @@ export function useAddressAutocomplete(
     justSelectedRef.current = true;
     setIsOpen(false);
     setSuggestions([]);
-    onChange(addressResult.displayString);
+    onChange(fullDisplayString);
     onSelect?.(addressResult);
   };
 
