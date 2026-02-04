@@ -6,7 +6,7 @@ import * as turf from '@turf/turf';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
-import { geocode, reverseGeocode } from '@/lib/mapquest';
+import { reverseGeocode } from '@/lib/mapquest';
 
 type TravelTimePreset = 15 | 30 | 45 | 60;
 type ModeOption = 'drive' | 'walk' | 'bike';
@@ -140,15 +140,12 @@ export default function IsolineOverlapWidget({
 
   const [polygonsById, setPolygonsById] = useState<Record<string, { coords: { lat: number; lng: number }[] }>>({});
   const [loadingIds, setLoadingIds] = useState<Record<string, boolean>>({});
-  const [geocodingIds, setGeocodingIds] = useState<Record<string, boolean>>({});
   const [meetingSpotLoading, setMeetingSpotLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overlapStats, setOverlapStats] = useState<OverlapStats>({ hasOverlap: false });
 
   const overlapGeoRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const geocodeTimersRef = useRef<Record<string, any>>({});
-  const skipNextAutoGeocodeRef = useRef<Record<string, boolean>>({});
   const meetingSpotAbortRef = useRef<AbortController | null>(null);
 
   // Decode HERE flexible polyline (copied from HereIsolineWidget for reuse)
@@ -311,42 +308,6 @@ export default function IsolineOverlapWidget({
       return next;
     });
   };
-
-  const geocodeLocation = async (id: string, address: string) => {
-    const trimmed = (address || '').trim();
-    if (trimmed.length < 4) return;
-    setGeocodingIds((p) => ({ ...p, [id]: true }));
-    try {
-      const g = await geocode(trimmed, 1);
-      if (g?.lat && g?.lng) {
-        updateLocation(id, { lat: g.lat, lng: g.lng });
-        clearPolygonFor(id);
-      }
-    } finally {
-      setGeocodingIds((p) => ({ ...p, [id]: false }));
-    }
-  };
-
-  // If the user types (without selecting a dropdown suggestion), geocode after a short pause.
-  useEffect(() => {
-    for (const loc of locations) {
-      const hasCoords = typeof loc.lat === 'number' && typeof loc.lng === 'number';
-      const hasText = (loc.address || '').trim().length >= 6;
-      if (hasCoords || !hasText) continue;
-      if (skipNextAutoGeocodeRef.current[loc.id]) {
-        skipNextAutoGeocodeRef.current[loc.id] = false;
-        continue;
-      }
-      if (geocodeTimersRef.current[loc.id]) clearTimeout(geocodeTimersRef.current[loc.id]);
-      geocodeTimersRef.current[loc.id] = setTimeout(() => {
-        geocodeLocation(loc.id, loc.address);
-      }, 800);
-    }
-    return () => {
-      // don't clear timers globally here; per-location updates handle it
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locations.map(l => `${l.id}:${l.address}:${l.lat},${l.lng}`).join('|')]);
 
   // Fetch isolines for any location with coordinates.
   useEffect(() => {
@@ -670,7 +631,6 @@ export default function IsolineOverlapWidget({
             <div className="space-y-3">
               {locations.map((loc, idx) => {
                 const isLoading = !!loadingIds[loc.id];
-                const isGeocoding = !!geocodingIds[loc.id];
                 const hasCoords = loc.lat != null && loc.lng != null;
                 const hasPoly = !!polygonsById[loc.id]?.coords;
                 return (
@@ -692,7 +652,6 @@ export default function IsolineOverlapWidget({
                           style={{ color: 'var(--text-main)' }}
                         />
                         {isLoading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} />}
-                        {isGeocoding && !isLoading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} />}
                       </div>
                       {locations.length > 2 && (
                         <button
@@ -717,8 +676,6 @@ export default function IsolineOverlapWidget({
                         }}
                         onSelect={(r) => {
                           if (typeof r.lat === 'number' && typeof r.lng === 'number') {
-                            // Prevent the auto-geocode effect from re-geocoding immediately after a suggestion selection.
-                            skipNextAutoGeocodeRef.current[loc.id] = true;
                             updateLocation(loc.id, { lat: r.lat, lng: r.lng, address: r.displayString });
                             clearPolygonFor(loc.id);
                           }
@@ -733,7 +690,7 @@ export default function IsolineOverlapWidget({
                       <div className="mt-1 flex items-center justify-between">
                         <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                           {!hasCoords
-                            ? 'Pick a suggestion (or wait a moment to auto-geocode)'
+                            ? 'Pick a suggestion from the dropdown'
                             : isLoading
                               ? 'Calculating isochrone…'
                               : hasPoly

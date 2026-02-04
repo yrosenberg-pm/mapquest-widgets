@@ -107,7 +107,15 @@ export default function AddressAutocomplete({
               <button
                 key={index}
                 type="button"
-                onClick={() => handleSelect(suggestion)}
+                // Important: select on mousedown so input blur doesn't unmount the dropdown before click fires.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelect(suggestion);
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  handleSelect(suggestion);
+                }}
                 className={`w-full text-left px-4 py-2.5 flex items-start gap-2 ${index === highlightedIndex ? (darkMode ? 'bg-gray-700' : 'bg-gray-100') : ''} ${hoverBg} transition-colors`}
               >
                 <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${muted}`} />
