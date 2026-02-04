@@ -542,7 +542,7 @@ export default function IsolineOverlapWidget({
       });
       out.push({
         coordinates: overlapPolygonCoords,
-        color: '#0EA5E9', // bright cyan
+        color: '#A855F7', // vivid purple
         fillOpacity: 0.62,
         strokeWidth: 4,
         onClick: () => {
