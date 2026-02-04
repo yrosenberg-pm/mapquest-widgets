@@ -543,7 +543,7 @@ export default function IsolineOverlapWidget({
         // Use a *different* purple than any location color in COLORS so it reads as "intersection"
         // even when a location isoline is also purple.
         color: '#7C3AED', // violet-600
-        fillOpacity: 0.72,
+        fillOpacity: 0.58,
         strokeWidth: 5,
         onClick: () => {
           onOverlapClick();
