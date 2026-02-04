@@ -640,7 +640,7 @@ export default function IsolineOverlapWidget({
                     Isochrone Visualizer
                   </h3>
                   <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                    Add 2–5 places and find the overlap zone
+                    Find overlap between points
                   </p>
                 </div>
               </div>
