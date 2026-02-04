@@ -94,7 +94,8 @@ function intersectRobust(
   for (const pa of aPolys) {
     for (const pb of bPolys) {
       try {
-        const r = (turf as any).intersect(pa, pb) as Feature<Polygon | MultiPolygon> | null;
+        // Turf v7 expects a FeatureCollection of 2+ geometries.
+        const r = turf.intersect(turf.featureCollection([pa, pb]) as any) as Feature<Polygon | MultiPolygon> | null;
         if (r) pieces.push(r);
       } catch {
         // ignore topo errors and keep trying other pieces
@@ -103,16 +104,12 @@ function intersectRobust(
   }
   if (pieces.length === 0) return null;
 
-  // Union pieces back together (if union fails, fall back to the first piece).
-  let acc: any = pieces[0];
-  for (let i = 1; i < pieces.length; i++) {
-    try {
-      acc = (turf as any).union(acc, pieces[i]);
-    } catch {
-      // ignore
-    }
+  // Union pieces back together into a single polygon/multipolygon.
+  try {
+    return (turf.union(turf.featureCollection(pieces as any) as any) as unknown as Feature<Polygon | MultiPolygon>) || pieces[0];
+  } catch {
+    return pieces[0];
   }
-  return acc as Feature<Polygon | MultiPolygon>;
 }
 
 function fmtSqMi(areaSqMi: number) {
@@ -465,7 +462,7 @@ export default function IsolineOverlapWidget({
       : geom.coordinates?.[0]?.[0];
     if (!firstRing || firstRing.length < 3) return null;
     return firstRing.map(([lng, lat]) => ({ lat, lng }));
-  }, [overlapStats.hasOverlap]); // recompute when overlap toggles
+  }, [overlapStats.hasOverlap, overlapStats.center?.lat, overlapStats.center?.lng, overlapStats.areaSqMi]); // recompute when overlap updates
 
   const onOverlapClick = async () => {
     if (!overlapStats.center) return;
