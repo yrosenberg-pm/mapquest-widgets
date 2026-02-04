@@ -1,0 +1,612 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus, Trash2, Loader2, AlertCircle, MapPin, Crosshair } from 'lucide-react';
+import * as turf from '@turf/turf';
+import type { Feature, Polygon, MultiPolygon } from 'geojson';
+import MapQuestMap from './MapQuestMap';
+import AddressAutocomplete from '../AddressAutocomplete';
+import { getIsoline, reverseGeocode, type IsolineMode } from '@/lib/mapquest';
+
+type TravelTimePreset = 15 | 30 | 45 | 60;
+type ModeOption = 'drive' | 'walk' | 'bike';
+
+type LocationItem = {
+  id: string;
+  label: string;
+  color: string;
+  address: string;
+  lat?: number;
+  lng?: number;
+  timeMinutes: TravelTimePreset;
+  mode: ModeOption;
+};
+
+type OverlapStats = {
+  hasOverlap: boolean;
+  areaSqMi?: number;
+  center?: { lat: number; lng: number };
+  centerAddress?: string;
+};
+
+const mapQuestApiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
+
+const COLORS = ['#2563EB', '#EF4444', '#10B981', '#A855F7', '#F59E0B'];
+
+function uid(prefix: string) {
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function modeToIsolineMode(mode: ModeOption): IsolineMode {
+  if (mode === 'walk') return 'walking';
+  if (mode === 'bike') return 'bicycling';
+  return 'driving';
+}
+
+function closeRing(coords: { lat: number; lng: number }[]) {
+  if (coords.length < 3) return coords;
+  const first = coords[0];
+  const last = coords[coords.length - 1];
+  if (first.lat === last.lat && first.lng === last.lng) return coords;
+  return [...coords, first];
+}
+
+function toTurfPolygon(coords: { lat: number; lng: number }[]) {
+  const ring = closeRing(coords);
+  const lngLat = ring.map((p) => [p.lng, p.lat]);
+  return turf.polygon([lngLat]);
+}
+
+function fmtSqMi(areaSqMi: number) {
+  if (areaSqMi < 1) return `${areaSqMi.toFixed(2)} sq mi`;
+  if (areaSqMi < 10) return `${areaSqMi.toFixed(1)} sq mi`;
+  return `${Math.round(areaSqMi)} sq mi`;
+}
+
+export default function IsolineOverlapWidget({
+  accentColor = '#2563eb',
+  darkMode = false,
+  showBranding = true,
+  companyName,
+  companyLogo,
+  fontFamily,
+}: {
+  accentColor?: string;
+  darkMode?: boolean;
+  showBranding?: boolean;
+  companyName?: string;
+  companyLogo?: string;
+  fontFamily?: string;
+}) {
+  const [locations, setLocations] = useState<LocationItem[]>(() => ([
+    { id: uid('loc'), label: 'Home', color: COLORS[0], address: '', timeMinutes: 30, mode: 'drive' },
+    { id: uid('loc'), label: 'Work', color: COLORS[1], address: '', timeMinutes: 30, mode: 'drive' },
+  ]));
+
+  const [polygonsById, setPolygonsById] = useState<Record<string, { coords: { lat: number; lng: number }[] }>>({});
+  const [loadingIds, setLoadingIds] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [overlapStats, setOverlapStats] = useState<OverlapStats>({ hasOverlap: false });
+  const [selectedOverlap, setSelectedOverlap] = useState(false);
+
+  const overlapGeoRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
+
+  // Keep Tailwind classes for AddressAutocomplete compatibility
+  const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
+  const textColor = darkMode ? 'text-white' : 'text-gray-900';
+  const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
+  const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+
+  const canCompute = useMemo(() => {
+    const valid = locations.filter((l) => typeof l.lat === 'number' && typeof l.lng === 'number');
+    return valid.length >= 2;
+  }, [locations]);
+
+  const addLocation = () => {
+    setLocations((prev) => {
+      if (prev.length >= 5) return prev;
+      const nextColor = COLORS[prev.length % COLORS.length];
+      return [
+        ...prev,
+        {
+          id: uid('loc'),
+          label: `Location ${prev.length + 1}`,
+          color: nextColor,
+          address: '',
+          timeMinutes: 30,
+          mode: 'drive',
+        },
+      ];
+    });
+  };
+
+  const removeLocation = (id: string) => {
+    setLocations((prev) => prev.filter((l) => l.id !== id));
+    setPolygonsById((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setLoadingIds((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const updateLocation = (id: string, patch: Partial<LocationItem>) => {
+    setLocations((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  };
+
+  // Fetch isolines for any location with coordinates.
+  useEffect(() => {
+    if (!canCompute) {
+      setError(null);
+      setOverlapStats({ hasOverlap: false });
+      overlapGeoRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      setError(null);
+      const targets = locations.filter((l) => typeof l.lat === 'number' && typeof l.lng === 'number');
+      for (const loc of targets) {
+        const key = `${loc.lat},${loc.lng}|${loc.timeMinutes}|${loc.mode}`;
+        // Skip if we already have a polygon for this id AND it matches current params by shallow heuristic:
+        // (we keep it simple; recompute whenever something changes by clearing polygonsById elsewhere)
+        if (polygonsById[loc.id] && (polygonsById[loc.id] as any).__key === key) continue;
+
+        setLoadingIds((p) => ({ ...p, [loc.id]: true }));
+        try {
+          const polys = await getIsoline({ lat: loc.lat!, lng: loc.lng! }, loc.timeMinutes, modeToIsolineMode(loc.mode));
+          if (cancelled) return;
+          const first = polys?.[0]?.coordinates;
+          if (!first || first.length < 3) {
+            setPolygonsById((p) => {
+              const next = { ...p };
+              delete next[loc.id];
+              return next;
+            });
+          } else {
+            setPolygonsById((p) => ({
+              ...p,
+              [loc.id]: { coords: first, __key: key } as any,
+            }));
+          }
+        } catch (e) {
+          if (cancelled) return;
+          setError(e instanceof Error ? e.message : 'Failed to compute isolines');
+        } finally {
+          if (!cancelled) setLoadingIds((p) => ({ ...p, [loc.id]: false }));
+        }
+      }
+    };
+
+    // Debounce slightly so changing multiple controls doesn’t thrash the API
+    const t = setTimeout(run, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canCompute, locations.map(l => `${l.id}:${l.lat},${l.lng}:${l.timeMinutes}:${l.mode}:${l.address}`).join('|')]);
+
+  // Compute overlap polygon + centroid + area whenever all needed polygons are available.
+  useEffect(() => {
+    if (!canCompute) return;
+    const active = locations.filter((l) => typeof l.lat === 'number' && typeof l.lng === 'number');
+    const polys = active.map((l) => polygonsById[l.id]?.coords).filter(Boolean) as { lat: number; lng: number }[][];
+
+    if (polys.length < 2) {
+      setOverlapStats({ hasOverlap: false });
+      overlapGeoRef.current = null;
+      return;
+    }
+
+    try {
+      let acc: Feature<Polygon | MultiPolygon> | null = null;
+      for (const ring of polys) {
+        const poly = toTurfPolygon(ring);
+        if (!acc) {
+          acc = poly as unknown as Feature<Polygon | MultiPolygon>;
+          continue;
+        }
+        // Turf v7+ intersect accepts two features; if it returns null => no overlap.
+        const next = (turf as any).intersect(acc, poly) as Feature<Polygon | MultiPolygon> | null;
+        if (!next) {
+          acc = null;
+          break;
+        }
+        acc = next;
+      }
+
+      if (!acc) {
+        setOverlapStats({ hasOverlap: false });
+        overlapGeoRef.current = null;
+        setSelectedOverlap(false);
+        return;
+      }
+
+      overlapGeoRef.current = acc;
+      const areaM2 = turf.area(acc);
+      const areaSqMi = areaM2 / 2_589_988.110336; // m^2 -> sq mi
+      const c = turf.centroid(acc);
+      const center = { lat: c.geometry.coordinates[1], lng: c.geometry.coordinates[0] };
+      setOverlapStats({ hasOverlap: true, areaSqMi, center });
+      setSelectedOverlap(false);
+    } catch (e) {
+      console.error('Overlap computation failed', e);
+      setOverlapStats({ hasOverlap: false });
+      overlapGeoRef.current = null;
+    }
+  }, [canCompute, locations, polygonsById]);
+
+  const overlapPolygonCoords = useMemo(() => {
+    const f = overlapGeoRef.current;
+    if (!f) return null;
+    const geom = f.geometry;
+    const firstRing = geom.type === 'Polygon'
+      ? geom.coordinates?.[0]
+      : geom.coordinates?.[0]?.[0];
+    if (!firstRing || firstRing.length < 3) return null;
+    return firstRing.map(([lng, lat]) => ({ lat, lng }));
+  }, [overlapStats.hasOverlap]); // recompute when overlap toggles
+
+  const onOverlapClick = async () => {
+    setSelectedOverlap(true);
+    if (!overlapStats.center) return;
+    const rev = await reverseGeocode(overlapStats.center.lat, overlapStats.center.lng);
+    const label = rev
+      ? [rev.street, rev.adminArea5, rev.adminArea3, rev.postalCode].filter(Boolean).join(', ')
+      : undefined;
+    setOverlapStats((s) => ({ ...s, centerAddress: label }));
+  };
+
+  const markers = useMemo(() => {
+    const ms: any[] = [];
+    for (const loc of locations) {
+      if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') continue;
+      ms.push({
+        lat: loc.lat,
+        lng: loc.lng,
+        label: `${loc.label}${loc.address ? ` • ${loc.address}` : ''}`,
+        color: loc.color,
+        type: 'home',
+        draggable: true,
+        onDragEnd: async (lat: number, lng: number) => {
+          updateLocation(loc.id, { lat, lng });
+          // Clear cached polygon for this location so it recomputes.
+          setPolygonsById((p) => {
+            const next = { ...p };
+            delete next[loc.id];
+            return next;
+          });
+          try {
+            const rev = await reverseGeocode(lat, lng);
+            const label = rev ? [rev.street, rev.adminArea5, rev.adminArea3].filter(Boolean).join(', ') : '';
+            updateLocation(loc.id, { address: label });
+          } catch {
+            // ignore
+          }
+        },
+      });
+    }
+
+    if (overlapStats.hasOverlap && overlapStats.center) {
+      ms.push({
+        lat: overlapStats.center.lat,
+        lng: overlapStats.center.lng,
+        label: overlapStats.centerAddress ? `Ideal meeting spot • ${overlapStats.centerAddress}` : 'Ideal meeting spot',
+        color: accentColor,
+        type: 'poi',
+        zIndexOffset: 1500,
+      });
+    }
+    return ms;
+  }, [locations, overlapStats, accentColor]);
+
+  const polygons = useMemo(() => {
+    const out: any[] = [];
+    const active = locations.filter((l) => typeof l.lat === 'number' && typeof l.lng === 'number');
+    for (const loc of active) {
+      const poly = polygonsById[loc.id]?.coords;
+      if (!poly) continue;
+      out.push({
+        coordinates: poly,
+        color: loc.color,
+        fillOpacity: 0.22,
+        strokeWidth: 2,
+      });
+    }
+    if (overlapPolygonCoords) {
+      out.push({
+        coordinates: overlapPolygonCoords,
+        color: '#0EA5E9',
+        fillOpacity: 0.45,
+        strokeWidth: 3,
+        onClick: () => {
+          onOverlapClick();
+        },
+      });
+    }
+    return out;
+  }, [locations, polygonsById, overlapPolygonCoords]);
+
+  const mapCenter = useMemo(() => {
+    const first = locations.find((l) => typeof l.lat === 'number' && typeof l.lng === 'number');
+    return first ? { lat: first.lat!, lng: first.lng! } : { lat: 39.8283, lng: -98.5795 };
+  }, [locations]);
+
+  const showNoOverlap = canCompute && Object.keys(loadingIds).every((k) => !loadingIds[k]) && !overlapStats.hasOverlap;
+
+  return (
+    <div
+      className="prism-widget w-full md:w-[980px]"
+      data-theme={darkMode ? 'dark' : 'light'}
+      style={{
+        fontFamily: fontFamily || 'var(--brand-font)',
+        '--brand-primary': accentColor,
+      } as React.CSSProperties}
+    >
+      <div className="flex flex-col md:flex-row md:h-[600px]">
+        {/* Map */}
+        <div className="h-[320px] md:h-auto md:flex-1 md:order-2">
+          <MapQuestMap
+            apiKey={mapQuestApiKey}
+            center={mapCenter}
+            zoom={locations.some((l) => l.lat != null && l.lng != null) ? 11 : 4}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            height="100%"
+            markers={markers}
+            polygons={polygons}
+          />
+        </div>
+
+        {/* Controls */}
+        <div
+          className="w-full md:w-[380px] flex-shrink-0 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r md:order-1"
+          style={{ borderColor: 'var(--border-subtle)' }}
+        >
+          <div className="flex-1 overflow-y-auto prism-scrollbar p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: `${accentColor}15` }}
+                >
+                  <span style={{ color: accentColor }}><Crosshair className="w-4 h-4" /></span>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-bold truncate" style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
+                    Isoline Overlap
+                  </h3>
+                  <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                    Add 2–5 places and find the overlap zone
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={addLocation}
+                disabled={locations.length >= 5}
+                className="prism-btn prism-btn-secondary"
+                style={{ height: 36, paddingInline: 10 }}
+                title={locations.length >= 5 ? 'Max 5 locations' : 'Add a location'}
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-sm">Add</span>
+              </button>
+            </div>
+
+            {error && (
+              <div
+                className="mb-3 p-2.5 rounded-lg text-xs flex items-start gap-2"
+                style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)' }}
+              >
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {locations.map((loc, idx) => {
+                const isLoading = !!loadingIds[loc.id];
+                return (
+                  <div
+                    key={loc.id}
+                    className="p-3 rounded-xl"
+                    style={{ background: 'var(--bg-panel)', border: `1px solid var(--border-subtle)` }}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ background: loc.color }}
+                        />
+                        <input
+                          value={loc.label}
+                          onChange={(e) => updateLocation(loc.id, { label: e.target.value })}
+                          className="text-sm font-semibold bg-transparent outline-none min-w-0"
+                          style={{ color: 'var(--text-main)' }}
+                        />
+                        {isLoading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} />}
+                      </div>
+                      {locations.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => removeLocation(loc.id)}
+                          className="p-2 rounded-lg hover:bg-black/5"
+                          title="Remove"
+                          style={{ color: 'var(--text-muted)' }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="mb-2">
+                      <AddressAutocomplete
+                        value={loc.address}
+                        onChange={(v) => updateLocation(loc.id, { address: v })}
+                        onSelect={(r) => {
+                          if (typeof r.lat === 'number' && typeof r.lng === 'number') {
+                            updateLocation(loc.id, { lat: r.lat, lng: r.lng, address: r.displayString });
+                            setPolygonsById((p) => {
+                              const next = { ...p };
+                              delete next[loc.id];
+                              return next;
+                            });
+                          }
+                        }}
+                        placeholder="Search an address..."
+                        darkMode={darkMode}
+                        inputBg={inputBg}
+                        textColor={textColor}
+                        mutedText={mutedText}
+                        borderColor={borderColor}
+                      />
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                          Drag marker to adjust
+                        </span>
+                        {(loc.lat != null && loc.lng != null) && (
+                          <span className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                            {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Time</div>
+                        <select
+                          className="prism-input w-full"
+                          value={loc.timeMinutes}
+                          onChange={(e) => {
+                            updateLocation(loc.id, { timeMinutes: Number(e.target.value) as TravelTimePreset });
+                            setPolygonsById((p) => {
+                              const next = { ...p };
+                              delete next[loc.id];
+                              return next;
+                            });
+                          }}
+                          style={{ height: 36 }}
+                        >
+                          {[15, 30, 45, 60].map((m) => (
+                            <option key={m} value={m}>{m} min</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium mb-1" style={{ color: 'var(--text-muted)' }}>Mode</div>
+                        <select
+                          className="prism-input w-full"
+                          value={loc.mode}
+                          onChange={(e) => {
+                            updateLocation(loc.id, { mode: e.target.value as ModeOption });
+                            setPolygonsById((p) => {
+                              const next = { ...p };
+                              delete next[loc.id];
+                              return next;
+                            });
+                          }}
+                          style={{ height: 36 }}
+                        >
+                          <option value="drive">Drive</option>
+                          <option value="walk">Walk</option>
+                          <option value="bike">Bike</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 p-3 rounded-xl" style={{ background: 'var(--bg-panel)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Overlap</div>
+                  <div className="text-sm" style={{ color: 'var(--text-main)' }}>
+                    {overlapStats.hasOverlap ? 'Found' : canCompute ? 'None yet' : 'Add at least 2 locations'}
+                  </div>
+                </div>
+                {overlapStats.hasOverlap && overlapStats.areaSqMi != null && (
+                  <div className="text-right">
+                    <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Area</div>
+                    <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                      {fmtSqMi(overlapStats.areaSqMi)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {showNoOverlap && (
+                <div className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  No overlap found. Try increasing travel times or switching to driving.
+                </div>
+              )}
+
+              {overlapStats.hasOverlap && overlapStats.center && (
+                <button
+                  type="button"
+                  onClick={onOverlapClick}
+                  className="mt-3 prism-btn prism-btn-primary w-full"
+                  style={{
+                    background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                    boxShadow: `0 4px 12px ${accentColor}40`,
+                  }}
+                >
+                  <MapPin className="w-4 h-4" />
+                  <span className="text-sm">
+                    {selectedOverlap ? 'Viewing overlap stats' : 'View overlap stats'}
+                  </span>
+                </button>
+              )}
+
+              {selectedOverlap && overlapStats.center && (
+                <div className="mt-3 text-xs space-y-1" style={{ color: 'var(--text-muted)' }}>
+                  <div>
+                    <span className="font-medium">Center:</span>{' '}
+                    <span className="font-mono">{overlapStats.center.lat.toFixed(5)}, {overlapStats.center.lng.toFixed(5)}</span>
+                  </div>
+                  {overlapStats.centerAddress && (
+                    <div>
+                      <span className="font-medium">Address:</span> {overlapStats.centerAddress}
+                    </div>
+                  )}
+                  <div style={{ color: 'var(--text-muted)' }}>
+                    Tip: click the highlighted overlap area on the map to load these stats too.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showBranding && (
+        <div className="prism-footer">
+          {companyLogo && (
+            <img
+              src={companyLogo}
+              alt={companyName || 'Company logo'}
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span>
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by <strong>MapQuest</strong>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+

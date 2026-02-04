@@ -17,6 +17,7 @@ import {
   InstacartDeliveryETA,
   NHLArenaExplorer,
   HereIsolineWidget,
+  IsolineOverlapWidget,
   TruckRouting,
   RouteWeatherAlerts,
   CheckoutFlowWidget,
@@ -40,6 +41,7 @@ type WidgetId =
   | 'instacart'
   | 'route-weather'
   | 'here-isoline'
+  | 'isoline-overlap'
   | 'checkout'
   | 'heatmap'
   | 'ev-charging';
@@ -58,6 +60,7 @@ const WIDGETS = [
   { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', category: 'Bigger Bet' },
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', category: 'Bigger Bet' },
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', category: 'Bigger Bet' },
+  { id: 'isoline-overlap' as WidgetId, name: 'Isoline Overlap', description: 'Find overlap zones across multiple origins', category: 'Bigger Bet' },
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', category: 'Quick Win' },
   { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', category: 'Bigger Bet' },
   { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', category: 'Bigger Bet' },
@@ -301,6 +304,8 @@ function HomeContent() {
         return <InstacartDeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
       case 'here-isoline':
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
+      case 'isoline-overlap':
+        return <IsolineOverlapWidget {...commonProps} />;
       default:
         return null;
     }

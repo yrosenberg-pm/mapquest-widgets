@@ -12,6 +12,8 @@ interface MapMarker {
   iconSize?: [number, number];
   zIndexOffset?: number;
   onClick?: () => void;
+  draggable?: boolean;
+  onDragEnd?: (lat: number, lng: number) => void;
 }
 
 interface MapCircle {
@@ -29,6 +31,7 @@ interface MapPolygon {
   color?: string;
   fillOpacity?: number;
   strokeWidth?: number;
+  onClick?: (lat: number, lng: number) => void;
 }
 
 interface TransitSegment {
@@ -595,7 +598,7 @@ export default function MapQuestMap({
         popupAnchor: popupAnchor,
       });
 
-      const m = L.marker([marker.lat, marker.lng], { icon, zIndexOffset }).addTo(markersLayerRef.current);
+      const m = L.marker([marker.lat, marker.lng], { icon, zIndexOffset, draggable: !!marker.draggable }).addTo(markersLayerRef.current);
       
       if (marker.label) {
         // Tooltip for hover state - shows location name on hover
@@ -614,6 +617,14 @@ export default function MapQuestMap({
       if (marker.onClick) {
         m.on('click', () => {
           marker.onClick!();
+        });
+      }
+
+      if (marker.onDragEnd) {
+        m.on('dragend', (e: any) => {
+          const ll = e?.target?.getLatLng?.();
+          if (!ll) return;
+          marker.onDragEnd?.(ll.lat, ll.lng);
         });
       }
     });
@@ -724,6 +735,9 @@ export default function MapQuestMap({
 
     polygonsLayerRef.current.clearLayers();
 
+    // Compute combined bounds for all polygons so we fit once (prevents "fighting" when rendering multiple).
+    let combinedBounds: any = null;
+
     polygons.forEach((polygon) => {
       const latLngs = polygon.coordinates.map(c => [c.lat, c.lng] as [number, number]);
       
@@ -736,12 +750,22 @@ export default function MapQuestMap({
           opacity: 0.8,
         }).addTo(polygonsLayerRef.current);
 
-        // Fit bounds to show the polygon
-        if (mapRef.current) {
-          mapRef.current.fitBounds(poly.getBounds(), { padding: [30, 30] });
+        if (polygon.onClick) {
+          poly.on('click', (e: any) => {
+            const ll = e?.latlng;
+            if (ll) polygon.onClick?.(ll.lat, ll.lng);
+          });
         }
+
+        const b = poly.getBounds();
+        combinedBounds = combinedBounds ? combinedBounds.extend(b) : b;
       }
     });
+
+    // Fit bounds to show all polygons (if any). If fitBounds prop is set, that still takes precedence elsewhere.
+    if (mapRef.current && combinedBounds && !fitBounds) {
+      mapRef.current.fitBounds(combinedBounds, { padding: [30, 30] });
+    }
   }, [polygons, accentColor, mapReady]);
 
   // Traffic incidents layer ref

@@ -17,6 +17,7 @@ import {
   InstacartDeliveryETA,
   NHLArenaExplorer,
   HereIsolineWidget,
+  IsolineOverlapWidget,
   RouteWeatherAlerts,
   CheckoutFlowWidget,
   EVChargingPlanner,
@@ -39,6 +40,7 @@ const VALID_WIDGETS = [
   'delivery',
   'instacart',
   'isoline',
+  'isoline-overlap',
   'heatmap',
   'checkout',
   'ev-charging',
@@ -182,6 +184,8 @@ export default function WidgetPage() {
         return <InstacartDeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
       case 'isoline':
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
+      case 'isoline-overlap':
+        return <IsolineOverlapWidget {...commonProps} />;
       default:
         return null;
     }
