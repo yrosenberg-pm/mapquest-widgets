@@ -606,7 +606,7 @@ export default function IsolineOverlapWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col md:flex-row md:h-[640px]">
+      <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map */}
         <div className="h-[320px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
