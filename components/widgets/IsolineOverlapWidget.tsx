@@ -536,7 +536,7 @@ export default function IsolineOverlapWidget({
         coordinates: overlapPolygonCoords,
         color: '#ffffff',
         fillOpacity: 0,
-        strokeWidth: 7,
+        strokeWidth: 5,
       });
       out.push({
         coordinates: overlapPolygonCoords,
@@ -544,7 +544,7 @@ export default function IsolineOverlapWidget({
         // even when a location isoline is also purple.
         color: '#7C3AED', // violet-600
         fillOpacity: 0.58,
-        strokeWidth: 5,
+        strokeWidth: 4,
         onClick: () => {
           onOverlapClick();
         },
