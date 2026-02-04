@@ -146,7 +146,6 @@ export default function IsolineOverlapWidget({
   const [geocodingIds, setGeocodingIds] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [overlapStats, setOverlapStats] = useState<OverlapStats>({ hasOverlap: false });
-  const [selectedOverlap, setSelectedOverlap] = useState(false);
 
   const overlapGeoRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -441,7 +440,6 @@ export default function IsolineOverlapWidget({
       if (!acc) {
         setOverlapStats({ hasOverlap: false });
         overlapGeoRef.current = null;
-        setSelectedOverlap(false);
         return;
       }
 
@@ -451,7 +449,6 @@ export default function IsolineOverlapWidget({
       const c = turf.centroid(acc);
       const center = { lat: c.geometry.coordinates[1], lng: c.geometry.coordinates[0] };
       setOverlapStats({ hasOverlap: true, areaSqMi, center });
-      setSelectedOverlap(false);
     } catch (e) {
       console.error('Overlap computation failed', e);
       setOverlapStats({ hasOverlap: false });
@@ -471,7 +468,6 @@ export default function IsolineOverlapWidget({
   }, [overlapStats.hasOverlap]); // recompute when overlap toggles
 
   const onOverlapClick = async () => {
-    setSelectedOverlap(true);
     if (!overlapStats.center) return;
     const rev = await reverseGeocode(overlapStats.center.lat, overlapStats.center.lng);
     const label = rev
@@ -770,59 +766,6 @@ export default function IsolineOverlapWidget({
                   </div>
                 );
               })}
-            </div>
-
-            <div className="mt-3 p-3 rounded-xl" style={{ background: 'var(--bg-panel)' }}>
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Overlap</div>
-                  <div className="text-sm" style={{ color: 'var(--text-main)' }}>
-                    {overlapStats.hasOverlap ? 'Found' : canCompute ? 'None yet' : 'Add at least 2 locations'}
-                  </div>
-                </div>
-                {overlapStats.hasOverlap && overlapStats.areaSqMi != null && (
-                  <div className="text-right">
-                    <div className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>Area</div>
-                    <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                      {fmtSqMi(overlapStats.areaSqMi)}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {overlapStats.hasOverlap && overlapStats.center && (
-                <button
-                  type="button"
-                  onClick={onOverlapClick}
-                  className="mt-3 prism-btn prism-btn-primary w-full"
-                  style={{
-                    background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
-                    boxShadow: `0 4px 12px ${accentColor}40`,
-                  }}
-                >
-                  <MapPin className="w-4 h-4" />
-                  <span className="text-sm">
-                    {selectedOverlap ? 'Viewing overlap stats' : 'View overlap stats'}
-                  </span>
-                </button>
-              )}
-
-              {selectedOverlap && overlapStats.center && (
-                <div className="mt-3 text-xs space-y-1" style={{ color: 'var(--text-muted)' }}>
-                  <div>
-                    <span className="font-medium">Center:</span>{' '}
-                    <span className="font-mono">{overlapStats.center.lat.toFixed(5)}, {overlapStats.center.lng.toFixed(5)}</span>
-                  </div>
-                  {overlapStats.centerAddress && (
-                    <div>
-                      <span className="font-medium">Address:</span> {overlapStats.centerAddress}
-                    </div>
-                  )}
-                  <div style={{ color: 'var(--text-muted)' }}>
-                    Tip: click the highlighted overlap area on the map to load these stats too.
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
