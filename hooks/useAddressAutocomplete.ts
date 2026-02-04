@@ -18,7 +18,9 @@ interface AddressResult {
 interface UseAddressAutocompleteOptions {
   onSelect?: (address: AddressResult) => void;
   minChars?: number;
+  minAlnumChars?: number;
   maxSuggestions?: number;
+  debounceMs?: number;
   disabled?: boolean;
 }
 
@@ -27,7 +29,17 @@ export function useAddressAutocomplete(
   onChange: (value: string) => void,
   options: UseAddressAutocompleteOptions = {}
 ) {
-  const { onSelect, minChars = 3, maxSuggestions = 6, disabled = false } = options;
+  const {
+    onSelect,
+    // UX: only start searching once we have enough signal (reduces jumpiness)
+    minChars = 4,
+    // "letters or numbers" threshold (ignores spaces/punctuation)
+    minAlnumChars = 4,
+    maxSuggestions = 6,
+    // UX: wait for the user to pause typing before fetching
+    debounceMs = 1000,
+    disabled = false,
+  } = options;
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -35,6 +47,7 @@ export function useAddressAutocomplete(
   const [isFocused, setIsFocused] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const justSelectedRef = useRef(false);
+  const requestSeqRef = useRef(0);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -59,17 +72,22 @@ export function useAddressAutocomplete(
       return;
     }
     
-    if (value.length < minChars) {
+    const trimmed = value.trim();
+    const alnumLen = trimmed.replace(/[^a-z0-9]/gi, '').length;
+
+    if (trimmed.length < minChars || alnumLen < minAlnumChars) {
       setSuggestions([]);
       setIsOpen(false);
       return;
     }
 
     debounceRef.current = setTimeout(async () => {
+      const seq = ++requestSeqRef.current;
       setLoading(true);
-      setIsOpen(false);
       try {
-        const results = await searchAhead(value, maxSuggestions);
+        const results = await searchAhead(trimmed, maxSuggestions);
+        // Ignore out-of-order responses
+        if (seq !== requestSeqRef.current) return;
         setSuggestions(results);
         
         if (results && results.length > 0) {
@@ -81,17 +99,18 @@ export function useAddressAutocomplete(
         setHighlightedIndex(-1);
       } catch (err) {
         console.error('Search failed:', err);
+        if (seq !== requestSeqRef.current) return;
         setSuggestions([]);
         setIsOpen(false);
       } finally {
-        setLoading(false);
+        if (seq === requestSeqRef.current) setLoading(false);
       }
-    }, 300);
+    }, debounceMs);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [value, minChars, maxSuggestions, disabled, isFocused]);
+  }, [value, minChars, minAlnumChars, maxSuggestions, debounceMs, disabled, isFocused]);
 
   const handleSelect = (suggestion: any) => {
     const addressResult: AddressResult = {
