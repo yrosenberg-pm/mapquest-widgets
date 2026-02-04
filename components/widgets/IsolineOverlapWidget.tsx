@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, Loader2, AlertCircle, MapPin, Crosshair } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle, MapPin, Crosshair, Pencil, Check, X } from 'lucide-react';
 import * as turf from '@turf/turf';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import MapQuestMap from './MapQuestMap';
@@ -143,10 +143,13 @@ export default function IsolineOverlapWidget({
   const [meetingSpotLoading, setMeetingSpotLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [overlapStats, setOverlapStats] = useState<OverlapStats>({ hasOverlap: false });
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [labelDraft, setLabelDraft] = useState('');
 
   const overlapGeoRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const meetingSpotAbortRef = useRef<AbortController | null>(null);
+  const labelInputRef = useRef<HTMLInputElement | null>(null);
 
   // Decode HERE flexible polyline (copied from HereIsolineWidget for reuse)
   const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
@@ -294,10 +297,35 @@ export default function IsolineOverlapWidget({
       delete next[id];
       return next;
     });
+    if (editingLabelId === id) {
+      setEditingLabelId(null);
+      setLabelDraft('');
+    }
   };
 
   const updateLocation = (id: string, patch: Partial<LocationItem>) => {
     setLocations((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  };
+
+  const startEditingLabel = (loc: LocationItem) => {
+    setEditingLabelId(loc.id);
+    setLabelDraft(loc.label || '');
+    setTimeout(() => {
+      labelInputRef.current?.focus();
+      labelInputRef.current?.select();
+    }, 0);
+  };
+
+  const cancelEditingLabel = () => {
+    setEditingLabelId(null);
+    setLabelDraft('');
+  };
+
+  const commitEditingLabel = (loc: LocationItem) => {
+    const next = labelDraft.trim();
+    if (next && next !== loc.label) updateLocation(loc.id, { label: next });
+    setEditingLabelId(null);
+    setLabelDraft('');
   };
 
   const clearPolygonFor = (id: string) => {
@@ -633,10 +661,11 @@ export default function IsolineOverlapWidget({
                 const isLoading = !!loadingIds[loc.id];
                 const hasCoords = loc.lat != null && loc.lng != null;
                 const hasPoly = !!polygonsById[loc.id]?.coords;
+                const isEditingLabel = editingLabelId === loc.id;
                 return (
                   <div
                     key={loc.id}
-                    className="p-3 rounded-xl"
+                    className="p-3 rounded-xl group"
                     style={{ background: 'var(--bg-panel)', border: `1px solid var(--border-subtle)` }}
                   >
                     <div className="flex items-center justify-between gap-2 mb-2">
@@ -645,12 +674,54 @@ export default function IsolineOverlapWidget({
                           className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                           style={{ background: loc.color }}
                         />
-                        <input
-                          value={loc.label}
-                          onChange={(e) => updateLocation(loc.id, { label: e.target.value })}
-                          className="text-sm font-semibold bg-transparent outline-none min-w-0"
-                          style={{ color: 'var(--text-main)' }}
-                        />
+                        {!isEditingLabel ? (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-main)' }}>
+                              {loc.label}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => startEditingLabel(loc)}
+                              className="p-1 rounded-md transition-opacity opacity-0 group-hover:opacity-100 hover:bg-black/5"
+                              title="Edit name"
+                              style={{ color: 'var(--text-muted)' }}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <input
+                              ref={labelInputRef}
+                              value={labelDraft}
+                              onChange={(e) => setLabelDraft(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') commitEditingLabel(loc);
+                                if (e.key === 'Escape') cancelEditingLabel();
+                              }}
+                              className="text-sm font-semibold bg-transparent outline-none min-w-0"
+                              style={{ color: 'var(--text-main)' }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => commitEditingLabel(loc)}
+                              className="p-1 rounded-md hover:bg-black/5"
+                              title="Save"
+                              style={{ color: 'var(--color-success)' }}
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditingLabel}
+                              className="p-1 rounded-md hover:bg-black/5"
+                              title="Cancel"
+                              style={{ color: 'var(--color-error)' }}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                         {isLoading && <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} />}
                       </div>
                       {locations.length > 2 && (
