@@ -55,6 +55,8 @@ export default function SmartAddressInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const requestSeqRef = useRef(0);
+  const [isFocused, setIsFocused] = useState(false);
 
   // Theme colors - inline for standalone component
   const bgWidget = darkMode ? '#0F172A' : '#FFFFFF';
@@ -81,17 +83,23 @@ export default function SmartAddressInput({
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     
-    if (query.length < 3) {
+    // Only start searching once we have enough signal (4 letters/numbers)
+    const trimmed = query.trim();
+    const alnumLen = trimmed.replace(/[^a-z0-9]/gi, '').length;
+
+    if (!isFocused || trimmed.length < 4 || alnumLen < 4) {
       setSuggestions([]);
       setIsOpen(false);
       return;
     }
 
     debounceRef.current = setTimeout(async () => {
+      const seq = ++requestSeqRef.current;
       setLoading(true);
       try {
-        console.log('[SmartAddressInput] Searching for:', query);
-        const results = await searchAhead(query, 6);
+        console.log('[SmartAddressInput] Searching for:', trimmed);
+        const results = await searchAhead(trimmed, 6);
+        if (seq !== requestSeqRef.current) return;
         console.log('[SmartAddressInput] Results:', results);
         setSuggestions(results);
         
@@ -103,20 +111,43 @@ export default function SmartAddressInput({
         setHighlightedIndex(-1);
       } catch (err) {
         console.error('[SmartAddressInput] Search failed:', err);
+        if (seq !== requestSeqRef.current) return;
         setSuggestions([]);
         setIsOpen(false);
       } finally {
-        setLoading(false);
+        if (seq === requestSeqRef.current) setLoading(false);
       }
-    }, 300);
+    }, 1000);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, isFocused]);
+
+  const buildFullAddressString = (suggestion: any) => {
+    const base = String(suggestion?.displayString || suggestion?.name || suggestion?.text || suggestion?.address || '').trim();
+    const street = String(suggestion?.place?.properties?.street || suggestion?.street || '').trim();
+    const city = String(suggestion?.place?.properties?.city || suggestion?.city || '').trim();
+    const state = String(suggestion?.place?.properties?.state || suggestion?.place?.properties?.stateCode || suggestion?.state || suggestion?.stateCode || '').trim();
+    const postalCode = String(suggestion?.place?.properties?.postalCode || suggestion?.postalCode || '').trim();
+    const country = String(suggestion?.place?.properties?.country || suggestion?.country || '').trim();
+
+    const looksFull =
+      base.includes(',') &&
+      (/\b[A-Z]{2}\b/.test(base) || /\d{5}(-\d{4})?/.test(base) || base.toLowerCase().includes('usa'));
+    if (looksFull) return base;
+
+    const primary = street || base;
+    const cityStateZip =
+      [city || null, state || null].filter(Boolean).join(', ')
+        + (postalCode ? `${(city || state) ? ' ' : ''}${postalCode}` : '');
+
+    const parts = [primary || null, cityStateZip.trim() || null, country || null].filter(Boolean) as string[];
+    return (parts.join(', ').replace(/\s+/g, ' ').trim()) || base;
+  };
 
   const handleSelect = async (suggestion: any) => {
-    const display = suggestion.displayString || suggestion.name || suggestion.text || suggestion.address || suggestion.description || '';
+    const display = buildFullAddressString(suggestion);
     setQuery(display);
     setIsOpen(false);
     setSuggestions([]);
@@ -228,9 +259,11 @@ export default function SmartAddressInput({
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => {
-            if (query.length >= 3 && suggestions.length > 0) {
-              setIsOpen(true);
-            }
+            setIsFocused(true);
+            if (suggestions.length > 0) setIsOpen(true);
+          }}
+          onBlur={() => {
+            setIsFocused(false);
           }}
           placeholder={placeholder}
           className="w-full pl-10 pr-10 transition-all outline-none"
@@ -291,9 +324,12 @@ export default function SmartAddressInput({
                 <button
                   key={`${suggestion.id || index}-${name}`}
                   type="button"
-                  onClick={(e) => {
+                  onMouseDown={(e) => {
                     e.preventDefault();
-                    e.stopPropagation();
+                    handleSelect(suggestion);
+                  }}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
                     handleSelect(suggestion);
                   }}
                   onMouseEnter={() => setHighlightedIndex(index)}

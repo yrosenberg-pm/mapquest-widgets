@@ -170,6 +170,7 @@ export async function searchAhead(query: string, limit: number = 6): Promise<Sea
           lat: coords ? coords[1] : undefined, // latitude is second
           lng: coords ? coords[0] : undefined, // longitude is first
           // Add properties for easier access
+          street: item.place?.properties?.street,
           city: item.place?.properties?.city,
           state: item.place?.properties?.state || item.place?.properties?.stateCode,
           postalCode: item.place?.properties?.postalCode,

@@ -251,7 +251,11 @@ export default function ServiceAreaChecker({
           <form onSubmit={handleSubmit} className="space-y-2">
             <AddressAutocomplete
               value={address}
-              onChange={setAddress}
+              onChange={(v) => {
+                setAddress(v);
+                // Clear previous marker/result until a new selection/check happens.
+                setResult(null);
+              }}
               onSelect={(result) => {
                 if (result.lat && result.lng) {
                   checkServiceArea(result.displayString, result.lat, result.lng);

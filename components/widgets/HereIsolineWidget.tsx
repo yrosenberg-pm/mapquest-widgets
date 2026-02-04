@@ -373,7 +373,13 @@ export default function HereIsolineWidget({
               </label>
               <AddressAutocomplete
                 value={address}
-                onChange={setAddress}
+                onChange={(v) => {
+                  setAddress(v);
+                  // Don't keep showing the previous marker/polygon while user is typing a new location.
+                  setLocation(null);
+                  setIsoline(null);
+                  setError(null);
+                }}
                 onSelect={(result) => {
                   if (result.lat && result.lng) {
                     setLocation({ lat: result.lat, lng: result.lng });

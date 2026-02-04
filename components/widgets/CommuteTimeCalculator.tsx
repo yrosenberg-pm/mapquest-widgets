@@ -360,7 +360,12 @@ export default function CommuteTimeCalculator({
                     </label>
                     <AddressAutocomplete
                       value={baseLocation}
-                      onChange={setBaseLocation}
+                      onChange={(v) => {
+                        setBaseLocation(v);
+                        setBaseCoords(null);
+                        setBaseResult(null);
+                        setResult(null);
+                      }}
                       onSelect={(result) => {
                         if (result.lat && result.lng) {
                           setBaseCoords({ lat: result.lat, lng: result.lng });
@@ -497,7 +502,11 @@ export default function CommuteTimeCalculator({
                   </div>
                   <AddressAutocomplete
                     value={destination}
-                    onChange={setDestination}
+                    onChange={(v) => {
+                      setDestination(v);
+                      setDestCoords(null);
+                      setResult(null);
+                    }}
                     onSelect={(result) => {
                       if (result.lat && result.lng) {
                         setDestCoords({ lat: result.lat, lng: result.lng });

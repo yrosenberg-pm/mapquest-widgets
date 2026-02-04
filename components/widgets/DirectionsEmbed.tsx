@@ -255,7 +255,13 @@ export default function DirectionsEmbed({
                 </div>
                 <AddressAutocomplete
                   value={from}
-                  onChange={setFrom}
+                  onChange={(v) => {
+                    setFrom(v);
+                    setFromCoords(null);
+                    setRoute(null);
+                    setStepsExpanded(false);
+                    setError(null);
+                  }}
                   onSelect={(result) => {
                     if (result.lat && result.lng) {
                       setFromCoords({ lat: result.lat, lng: result.lng });
@@ -296,7 +302,13 @@ export default function DirectionsEmbed({
                 </div>
                 <AddressAutocomplete
                   value={to}
-                  onChange={setTo}
+                  onChange={(v) => {
+                    setTo(v);
+                    setToCoords(null);
+                    setRoute(null);
+                    setStepsExpanded(false);
+                    setError(null);
+                  }}
                   onSelect={(result) => {
                     if (result.lat && result.lng) {
                       setToCoords({ lat: result.lat, lng: result.lng });

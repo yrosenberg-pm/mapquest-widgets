@@ -235,7 +235,15 @@ function AddressLine1Autocomplete({
             <button
               key={idx}
               type="button"
-              onClick={() => handleSelect(s)}
+              // Select on mousedown so blur/focus changes can't eat the click.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleSelect(s);
+              }}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                handleSelect(s);
+              }}
               className={`w-full px-4 py-3 text-left text-sm flex items-start gap-3 transition-colors ${idx === highlightedIndex ? 'bg-black/5' : ''}`}
               style={{ color: 'var(--text-main)' }}
             >

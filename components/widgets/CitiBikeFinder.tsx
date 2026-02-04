@@ -404,7 +404,11 @@ export default function CitiBikeFinder({
             </div>
             <AddressAutocomplete
               value={searchQuery}
-              onChange={setSearchQuery}
+              onChange={(v) => {
+                setSearchQuery(v);
+                setUserLocation(null);
+                setSelectedStation(null);
+              }}
               onSelect={async (result) => {
                 if (result.lat && result.lng) {
                   setSearchQuery(result.displayString);

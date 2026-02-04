@@ -416,7 +416,13 @@ export default function StarbucksFinder({
             </div>
             <AddressAutocomplete
               value={searchQuery}
-              onChange={setSearchQuery}
+              onChange={(v) => {
+                setSearchQuery(v);
+                // Don't keep showing the previous "Your Location" marker while typing a new search.
+                setUserLocation(null);
+                setPendingLocation(null);
+                setSelectedStore(null);
+              }}
               onSelect={async (result) => {
                 if (result.lat && result.lng) {
                   setSearchQuery(result.displayString);

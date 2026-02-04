@@ -764,6 +764,10 @@ export default function TruckRouting({
                     onChange={(v) => {
                       if (demoMode) setDemoMode(false);
                       setFrom(v);
+                      setFromCoords(null);
+                      setRoute(null);
+                      setRoutePolyline(undefined);
+                      setError(null);
                     }}
                     onSelect={(result) => {
                       if (result.lat && result.lng) {
@@ -809,6 +813,10 @@ export default function TruckRouting({
                     onChange={(v) => {
                       if (demoMode) setDemoMode(false);
                       setTo(v);
+                      setToCoords(null);
+                      setRoute(null);
+                      setRoutePolyline(undefined);
+                      setError(null);
                     }}
                     onSelect={(result) => {
                       if (result.lat && result.lng) {
