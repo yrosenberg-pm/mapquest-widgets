@@ -746,16 +746,6 @@ export default function IsolineOverlapWidget({
                           </span>
                         )}
                       </div>
-                      {!hasCoords && (loc.address || '').trim().length >= 4 && (
-                        <button
-                          type="button"
-                          onClick={() => geocodeLocation(loc.id, loc.address)}
-                          className="mt-2 prism-btn prism-btn-secondary w-full"
-                          style={{ height: 36 }}
-                        >
-                          {isGeocoding ? <><Loader2 className="w-4 h-4 prism-spinner" /> Geocoding…</> : 'Use typed address'}
-                        </button>
-                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
