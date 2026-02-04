@@ -6,7 +6,7 @@ import * as turf from '@turf/turf';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
-import { getIsoline, reverseGeocode, type IsolineMode } from '@/lib/mapquest';
+import { reverseGeocode } from '@/lib/mapquest';
 
 type TravelTimePreset = 15 | 30 | 45 | 60;
 type ModeOption = 'drive' | 'walk' | 'bike';
@@ -37,10 +37,10 @@ function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function modeToIsolineMode(mode: ModeOption): IsolineMode {
-  if (mode === 'walk') return 'walking';
-  if (mode === 'bike') return 'bicycling';
-  return 'driving';
+function modeToHereTransportMode(mode: ModeOption): 'car' | 'pedestrian' | 'bicycle' {
+  if (mode === 'walk') return 'pedestrian';
+  if (mode === 'bike') return 'bicycle';
+  return 'car';
 }
 
 function closeRing(coords: { lat: number; lng: number }[]) {
@@ -90,6 +90,112 @@ export default function IsolineOverlapWidget({
   const [selectedOverlap, setSelectedOverlap] = useState(false);
 
   const overlapGeoRef = useRef<Feature<Polygon | MultiPolygon> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Decode HERE flexible polyline (copied from HereIsolineWidget for reuse)
+  const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
+    const coordinates: { lat: number; lng: number }[] = [];
+
+    let index = 0;
+    const version = decodeUnsignedVarint(encoded, { index: 0 });
+    index = version.newIndex;
+
+    const header = decodeUnsignedVarint(encoded, { index });
+    index = header.newIndex;
+
+    const precision = header.value & 0x0f;
+    const thirdDimType = (header.value >> 8) & 0x07;
+
+    const multiplier = Math.pow(10, precision);
+
+    let lat = 0;
+    let lng = 0;
+
+    while (index < encoded.length) {
+      const latResult = decodeSignedVarint(encoded, { index });
+      lat += latResult.value;
+      index = latResult.newIndex;
+
+      if (index >= encoded.length) break;
+
+      const lngResult = decodeSignedVarint(encoded, { index });
+      lng += lngResult.value;
+      index = lngResult.newIndex;
+
+      if (thirdDimType !== 0 && index < encoded.length) {
+        const thirdResult = decodeSignedVarint(encoded, { index });
+        index = thirdResult.newIndex;
+      }
+
+      coordinates.push({
+        lat: lat / multiplier,
+        lng: lng / multiplier,
+      });
+    }
+
+    return coordinates;
+  };
+
+  const decodeUnsignedVarint = (encoded: string, pos: { index: number }): { value: number; newIndex: number } => {
+    const DECODING_TABLE: Record<string, number> = {};
+    const ENCODING_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    for (let i = 0; i < ENCODING_CHARS.length; i++) {
+      DECODING_TABLE[ENCODING_CHARS[i]] = i;
+    }
+
+    let result = 0;
+    let shift = 0;
+    let index = pos.index;
+
+    while (index < encoded.length) {
+      const char = encoded[index];
+      const value = DECODING_TABLE[char];
+      if (value === undefined) {
+        throw new Error(`Invalid character: ${char}`);
+      }
+
+      result |= (value & 0x1f) << shift;
+
+      if ((value & 0x20) === 0) {
+        return { value: result, newIndex: index + 1 };
+      }
+
+      shift += 5;
+      index++;
+    }
+
+    throw new Error('Incomplete varint');
+  };
+
+  const decodeSignedVarint = (encoded: string, pos: { index: number }): { value: number; newIndex: number } => {
+    const unsigned = decodeUnsignedVarint(encoded, pos);
+    const value = unsigned.value;
+    const decoded = (value >> 1) ^ (-(value & 1));
+    return { value: decoded, newIndex: unsigned.newIndex };
+  };
+
+  const fetchHereIsochrone = async (center: { lat: number; lng: number }, timeMinutes: number, mode: ModeOption, signal: AbortSignal) => {
+    const rangeSeconds = Math.max(60, Math.round(timeMinutes * 60));
+    const params = new URLSearchParams({
+      endpoint: 'isoline',
+      origin: `${center.lat},${center.lng}`,
+      rangeType: 'time',
+      rangeValues: String(rangeSeconds),
+      transportMode: modeToHereTransportMode(mode),
+      optimizeFor: 'balanced',
+    });
+
+    const res = await fetch(`/api/here?${params.toString()}`, { signal });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j?.error || `Failed to compute isochrone (${res.status})`);
+    }
+    const data = await res.json();
+    const outer = data?.isolines?.[0]?.polygons?.[0]?.outer;
+    if (!outer) return null;
+    const coords = decodeFlexiblePolyline(String(outer));
+    return coords.length >= 3 ? coords : null;
+  };
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -147,50 +253,55 @@ export default function IsolineOverlapWidget({
       return;
     }
 
-    let cancelled = false;
+    if (abortRef.current) abortRef.current.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
     const run = async () => {
       setError(null);
       const targets = locations.filter((l) => typeof l.lat === 'number' && typeof l.lng === 'number');
-      for (const loc of targets) {
-        const key = `${loc.lat},${loc.lng}|${loc.timeMinutes}|${loc.mode}`;
-        // Skip if we already have a polygon for this id AND it matches current params by shallow heuristic:
-        // (we keep it simple; recompute whenever something changes by clearing polygonsById elsewhere)
-        if (polygonsById[loc.id] && (polygonsById[loc.id] as any).__key === key) continue;
+      // Mark all targets loading
+      setLoadingIds((p) => {
+        const next = { ...p };
+        targets.forEach((t) => (next[t.id] = true));
+        return next;
+      });
 
-        setLoadingIds((p) => ({ ...p, [loc.id]: true }));
-        try {
-          const polys = await getIsoline({ lat: loc.lat!, lng: loc.lng! }, loc.timeMinutes, modeToIsolineMode(loc.mode));
-          if (cancelled) return;
-          const first = polys?.[0]?.coordinates;
-          if (!first || first.length < 3) {
-            setPolygonsById((p) => {
-              const next = { ...p };
-              delete next[loc.id];
-              return next;
-            });
-          } else {
-            setPolygonsById((p) => ({
-              ...p,
-              [loc.id]: { coords: first, __key: key } as any,
-            }));
-          }
-        } catch (e) {
-          if (cancelled) return;
-          setError(e instanceof Error ? e.message : 'Failed to compute isolines');
-        } finally {
-          if (!cancelled) setLoadingIds((p) => ({ ...p, [loc.id]: false }));
+      try {
+        const results = await Promise.all(
+          targets.map(async (loc) => {
+            const key = `${loc.lat},${loc.lng}|${loc.timeMinutes}|${loc.mode}`;
+            const coords = await fetchHereIsochrone({ lat: loc.lat!, lng: loc.lng! }, loc.timeMinutes, loc.mode, ac.signal);
+            return { id: loc.id, key, coords };
+          })
+        );
+
+        const nextPolys: Record<string, any> = {};
+        results.forEach((r) => {
+          if (r.coords) nextPolys[r.id] = { coords: r.coords, __key: r.key };
+        });
+        setPolygonsById(nextPolys);
+      } catch (e) {
+        if ((e as any)?.name === 'AbortError') return;
+        setError(e instanceof Error ? e.message : 'Failed to compute isochrones');
+        setPolygonsById({});
+      } finally {
+        if (!ac.signal.aborted) {
+          setLoadingIds((p) => {
+            const next = { ...p };
+            targets.forEach((t) => (next[t.id] = false));
+            return next;
+          });
         }
       }
     };
 
-    // Debounce slightly so changing multiple controls doesn’t thrash the API
     const t = setTimeout(run, 250);
     return () => {
-      cancelled = true;
+      ac.abort();
       clearTimeout(t);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canCompute, locations.map(l => `${l.id}:${l.lat},${l.lng}:${l.timeMinutes}:${l.mode}:${l.address}`).join('|')]);
+  }, [canCompute, locations]);
 
   // Compute overlap polygon + centroid + area whenever all needed polygons are available.
   useEffect(() => {
