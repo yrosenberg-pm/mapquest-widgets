@@ -887,7 +887,7 @@ function HomeContent() {
                   <div>
                     <h3 className={`font-medium mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Embed Code</h3>
                     <div className="relative rounded-lg overflow-hidden bg-gray-900">
-                      <pre className="p-4 text-sm text-gray-300 overflow-x-auto">
+                      <pre className="p-4 text-sm text-gray-300 whitespace-pre-wrap break-words overflow-x-hidden">
                         <code>{generateEmbedCode()}</code>
                       </pre>
                       <button

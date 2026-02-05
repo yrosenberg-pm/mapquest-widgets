@@ -131,16 +131,34 @@
         history.replaceState({}, '', u.toString());
       }
 
-      function applySrc(src) {
+      function extractUrl(maybeIframeOrUrl) {
+        const raw = (maybeIframeOrUrl || '').trim();
+        if (!raw) return '';
+
+        // If user pasted the full iframe snippet, extract src="..."
+        if (raw.includes('<iframe')) {
+          const m = raw.match(/src\s*=\s*["']([^"']+)["']/i);
+          if (m && m[1]) return m[1].trim();
+        }
+
+        // If user pasted something like: src="..."; or just "...", normalize
+        const m2 = raw.match(/^src\s*=\s*["']([^"']+)["']\s*$/i);
+        if (m2 && m2[1]) return m2[1].trim();
+
+        return raw;
+      }
+
+      function applySrc(maybeIframeOrUrl) {
+        const src = extractUrl(maybeIframeOrUrl);
         if (!src) return;
         input.value = src;
         frame.src = src;
         setParam('src', src);
       }
 
-      btnApply.addEventListener('click', () => applySrc(input.value.trim()));
+      btnApply.addEventListener('click', () => applySrc(input.value));
       input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') applySrc(input.value.trim());
+        if (e.key === 'Enter') applySrc(input.value);
       });
 
       btnCopy.addEventListener('click', async () => {
