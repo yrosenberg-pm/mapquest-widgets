@@ -228,17 +228,39 @@ function HomeContent() {
   };
 
   const generateEmbedCode = () => {
-    const props = [
-      `apiKey="YOUR_API_KEY"`,
-      darkMode && `darkMode={true}`,
-      accentColor !== '#2563eb' && `accentColor="${accentColor}"`,
-      fontFamily !== 'system-ui, -apple-system, sans-serif' && `fontFamily="${fontFamily}"`,
-      borderRadius !== '0.5rem' && `borderRadius="${borderRadius}"`,
-      brandingMode === 'whitelabel' && `showBranding={false}`,
-      brandingMode === 'cobranded' && companyName && `companyName="${companyName}"`,
-    ].filter(Boolean).join('\n  ');
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = new URL(`${baseUrl}/${activeWidget}`);
 
-    return `<${currentWidget?.name.replace(/\s/g, '')}\n  ${props}\n/>`;
+    // Make embed self-contained via URL params
+    url.searchParams.set('darkMode', darkMode ? '1' : '0');
+    if (accentColor) url.searchParams.set('accentColor', accentColor);
+    if (fontFamily) url.searchParams.set('fontFamily', fontFamily);
+    if (borderRadius) url.searchParams.set('borderRadius', borderRadius);
+
+    if (brandingMode === 'whitelabel') {
+      url.searchParams.set('showBranding', '0');
+    } else {
+      url.searchParams.set('showBranding', '1');
+      if (brandingMode === 'cobranded') {
+        if (companyName) url.searchParams.set('companyName', companyName);
+        // Note: companyLogo can be a URL or a data URL; data URLs can be very long, so prefer a URL.
+        if (companyLogo) url.searchParams.set('companyLogo', companyLogo);
+      }
+    }
+
+    const iframeHeight = activeWidget === 'isoline-overlap' ? 740 : 640;
+    const safeSrc = url.toString();
+
+    return [
+      `<iframe`,
+      `  src="${safeSrc}"`,
+      `  width="100%"`,
+      `  height="${iframeHeight}"`,
+      `  style="border:0;border-radius:12px;overflow:hidden"`,
+      `  loading="lazy"`,
+      `  allow="geolocation"`,
+      `></iframe>`,
+    ].join('\n');
   };
 
   const copyEmbedCode = () => {

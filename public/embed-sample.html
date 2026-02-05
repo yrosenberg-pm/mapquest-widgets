@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Embed Sample Site</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: #f6f7fb;
+        color: #0f172a;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid #e5e7eb;
+        padding: 14px 18px;
+        z-index: 10;
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 0 18px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 14px;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: #475569;
+      }
+      .controls {
+        margin-top: 10px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      input[type="text"] {
+        flex: 1;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        font-size: 13px;
+        background: #fff;
+      }
+      button {
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        background: #0f172a;
+        color: #fff;
+        font-weight: 600;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #fff;
+        color: #0f172a;
+      }
+      main {
+        padding: 18px 0 40px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 20px 40px -30px rgba(15, 23, 42, 0.35);
+      }
+      iframe {
+        width: 100%;
+        border: 0;
+        display: block;
+      }
+      .hint {
+        margin-top: 10px;
+        font-size: 12px;
+        color: #64748b;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 12px;
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <h1>Sample Website (Embed Tester)</h1>
+        <div class="controls">
+          <input id="src" type="text" placeholder="Paste iframe src URL here (e.g. http://localhost:3000/isoline-overlap?...)" />
+          <button id="apply">Apply</button>
+          <button id="copy" class="secondary">Copy Link</button>
+        </div>
+        <div class="hint">
+          Tip: open the app, go to <strong>Customize → Embed Code</strong>, copy the iframe snippet, then paste the <code>src</code> URL here.
+        </div>
+      </div>
+    </header>
+    <main>
+      <div class="wrap">
+        <div class="card">
+          <iframe id="frame" title="Embedded widget preview" height="720"></iframe>
+        </div>
+      </div>
+    </main>
+    <script>
+      const input = document.getElementById('src');
+      const frame = document.getElementById('frame');
+      const btnApply = document.getElementById('apply');
+      const btnCopy = document.getElementById('copy');
+
+      function getParam(name) {
+        const u = new URL(window.location.href);
+        return u.searchParams.get(name);
+      }
+
+      function setParam(name, value) {
+        const u = new URL(window.location.href);
+        if (value) u.searchParams.set(name, value);
+        else u.searchParams.delete(name);
+        history.replaceState({}, '', u.toString());
+      }
+
+      function applySrc(src) {
+        if (!src) return;
+        input.value = src;
+        frame.src = src;
+        setParam('src', src);
+      }
+
+      btnApply.addEventListener('click', () => applySrc(input.value.trim()));
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') applySrc(input.value.trim());
+      });
+
+      btnCopy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(window.location.href);
+          btnCopy.textContent = 'Copied!';
+          setTimeout(() => (btnCopy.textContent = 'Copy Link'), 1200);
+        } catch (_) {}
+      });
+
+      // Initialize from URL param
+      const initial = getParam('src');
+      if (initial) applySrc(initial);
+    </script>
+  </body>
+</html>
+

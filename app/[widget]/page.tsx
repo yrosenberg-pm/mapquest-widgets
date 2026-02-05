@@ -1,7 +1,7 @@
 // app/[widget]/page.tsx
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { 
@@ -40,6 +40,7 @@ const VALID_WIDGETS = [
   'delivery',
   'instacart',
   'isoline',
+  'here-isoline',
   'isoline-overlap',
   'heatmap',
   'checkout',
@@ -50,9 +51,16 @@ type WidgetId = typeof VALID_WIDGETS[number];
 
 export default function WidgetPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const widgetId = params.widget as string;
   
   const [darkMode, setDarkMode] = useState(false);
+  const [accentColor, setAccentColor] = useState('#2563eb');
+  const [fontFamily, setFontFamily] = useState('system-ui, -apple-system, sans-serif');
+  const [borderRadius, setBorderRadius] = useState('0.5rem');
+  const [showBranding, setShowBranding] = useState(true);
+  const [companyName, setCompanyName] = useState('');
+  const [companyLogo, setCompanyLogo] = useState('');
   const [mounted, setMounted] = useState(false);
 
   // Auto-scale widgets to fit on iPad/tablet (prevents horizontal clipping for wide widgets).
@@ -63,17 +71,45 @@ export default function WidgetPage() {
 
   // Load dark mode preference
   useEffect(() => {
+    // URL params take priority (so iframe embeds are self-contained)
+    try {
+      const pDark = searchParams.get('darkMode');
+      const pAccent = searchParams.get('accentColor');
+      const pFont = searchParams.get('fontFamily');
+      const pRadius = searchParams.get('borderRadius');
+      const pShowBranding = searchParams.get('showBranding');
+      const pCompanyName = searchParams.get('companyName');
+      const pCompanyLogo = searchParams.get('companyLogo');
+
+      if (pDark != null) setDarkMode(pDark === '1' || pDark === 'true');
+      if (pAccent) setAccentColor(pAccent);
+      if (pFont) setFontFamily(pFont);
+      if (pRadius) setBorderRadius(pRadius);
+      if (pShowBranding != null) setShowBranding(!(pShowBranding === '0' || pShowBranding === 'false'));
+      if (pCompanyName) setCompanyName(pCompanyName);
+      if (pCompanyLogo) setCompanyLogo(pCompanyLogo);
+    } catch (e) {
+      console.error('Failed to load embed URL params:', e);
+    }
+
     try {
       const savedPrefs = localStorage.getItem('widgetPreferences');
       if (savedPrefs) {
         const prefs = JSON.parse(savedPrefs);
-        if (prefs.darkMode !== undefined) setDarkMode(prefs.darkMode);
+        // Only apply saved prefs if URL didn't specify them
+        if (searchParams.get('darkMode') == null && prefs.darkMode !== undefined) setDarkMode(prefs.darkMode);
+        if (searchParams.get('accentColor') == null && prefs.accentColor) setAccentColor(prefs.accentColor);
+        if (searchParams.get('fontFamily') == null && prefs.fontFamily) setFontFamily(prefs.fontFamily);
+        if (searchParams.get('borderRadius') == null && prefs.borderRadius) setBorderRadius(prefs.borderRadius);
+        if (searchParams.get('showBranding') == null && prefs.brandingMode) setShowBranding(prefs.brandingMode !== 'whitelabel');
+        if (searchParams.get('companyName') == null && prefs.companyName) setCompanyName(prefs.companyName);
+        if (searchParams.get('companyLogo') == null && prefs.companyLogo) setCompanyLogo(prefs.companyLogo);
       }
     } catch (e) {
       console.error('Failed to load preferences:', e);
     }
     setMounted(true);
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     const recompute = () => {
@@ -147,7 +183,12 @@ export default function WidgetPage() {
   const commonProps = {
     apiKey: API_KEY,
     darkMode,
-    showBranding: true,
+    accentColor,
+    fontFamily,
+    borderRadius,
+    showBranding,
+    companyName: showBranding ? companyName : undefined,
+    companyLogo: showBranding ? companyLogo : undefined,
   };
 
   const renderWidget = () => {
@@ -183,6 +224,7 @@ export default function WidgetPage() {
       case 'instacart':
         return <InstacartDeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
       case 'isoline':
+      case 'here-isoline':
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
       case 'isoline-overlap':
         return <IsolineOverlapWidget {...commonProps} />;
