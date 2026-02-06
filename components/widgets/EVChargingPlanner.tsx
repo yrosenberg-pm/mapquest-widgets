@@ -5,7 +5,14 @@ import { BatteryCharging, Bolt, CheckCircle2, CircleDashed, Filter, Loader2, Map
 import AddressAutocomplete from '../AddressAutocomplete';
 import MapQuestMap from './MapQuestMap';
 
-type VehiclePresetId = 'tesla-model-3' | 'tesla-model-y' | 'rivian-r1t' | 'ford-mach-e' | 'hyundai-ioniq-5' | 'kia-ev6';
+type VehiclePresetId =
+  | 'tesla-model-3'
+  | 'tesla-model-y'
+  | 'rivian-r1t'
+  | 'rivian-r1s'
+  | 'ford-mach-e'
+  | 'hyundai-ioniq-5'
+  | 'kia-ev6';
 
 type VehiclePreset = {
   id: VehiclePresetId;
@@ -20,6 +27,7 @@ const VEHICLES: VehiclePreset[] = [
   { id: 'tesla-model-3', name: 'Tesla Model 3', batteryKWh: 75, efficiencyMiPerKWh: 4.0, port: 'NACS', maxChargeKW: 250 },
   { id: 'tesla-model-y', name: 'Tesla Model Y', batteryKWh: 75, efficiencyMiPerKWh: 3.6, port: 'NACS', maxChargeKW: 250 },
   { id: 'rivian-r1t', name: 'Rivian R1T', batteryKWh: 135, efficiencyMiPerKWh: 2.2, port: 'CCS', maxChargeKW: 220 },
+  { id: 'rivian-r1s', name: 'Rivian R1S', batteryKWh: 400, efficiencyMiPerKWh: 2.2, port: 'CCS', maxChargeKW: 220 },
   { id: 'ford-mach-e', name: 'Ford Mustang Mach‑E', batteryKWh: 88, efficiencyMiPerKWh: 2.9, port: 'CCS', maxChargeKW: 150 },
   { id: 'hyundai-ioniq-5', name: 'Hyundai Ioniq 5', batteryKWh: 77, efficiencyMiPerKWh: 3.2, port: 'CCS', maxChargeKW: 235 },
   { id: 'kia-ev6', name: 'Kia EV6', batteryKWh: 77, efficiencyMiPerKWh: 3.1, port: 'CCS', maxChargeKW: 235 },
