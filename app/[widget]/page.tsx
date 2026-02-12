@@ -192,6 +192,12 @@ export default function WidgetPage() {
   };
 
   const renderWidget = () => {
+    const pTruckMaxElevationFt = searchParams.get('maxElevationFt');
+    const truckMaxElevationFtNum =
+      pTruckMaxElevationFt != null && pTruckMaxElevationFt !== '' && Number.isFinite(Number(pTruckMaxElevationFt))
+        ? Number(pTruckMaxElevationFt)
+        : undefined;
+
     switch (widgetId) {
       case 'nhl':
         return <NHLArenaExplorer {...commonProps} />;
@@ -204,7 +210,7 @@ export default function WidgetPage() {
       case 'directions':
         return <DirectionsEmbed {...commonProps} />;
       case 'truck':
-        return <TruckRouting {...commonProps} />;
+        return <TruckRouting {...commonProps} defaultMaxElevationFt={truckMaxElevationFtNum} />;
       case 'route-weather':
         return <RouteWeatherAlerts {...commonProps} />;
       case 'heatmap':

@@ -40,6 +40,11 @@ interface TruckRoutingProps {
   companyLogo?: string;
   fontFamily?: string;
   borderRadius?: string;
+  /**
+   * Optional ceiling for elevation along the route. Used to avoid routing freight above a certain elevation.
+   * Units: feet.
+   */
+  defaultMaxElevationFt?: number;
   // Default vehicle profile values
   defaultVehicle?: Partial<VehicleProfile>;
   // Min/max constraints (to be provided in next iteration)
@@ -176,6 +181,48 @@ const DEFAULT_VEHICLE: VehicleProfile = {
   axleCount: 5,
 };
 
+function metersToFeet(m: number) {
+  return m * 3.28084;
+}
+
+function feetToMeters(ft: number) {
+  return ft / 3.28084;
+}
+
+function extractElevationSamplesMeters(route: any): number[] {
+  // NOTE: HERE Routing v8 elevation profile response shape can vary.
+  // We handle a few common patterns defensively.
+  const out: number[] = [];
+
+  const pushFromMaybe = (v: any) => {
+    if (!Array.isArray(v)) return;
+    for (const item of v) {
+      if (typeof item === 'number' && Number.isFinite(item)) out.push(item);
+      else if (item && typeof item === 'object') {
+        const e = (item as any).elevation;
+        if (typeof e === 'number' && Number.isFinite(e)) out.push(e);
+      }
+    }
+  };
+
+  if (route?.elevationProfile) {
+    pushFromMaybe(route.elevationProfile.elevations);
+    pushFromMaybe(route.elevationProfile.profile);
+    pushFromMaybe(route.elevationProfile.samples);
+  }
+
+  const sections = Array.isArray(route?.sections) ? route.sections : [];
+  for (const s of sections) {
+    if (s?.elevationProfile) {
+      pushFromMaybe(s.elevationProfile.elevations);
+      pushFromMaybe(s.elevationProfile.profile);
+      pushFromMaybe(s.elevationProfile.samples);
+    }
+  }
+
+  return out;
+}
+
 export default function TruckRouting({
   defaultFrom = '',
   defaultTo = '',
@@ -185,6 +232,7 @@ export default function TruckRouting({
   companyName,
   companyLogo,
   fontFamily,
+  defaultMaxElevationFt,
   defaultVehicle,
   vehicleConstraints,
   onRouteCalculated,
@@ -203,6 +251,10 @@ export default function TruckRouting({
   const [useHereRouting, setUseHereRouting] = useState(true); // Default to HERE for better truck routing
   const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | undefined>(undefined);
   const [demoMode, setDemoMode] = useState(false);
+  const [maxElevationFt, setMaxElevationFt] = useState<number | null>(
+    typeof defaultMaxElevationFt === 'number' && Number.isFinite(defaultMaxElevationFt) ? defaultMaxElevationFt : null
+  );
+  const [elevationNote, setElevationNote] = useState<string | null>(null);
 
   // Vehicle profile state
   const [vehicle, setVehicle] = useState<VehicleProfile>({
@@ -239,7 +291,8 @@ export default function TruckRouting({
     fromCoords: { lat: number; lng: number },
     toCoords: { lat: number; lng: number },
     vehicleProfile: VehicleProfile,
-    departure?: 'now' | Date
+    departure?: 'now' | Date,
+    elevationCeilingFt?: number | null
   ) => {
     // Convert dimensions to centimeters for HERE API
     const heightCm = Math.round(vehicleProfile.height * 30.48); // feet to cm
@@ -271,6 +324,12 @@ export default function TruckRouting({
       truckWeight: weightKg.toString(),
       truckAxles: vehicleProfile.axleCount.toString(),
     });
+
+    // If elevation is configured, ask HERE for alternatives and elevation profile data.
+    if (elevationCeilingFt != null) {
+      params.set('alternatives', '3');
+      params.set('includeElevationProfile', '1');
+    }
 
     // Add departure time if specified
     if (departure && departure !== 'now') {
@@ -305,7 +364,37 @@ export default function TruckRouting({
       throw new Error('No truck-safe route found. Try adjusting vehicle dimensions.');
     }
 
-    const route = data.routes[0];
+    const routes = Array.isArray(data.routes) ? data.routes : [];
+    const candidates = routes.map((r: any) => {
+      const samplesM = extractElevationSamplesMeters(r);
+      const maxM = samplesM.length > 0 ? Math.max(...samplesM) : null;
+      return { raw: r, maxElevationMeters: maxM };
+    });
+
+    let chosen = candidates[0];
+    let note: string | null = null;
+
+    if (elevationCeilingFt != null) {
+      const ceilingM = feetToMeters(elevationCeilingFt);
+      const withElevation = candidates.filter((c) => typeof c.maxElevationMeters === 'number' && Number.isFinite(c.maxElevationMeters));
+
+      if (withElevation.length === 0) {
+        note = 'Elevation limit is set, but HERE did not return elevation profile data for this route.';
+      } else {
+        const ok = withElevation.find((c) => (c.maxElevationMeters as number) <= ceilingM);
+        if (ok) {
+          chosen = ok;
+        } else {
+          const lowest = [...withElevation].sort((a, b) => (a.maxElevationMeters as number) - (b.maxElevationMeters as number))[0];
+          chosen = lowest;
+          note = `No alternative route found under ${Math.round(elevationCeilingFt)} ft. Showing the lowest-elevation option (max ~${Math.round(metersToFeet(lowest.maxElevationMeters as number))} ft).`;
+        }
+      }
+    }
+
+    setElevationNote(note);
+
+    const route = chosen.raw;
     
     // Log route notices if any
     if (route.notices) {
@@ -480,7 +569,7 @@ export default function TruckRouting({
       // Use HERE API for better truck routing (with vehicle dimension restrictions)
       if (useHereRouting) {
         try {
-          directions = await getHereTruckDirections(fromLoc, toLoc, vehicle, departureTime);
+          directions = await getHereTruckDirections(fromLoc, toLoc, vehicle, departureTime, maxElevationFt);
           if (directions.polyline && directions.polyline.length > 0) {
             setRoutePolyline(directions.polyline);
           } else {
@@ -552,7 +641,7 @@ export default function TruckRouting({
     if (hasCalculatedRef.current && from.trim() && to.trim()) {
       calculateRoute();
     }
-  }, [vehicle, departureTime]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [vehicle, departureTime, maxElevationFt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mark that we've calculated when route is set
   useEffect(() => {
@@ -716,6 +805,43 @@ export default function TruckRouting({
                       <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
                       <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
                         Avoids low bridges and restricted roads using your vehicle profile.
+                      </p>
+                    </div>
+
+                    {/* Elevation constraint */}
+                    <div className="mt-3">
+                      <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
+                        Max elevation (optional)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={maxElevationFt ?? ''}
+                          min={0}
+                          step={100}
+                          placeholder="No limit"
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              setMaxElevationFt(null);
+                              return;
+                            }
+                            const next = Number(raw);
+                            if (Number.isFinite(next) && next >= 0) setMaxElevationFt(next);
+                          }}
+                          className="w-full px-3 py-2 rounded-lg text-sm font-medium"
+                          style={{
+                            background: 'var(--bg-input)',
+                            border: '1px solid var(--border-subtle)',
+                            color: 'var(--text-main)',
+                          }}
+                        />
+                        <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '30px' }}>
+                          ft
+                        </span>
+                      </div>
+                      <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                        If set, we’ll request HERE route alternatives and pick one whose max elevation stays under this ceiling.
                       </p>
                     </div>
                   </div>
@@ -1078,6 +1204,17 @@ export default function TruckRouting({
               background: 'var(--bg-panel)',
             }}
           >
+            {elevationNote && (
+              <p
+                className="mb-3 text-xs font-medium px-3 py-2 rounded-lg"
+                style={{
+                  color: 'var(--color-warning)',
+                  background: 'var(--color-warning-bg)',
+                }}
+              >
+                {elevationNote}
+              </p>
+            )}
             <button
               onClick={() => calculateRoute()}
               disabled={loading || !from.trim() || !to.trim()}

@@ -250,6 +250,8 @@ export async function GET(request: NextRequest) {
         const destination = searchParams.get('destination'); // lat,lng
         const routeTransportMode = searchParams.get('transportMode') || 'car';
         const departureTime = searchParams.get('departureTime') || new Date().toISOString();
+        const alternatives = searchParams.get('alternatives');
+        const includeElevationProfile = searchParams.get('includeElevationProfile');
 
         if (!routeOrigin || !destination) {
           return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
@@ -262,7 +264,12 @@ export async function GET(request: NextRequest) {
         }
 
         // Build the URL with return parameters
-        const returnParams = 'polyline,summary,actions,instructions';
+        // NOTE: HERE supports "elevationProfile" return for generating an elevation profile along the route.
+        // We only request it when explicitly enabled to keep payloads smaller for normal traffic.
+        const returnParams =
+          includeElevationProfile === '1' || includeElevationProfile === 'true'
+            ? 'polyline,summary,actions,instructions,elevationProfile'
+            : 'polyline,summary,actions,instructions';
         
         // For truck routing, we need to build the URL carefully with proper parameter encoding
         if (routeTransportMode === 'truck') {
@@ -283,6 +290,7 @@ export async function GET(request: NextRequest) {
           urlParams.set('transportMode', 'truck');
           urlParams.set('return', returnParams);
           urlParams.set('departureTime', departureTime);
+          if (alternatives) urlParams.set('alternatives', alternatives);
           
           // Truck dimensions and attributes
           // Note: HERE v8 uses truck[height] etc. - brackets get URL encoded automatically
@@ -306,7 +314,8 @@ export async function GET(request: NextRequest) {
           console.log('  Axles:', truckAxles);
           console.log('  Full URL params:', urlParams.toString());
         } else {
-          url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}`;
+          const alt = alternatives ? `&alternatives=${encodeURIComponent(alternatives)}` : '';
+          url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}${alt}`;
         }
         
         console.log('HERE Routes API URL:', url.replace(HERE_API_KEY!, '***'));
