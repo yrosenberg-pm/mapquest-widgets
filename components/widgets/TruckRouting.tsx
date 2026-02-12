@@ -20,6 +20,7 @@ interface RouteInfo {
   hasTolls?: boolean;
   hasHighway?: boolean;
   steps: RouteStep[];
+  maxElevationFt?: number | null;
 }
 
 interface VehicleProfile {
@@ -255,6 +256,7 @@ export default function TruckRouting({
     typeof defaultMaxElevationFt === 'number' && Number.isFinite(defaultMaxElevationFt) ? defaultMaxElevationFt : null
   );
   const [elevationNote, setElevationNote] = useState<string | null>(null);
+  const [routeMaxElevationFt, setRouteMaxElevationFt] = useState<number | null>(null);
 
   // Vehicle profile state
   const [vehicle, setVehicle] = useState<VehicleProfile>({
@@ -393,6 +395,11 @@ export default function TruckRouting({
     }
 
     setElevationNote(note);
+    setRouteMaxElevationFt(
+      typeof chosen?.maxElevationMeters === 'number' && Number.isFinite(chosen.maxElevationMeters)
+        ? metersToFeet(chosen.maxElevationMeters)
+        : null
+    );
 
     const route = chosen.raw;
     
@@ -449,6 +456,10 @@ export default function TruckRouting({
       hasHighway: true, // HERE doesn't provide this directly
       steps,
       polyline: decodedPolyline, // Decoded coordinates array
+      maxElevationFt:
+        typeof chosen?.maxElevationMeters === 'number' && Number.isFinite(chosen.maxElevationMeters)
+          ? metersToFeet(chosen.maxElevationMeters)
+          : null,
     };
   };
 
@@ -519,6 +530,9 @@ export default function TruckRouting({
 
   const DEMO_FROM = '126 S Gregson St, Durham, NC 27701';
   const DEMO_TO = '310 S Gregson St, Durham, NC 27701';
+  const DEMO_DONNER_FROM = 'Sacramento, CA';
+  const DEMO_DONNER_TO = 'Reno, NV';
+  const DEMO_DONNER_MAX_ELEV_FT = 5600;
 
   const calculateRoute = async (opts?: { from?: string; to?: string; applyInputs?: boolean }) => {
     const fromValue = (opts?.from ?? from).trim();
@@ -539,6 +553,8 @@ export default function TruckRouting({
       setRoutePolyline(undefined);
       setStepsExpanded(false);
       setError(null);
+      setElevationNote(null);
+      setRouteMaxElevationFt(null);
     }
 
     setLoading(true);
@@ -585,6 +601,8 @@ export default function TruckRouting({
             vehicle,
             departureTime
           );
+          setElevationNote(null);
+          setRouteMaxElevationFt(null);
         }
       } else {
         setRoutePolyline(undefined);
@@ -594,6 +612,8 @@ export default function TruckRouting({
           vehicle,
           departureTime
         );
+        setElevationNote(null);
+        setRouteMaxElevationFt(null);
       }
 
       if (!directions) {
@@ -607,6 +627,7 @@ export default function TruckRouting({
         hasTolls: directions.hasTolls,
         hasHighway: directions.hasHighway,
         steps: directions.steps || [],
+        maxElevationFt: directions.maxElevationFt ?? routeMaxElevationFt,
       };
 
       setRoute(routeInfo);
@@ -854,23 +875,44 @@ export default function TruckRouting({
                   <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
                     Route
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDemoMode(true);
-                      calculateRoute({ from: DEMO_FROM, to: DEMO_TO, applyInputs: true });
-                    }}
-                    disabled={loading}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                    style={{
-                      background: loading ? 'var(--bg-panel)' : `${accentColor}15`,
-                      border: `1px solid ${loading ? 'var(--border-subtle)' : `${accentColor}35`}`,
-                      color: loading ? 'var(--text-muted)' : accentColor,
-                    }}
-                    title="Load demo addresses and calculate a truck-safe route"
-                  >
-                    Load Durham demo
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDemoMode(true);
+                        setMaxElevationFt(null);
+                        calculateRoute({ from: DEMO_FROM, to: DEMO_TO, applyInputs: true });
+                      }}
+                      disabled={loading}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      style={{
+                        background: loading ? 'var(--bg-panel)' : `${accentColor}15`,
+                        border: `1px solid ${loading ? 'var(--border-subtle)' : `${accentColor}35`}`,
+                        color: loading ? 'var(--text-muted)' : accentColor,
+                      }}
+                      title="Bridge clearance demo (Durham, NC)"
+                    >
+                      Durham demo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDemoMode(true);
+                        setMaxElevationFt(DEMO_DONNER_MAX_ELEV_FT);
+                        calculateRoute({ from: DEMO_DONNER_FROM, to: DEMO_DONNER_TO, applyInputs: true });
+                      }}
+                      disabled={loading}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      style={{
+                        background: loading ? 'var(--bg-panel)' : `${accentColor}15`,
+                        border: `1px solid ${loading ? 'var(--border-subtle)' : `${accentColor}35`}`,
+                        color: loading ? 'var(--text-muted)' : accentColor,
+                      }}
+                      title="Elevation-sensitive freight demo (Sacramento → Reno)"
+                    >
+                      Donner Pass demo
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-1">
                 {/* From Input */}
@@ -1116,6 +1158,30 @@ export default function TruckRouting({
                     }}
                   >
                     Tolls
+                  </span>
+                )}
+                {typeof routeMaxElevationFt === 'number' && Number.isFinite(routeMaxElevationFt) && (
+                  <span
+                    className="text-xs font-medium px-2.5 py-1 rounded-full"
+                    style={{
+                      background: 'var(--bg-panel)',
+                      color: 'var(--text-muted)',
+                    }}
+                    title="Maximum elevation along the selected route (from HERE elevation profile)"
+                  >
+                    Max elev: {Math.round(routeMaxElevationFt).toLocaleString()} ft
+                  </span>
+                )}
+                {typeof maxElevationFt === 'number' && Number.isFinite(maxElevationFt) && (
+                  <span
+                    className="text-xs font-medium px-2.5 py-1 rounded-full"
+                    style={{
+                      background: `${accentColor}15`,
+                      color: accentColor,
+                    }}
+                    title="Configured elevation ceiling"
+                  >
+                    Ceiling: {Math.round(maxElevationFt).toLocaleString()} ft
                   </span>
                 )}
               </div>
