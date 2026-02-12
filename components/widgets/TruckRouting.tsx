@@ -659,11 +659,11 @@ export default function TruckRouting({
           setRoutePolyline(undefined);
           // Fallback to MapQuest
           directions = await getMapQuestTruckDirections(
-            `${fromLoc.lat},${fromLoc.lng}`, 
-            `${toLoc.lat},${toLoc.lng}`, 
-            vehicle,
-            departureTime
-          );
+        `${fromLoc.lat},${fromLoc.lng}`, 
+        `${toLoc.lat},${toLoc.lng}`, 
+        vehicle,
+        departureTime
+      );
           setElevationNote(null);
           setRouteMaxElevationFt(null);
         }
@@ -844,60 +844,58 @@ export default function TruckRouting({
             </div>
           </div>
 
-          {/* Body: scrollable content + fixed CTA footer */}
+          {/* Body: fixed controls + scrollable results + fixed CTA footer */}
           <div className="flex-1 min-h-0 flex flex-col">
-            {/* Scrollable content */}
-            <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
-              {/* Controls */}
-              <div className="p-3 space-y-2" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
-                {/* Vehicle Profile Section */}
-                <div className="rounded-2xl" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
-                <button
-                  onClick={() => setShowVehicleSettings(!showVehicleSettings)}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors"
-                  style={{ background: 'transparent' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <div className="flex items-center gap-2">
-                    <Settings2 className="w-4 h-4" style={{ color: accentColor }} />
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                      Vehicle Profile
-                    </span>
-                  </div>
-                  <span style={{ color: 'var(--text-muted)' }}>
-                    {showVehicleSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </span>
-                </button>
+            {/* Controls (fixed) */}
+            <div className="p-3 space-y-2 flex-shrink-0" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
+          {/* Vehicle Profile Section */}
+              <div className="rounded-2xl" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+            <button
+              onClick={() => setShowVehicleSettings(!showVehicleSettings)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors"
+              style={{ background: 'transparent' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div className="flex items-center gap-2">
+                <Settings2 className="w-4 h-4" style={{ color: accentColor }} />
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                  Vehicle Profile
+                </span>
+              </div>
+              <span style={{ color: 'var(--text-muted)' }}>
+                {showVehicleSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </span>
+            </button>
 
-                {showVehicleSettings && (
-                  <div className="px-4 pb-4">
+            {showVehicleSettings && (
+                  <div className="px-4 pb-4 max-h-[260px] overflow-y-auto prism-scrollbar">
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <div className="text-[11px] font-medium leading-snug" style={{ color: 'var(--text-secondary)' }}>
                         <div>
                           {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L
-                        </div>
+                  </div>
                         <div>
                           {vehicle.weight} tons · {vehicle.axleCount} axles
                         </div>
                       </div>
-                    </div>
+                </div>
 
-                    {/* Vehicle Inputs */}
+                {/* Vehicle Inputs */}
                     <div className="grid grid-cols-2 gap-2">
-                      <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
-                      <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
-                      <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
-                      <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
+                  <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
+                  <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
+                  <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
+                  <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
                       <div className="col-span-2">
-                        <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
+                  <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
                       </div>
-                    </div>
+                </div>
 
                     {/* Compact warning */}
                     <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--color-warning-bg)' }}>
-                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
-                      <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
+                  <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
                         Avoids low bridges and restricted roads using your vehicle profile.
                       </p>
                     </div>
@@ -936,13 +934,13 @@ export default function TruckRouting({
                       </div>
                       <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
                         If set, we’ll request route alternatives and pick one whose max elevation stays under this ceiling.
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  </p>
+                </div>
               </div>
+            )}
+          </div>
 
-              {/* Address Inputs */}
+          {/* Address Inputs */}
               <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
@@ -987,21 +985,21 @@ export default function TruckRouting({
                     </button>
                   </div>
                 </div>
-                <div className="space-y-1">
-                {/* From Input */}
-                <div className="flex items-center gap-3">
-                  <div 
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                    style={{ 
-                      background: 'var(--bg-panel)',
-                      border: '2px solid var(--border-default)',
-                      color: 'var(--text-secondary)',
-                    }}
-                  >
-                    A
-                  </div>
-                  <AddressAutocomplete
-                    value={from}
+            <div className="space-y-1">
+              {/* From Input */}
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ 
+                    background: 'var(--bg-panel)',
+                    border: '2px solid var(--border-default)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  A
+                </div>
+                <AddressAutocomplete
+                  value={from}
                     onChange={(v) => {
                       if (demoMode) setDemoMode(false);
                       setFrom(v);
@@ -1010,47 +1008,47 @@ export default function TruckRouting({
                       setRoutePolyline(undefined);
                       setError(null);
                     }}
-                    onSelect={(result) => {
-                      if (result.lat && result.lng) {
-                        setFromCoords({ lat: result.lat, lng: result.lng });
-                      }
-                    }}
-                    placeholder="Enter origin"
-                    darkMode={darkMode}
-                    inputBg={inputBg}
-                    textColor={textColor}
-                    mutedText={mutedText}
-                    borderColor={borderColor}
-                    className="flex-1"
-                    hideIcon
+                  onSelect={(result) => {
+                    if (result.lat && result.lng) {
+                      setFromCoords({ lat: result.lat, lng: result.lng });
+                    }
+                  }}
+                  placeholder="Enter origin"
+                  darkMode={darkMode}
+                  inputBg={inputBg}
+                  textColor={textColor}
+                  mutedText={mutedText}
+                  borderColor={borderColor}
+                  className="flex-1"
+                  hideIcon
                     readOnly={demoMode}
+                />
+              </div>
+
+              {/* Connection Line */}
+              <div className="flex items-center gap-3">
+                <div className="w-8 flex justify-center">
+                  <div 
+                    className="w-0.5 h-2 rounded-full"
+                    style={{ background: 'var(--border-default)' }}
                   />
                 </div>
+              </div>
 
-                {/* Connection Line */}
-                <div className="flex items-center gap-3">
-                  <div className="w-8 flex justify-center">
-                    <div 
-                      className="w-0.5 h-2 rounded-full"
-                      style={{ background: 'var(--border-default)' }}
-                    />
-                  </div>
+              {/* To Input */}
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ 
+                    background: `${accentColor}15`,
+                    border: `2px solid ${accentColor}`,
+                    color: accentColor,
+                  }}
+                >
+                  B
                 </div>
-
-                {/* To Input */}
-                <div className="flex items-center gap-3">
-                  <div 
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                    style={{ 
-                      background: `${accentColor}15`,
-                      border: `2px solid ${accentColor}`,
-                      color: accentColor,
-                    }}
-                  >
-                    B
-                  </div>
-                  <AddressAutocomplete
-                    value={to}
+                <AddressAutocomplete
+                  value={to}
                     onChange={(v) => {
                       if (demoMode) setDemoMode(false);
                       setTo(v);
@@ -1059,117 +1057,117 @@ export default function TruckRouting({
                       setRoutePolyline(undefined);
                       setError(null);
                     }}
-                    onSelect={(result) => {
-                      if (result.lat && result.lng) {
-                        setToCoords({ lat: result.lat, lng: result.lng });
-                      }
-                    }}
-                    placeholder="Enter destination"
-                    darkMode={darkMode}
-                    inputBg={inputBg}
-                    textColor={textColor}
-                    mutedText={mutedText}
-                    borderColor={borderColor}
-                    className="flex-1"
-                    hideIcon
-                    readOnly={demoMode}
-                  />
-                </div>
-              </div>
-
-              {/* Departure Time */}
-              <div className="mt-2 relative">
-                <button
-                  onClick={() => setShowDepartureOptions(!showDepartureOptions)}
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
-                  style={{
-                    background: 'var(--bg-panel)',
-                    border: '1px solid var(--border-subtle)',
+                  onSelect={(result) => {
+                    if (result.lat && result.lng) {
+                      setToCoords({ lat: result.lat, lng: result.lng });
+                    }
                   }}
-                >
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4" style={{ color: accentColor }} />
-                    <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>
-                      {formatDepartureTime(departureTime)}
-                    </span>
-                  </div>
-                  <ChevronDown 
-                    className={`w-4 h-4 transition-transform ${showDepartureOptions ? 'rotate-180' : ''}`} 
-                    style={{ color: 'var(--text-muted)' }} 
-                  />
-                </button>
-
-                {showDepartureOptions && (
-                  <div 
-                    className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-40"
-                    style={{
-                      background: 'var(--bg-widget)',
-                      border: '1px solid var(--border-subtle)',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    }}
-                  >
-                    <button
-                      onClick={() => { setDepartureTime('now'); setShowDepartureOptions(false); }}
-                      className="w-full px-3 py-2.5 text-left text-sm transition-colors"
-                      style={{ 
-                        background: departureTime === 'now' ? `${accentColor}15` : 'transparent',
-                        color: departureTime === 'now' ? accentColor : 'var(--text-main)',
-                      }}
-                    >
-                      Leave now
-                    </button>
-                    {[15, 30, 60].map((mins) => {
-                      const time = new Date(Date.now() + mins * 60000);
-                      const label = mins < 60 ? `In ${mins} minutes` : 'In 1 hour';
-                      return (
-                        <button
-                          key={mins}
-                          onClick={() => { setDepartureTime(time); setShowDepartureOptions(false); }}
-                          className="w-full px-3 py-2.5 text-left text-sm transition-colors"
-                          style={{ color: 'var(--text-main)' }}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                    <div 
-                      className="px-3 py-2.5"
-                      style={{ borderTop: '1px solid var(--border-subtle)' }}
-                    >
-                      <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
-                        Custom time
-                      </label>
-                      <input
-                        type="datetime-local"
-                        min={new Date().toISOString().slice(0, 16)}
-                        className="w-full px-2 py-1.5 rounded-lg text-sm"
-                        style={{
-                          background: 'var(--bg-input)',
-                          border: '1px solid var(--border-subtle)',
-                          color: 'var(--text-main)',
-                        }}
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            setDepartureTime(new Date(e.target.value));
-                            setShowDepartureOptions(false);
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+                  placeholder="Enter destination"
+                  darkMode={darkMode}
+                  inputBg={inputBg}
+                  textColor={textColor}
+                  mutedText={mutedText}
+                  borderColor={borderColor}
+                  className="flex-1"
+                  hideIcon
+                    readOnly={demoMode}
+                />
               </div>
             </div>
 
-              {/* Results */}
-              {route ? (
-                <>
-                  {/* Route Summary */}
-                  <div 
-                    className="p-4 flex-shrink-0"
-                    style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            {/* Departure Time */}
+              <div className="mt-2 relative">
+              <button
+                onClick={() => setShowDepartureOptions(!showDepartureOptions)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
+                style={{
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" style={{ color: accentColor }} />
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>
+                    {formatDepartureTime(departureTime)}
+                  </span>
+                </div>
+                <ChevronDown 
+                  className={`w-4 h-4 transition-transform ${showDepartureOptions ? 'rotate-180' : ''}`} 
+                  style={{ color: 'var(--text-muted)' }} 
+                />
+              </button>
+
+              {showDepartureOptions && (
+                <div 
+                    className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-40"
+                  style={{
+                    background: 'var(--bg-widget)',
+                    border: '1px solid var(--border-subtle)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  <button
+                    onClick={() => { setDepartureTime('now'); setShowDepartureOptions(false); }}
+                    className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                    style={{ 
+                      background: departureTime === 'now' ? `${accentColor}15` : 'transparent',
+                      color: departureTime === 'now' ? accentColor : 'var(--text-main)',
+                    }}
                   >
+                    Leave now
+                  </button>
+                  {[15, 30, 60].map((mins) => {
+                    const time = new Date(Date.now() + mins * 60000);
+                    const label = mins < 60 ? `In ${mins} minutes` : 'In 1 hour';
+                    return (
+                      <button
+                        key={mins}
+                        onClick={() => { setDepartureTime(time); setShowDepartureOptions(false); }}
+                        className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                        style={{ color: 'var(--text-main)' }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                  <div 
+                    className="px-3 py-2.5"
+                    style={{ borderTop: '1px solid var(--border-subtle)' }}
+                  >
+                    <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
+                      Custom time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      min={new Date().toISOString().slice(0, 16)}
+                      className="w-full px-2 py-1.5 rounded-lg text-sm"
+                      style={{
+                        background: 'var(--bg-input)',
+                        border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-main)',
+                      }}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setDepartureTime(new Date(e.target.value));
+                          setShowDepartureOptions(false);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+              </div>
+          </div>
+
+            {/* Results (scroll) */}
+            {route ? (
+              <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
+          {/* Route Summary */}
+            <div 
+              className="p-4 flex-shrink-0"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
               <div className="grid grid-cols-2 gap-2">
                 <div 
                   className="p-3 rounded-lg text-center"
@@ -1257,9 +1255,9 @@ export default function TruckRouting({
                 )}
               </div>
             </div>
-                  {/* Turn-by-Turn */}
-                  {route.steps.length > 0 && (
-                    <div className="flex flex-col">
+          {/* Turn-by-Turn */}
+                {route.steps.length > 0 && (
+                  <div className="flex flex-col">
 
               <button
                 onClick={() => setStepsExpanded(!stepsExpanded)}
@@ -1287,7 +1285,7 @@ export default function TruckRouting({
                 </div>
               </button>
 
-                  {stepsExpanded && (
+              {stepsExpanded && (
                     <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   {route.steps.map((step, index) => (
                     <div 
@@ -1324,13 +1322,14 @@ export default function TruckRouting({
                       </div>
                     </div>
                   ))}
-                    </div>
-                  )}
                 </div>
-                  )}
-                </>
-              ) : null}
+              )}
             </div>
+          )}
+        </div>
+            ) : (
+              <div className="flex-1 min-h-0" />
+            )}
 
             {/* Fixed CTA footer */}
             <div
@@ -1378,9 +1377,7 @@ export default function TruckRouting({
                   {error}
                 </p>
               )}
-            </div>
-
-            {/* End scroll/fixed footer layout */}
+        </div>
           </div>
 
         </div>
