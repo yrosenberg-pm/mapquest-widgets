@@ -868,8 +868,8 @@ export default function TruckRouting({
               </span>
             </button>
 
-            {showVehicleSettings && (
-                  <div className="px-4 pb-4 max-h-[260px] overflow-y-auto prism-scrollbar">
+              {showVehicleSettings && (
+                  <div className="px-4 pb-4 max-h-[200px] overflow-y-auto prism-scrollbar">
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <div className="text-[11px] font-medium leading-snug" style={{ color: 'var(--text-secondary)' }}>
                         <div>
@@ -1161,13 +1161,24 @@ export default function TruckRouting({
           </div>
 
             {/* Results (scroll) */}
-            {route ? (
+              {route ? (
               <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
           {/* Route Summary */}
             <div 
               className="p-4 flex-shrink-0"
               style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
+                  {elevationNote && (
+                    <div
+                      className="mb-3 text-xs font-medium px-3 py-2 rounded-lg"
+                      style={{
+                        color: 'var(--color-warning)',
+                        background: 'var(--color-warning-bg)',
+                      }}
+                    >
+                      {elevationNote}
+                    </div>
+                  )}
               <div className="grid grid-cols-2 gap-2">
                 <div 
                   className="p-3 rounded-lg text-center"
@@ -1339,17 +1350,6 @@ export default function TruckRouting({
                 background: 'var(--bg-panel)',
               }}
             >
-              {elevationNote && (
-                <p
-                  className="mb-3 text-xs font-medium px-3 py-2 rounded-lg"
-                  style={{
-                    color: 'var(--color-warning)',
-                    background: 'var(--color-warning-bg)',
-                  }}
-                >
-                  {elevationNote}
-                </p>
-              )}
               <button
                 onClick={() => calculateRoute()}
                 disabled={loading || !from.trim() || !to.trim()}
