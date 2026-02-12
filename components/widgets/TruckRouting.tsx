@@ -844,12 +844,14 @@ export default function TruckRouting({
             </div>
           </div>
 
-          {/* Body: keep inputs visible; make results scroll when needed */}
+          {/* Body: scrollable content + fixed CTA footer */}
           <div className="flex-1 min-h-0 flex flex-col">
-            {/* Controls (no scrolling) */}
-            <div className="p-3 space-y-2 flex-shrink-0" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
-              {/* Vehicle Profile Section */}
-              <div className="rounded-2xl" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+            {/* Scrollable content */}
+            <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
+              {/* Controls */}
+              <div className="p-3 space-y-2" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
+                {/* Vehicle Profile Section */}
+                <div className="rounded-2xl" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
                 <button
                   onClick={() => setShowVehicleSettings(!showVehicleSettings)}
                   className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors"
@@ -1160,16 +1162,14 @@ export default function TruckRouting({
               </div>
             </div>
 
-            {/* Results (scroll only when route exists) */}
-            {route ? (
-              <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
-
-          {/* Route Summary */}
-          {route && (
-            <div 
-              className="p-4 flex-shrink-0"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
+              {/* Results */}
+              {route ? (
+                <>
+                  {/* Route Summary */}
+                  <div 
+                    className="p-4 flex-shrink-0"
+                    style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                  >
               <div className="grid grid-cols-2 gap-2">
                 <div 
                   className="p-3 rounded-lg text-center"
@@ -1257,11 +1257,10 @@ export default function TruckRouting({
                 )}
               </div>
             </div>
-          )}
+                  {/* Turn-by-Turn */}
+                  {route.steps.length > 0 && (
+                    <div className="flex flex-col">
 
-                {/* Turn-by-Turn */}
-                {route.steps.length > 0 && (
-                  <div className="flex flex-col">
               <button
                 onClick={() => setStepsExpanded(!stepsExpanded)}
                 className="flex items-center justify-between px-4 py-3 transition-colors"
@@ -1328,57 +1327,60 @@ export default function TruckRouting({
                     </div>
                   )}
                 </div>
-                )}
-              </div>
-            ) : null}
-          </div>
+                  )}
+                </>
+              ) : null}
+            </div>
 
-          {/* Footer CTA (always visible) */}
-          <div
-            className="p-4 flex-shrink-0"
-            style={{
-              borderTop: '1px solid var(--border-subtle)',
-              background: 'var(--bg-panel)',
-            }}
-          >
-            {elevationNote && (
-              <p
-                className="mb-3 text-xs font-medium px-3 py-2 rounded-lg"
-                style={{
-                  color: 'var(--color-warning)',
-                  background: 'var(--color-warning-bg)',
-                }}
-              >
-                {elevationNote}
-              </p>
-            )}
-            <button
-              onClick={() => calculateRoute()}
-              disabled={loading || !from.trim() || !to.trim()}
-              className="prism-btn prism-btn-primary w-full"
-              style={{ 
-                background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
-                boxShadow: `0 8px 20px ${accentColor}40`,
+            {/* Fixed CTA footer */}
+            <div
+              className="p-4 flex-shrink-0"
+              style={{
+                borderTop: '1px solid var(--border-subtle)',
+                background: 'var(--bg-panel)',
               }}
             >
-              {loading ? (
-                <><Loader2 className="w-4 h-4 prism-spinner" /> Calculating Truck Route...</>
-              ) : (
-                <><Navigation className="w-4 h-4" /> Get Truck Route</>
+              {elevationNote && (
+                <p
+                  className="mb-3 text-xs font-medium px-3 py-2 rounded-lg"
+                  style={{
+                    color: 'var(--color-warning)',
+                    background: 'var(--color-warning-bg)',
+                  }}
+                >
+                  {elevationNote}
+                </p>
               )}
-            </button>
-
-            {error && (
-              <p 
-                className="mt-3 text-sm font-medium px-3 py-2 rounded-lg"
+              <button
+                onClick={() => calculateRoute()}
+                disabled={loading || !from.trim() || !to.trim()}
+                className="prism-btn prism-btn-primary w-full"
                 style={{ 
-                  color: 'var(--color-error)', 
-                  background: 'var(--color-error-bg)' 
+                  background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                  boxShadow: `0 8px 20px ${accentColor}40`,
                 }}
               >
-                {error}
-              </p>
-            )}
+                {loading ? (
+                  <><Loader2 className="w-4 h-4 prism-spinner" /> Calculating Truck Route...</>
+                ) : (
+                  <><Navigation className="w-4 h-4" /> Get Truck Route</>
+                )}
+              </button>
+
+              {error && (
+                <p 
+                  className="mt-3 text-sm font-medium px-3 py-2 rounded-lg"
+                  style={{ 
+                    color: 'var(--color-error)', 
+                    background: 'var(--color-error-bg)' 
+                  }}
+                >
+                  {error}
+                </p>
+              )}
+            </div>
+
+            {/* End scroll/fixed footer layout */}
           </div>
 
         </div>
