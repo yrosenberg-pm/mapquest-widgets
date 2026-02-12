@@ -224,6 +224,49 @@ function extractElevationSamplesMeters(route: any): number[] {
   return out;
 }
 
+function samplePointsForElevation(points: Array<{ lat: number; lng: number }>, maxPoints: number) {
+  if (points.length <= maxPoints) return points;
+  const out: Array<{ lat: number; lng: number }> = [];
+  out.push(points[0]);
+  const innerCount = maxPoints - 2;
+  const step = (points.length - 2) / Math.max(1, innerCount);
+  for (let i = 1; i <= innerCount; i++) {
+    const idx = 1 + Math.round(i * step);
+    out.push(points[Math.min(points.length - 2, idx)]);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+async function getMaxElevationFeetForPolyline(polyline: Array<{ lat: number; lng: number }>) {
+  if (!polyline.length) return null;
+  const sampled = samplePointsForElevation(polyline, 100);
+  const pointsParam = sampled.map((p) => `${p.lat},${p.lng}`).join(';');
+
+  const params = new URLSearchParams({
+    endpoint: 'elevation',
+    points: pointsParam,
+  });
+
+  const resp = await fetch(`/api/here?${params.toString()}`);
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(text || 'Elevation lookup failed');
+  }
+  const data = await resp.json();
+
+  const elevationsRaw = (data as any).elevations;
+  if (!Array.isArray(elevationsRaw) || elevationsRaw.length === 0) return null;
+
+  const valsMeters = elevationsRaw
+    .map((e: any) => (typeof e === 'number' ? e : e?.elevation))
+    .filter((v: any) => typeof v === 'number' && Number.isFinite(v)) as number[];
+
+  if (valsMeters.length === 0) return null;
+  const maxM = Math.max(...valsMeters);
+  return metersToFeet(maxM);
+}
+
 export default function TruckRouting({
   defaultFrom = '',
   defaultTo = '',
@@ -327,10 +370,9 @@ export default function TruckRouting({
       truckAxles: vehicleProfile.axleCount.toString(),
     });
 
-    // If elevation is configured, ask for alternatives and elevation profile data.
+    // If elevation is configured, ask for alternatives.
     if (elevationCeilingFt != null) {
       params.set('alternatives', '3');
-      params.set('includeElevationProfile', '1');
     }
 
     // Add departure time if specified
@@ -368,38 +410,70 @@ export default function TruckRouting({
 
     const routes = Array.isArray(data.routes) ? data.routes : [];
     const candidates = routes.map((r: any) => {
+      const section = r?.sections?.[0];
+      const encodedPolyline = section?.polyline;
+      let decodedPolyline: { lat: number; lng: number }[] = [];
+
+      if (encodedPolyline) {
+        try {
+          decodedPolyline = decodeHerePolyline(encodedPolyline);
+        } catch (err) {
+          console.error('[TruckRouting] Failed to decode polyline:', err);
+        }
+      }
+
+      // Legacy fallback if elevation ever returns in routing response
       const samplesM = extractElevationSamplesMeters(r);
       const maxM = samplesM.length > 0 ? Math.max(...samplesM) : null;
-      return { raw: r, maxElevationMeters: maxM };
+
+      return { raw: r, section, decodedPolyline, legacyMaxElevationMeters: maxM };
     });
 
     let chosen = candidates[0];
     let note: string | null = null;
 
-    if (elevationCeilingFt != null) {
-      const ceilingM = feetToMeters(elevationCeilingFt);
-      const withElevation = candidates.filter((c) => typeof c.maxElevationMeters === 'number' && Number.isFinite(c.maxElevationMeters));
+    let chosenMaxElevationFt: number | null = null;
 
+    if (elevationCeilingFt != null) {
+      const withMax: Array<{ c: typeof candidates[number]; maxFt: number | null }> = await Promise.all(
+        candidates.map(async (c) => {
+          try {
+            if (
+              typeof c.legacyMaxElevationMeters === 'number' &&
+              Number.isFinite(c.legacyMaxElevationMeters)
+            ) {
+              return { c, maxFt: metersToFeet(c.legacyMaxElevationMeters) };
+            }
+            if (c.decodedPolyline?.length) {
+              const maxFt = await getMaxElevationFeetForPolyline(c.decodedPolyline);
+              return { c, maxFt };
+            }
+            return { c, maxFt: null };
+          } catch {
+            return { c, maxFt: null };
+          }
+        })
+      );
+
+      const withElevation = withMax.filter((x) => typeof x.maxFt === 'number' && Number.isFinite(x.maxFt));
       if (withElevation.length === 0) {
-        note = 'Elevation limit is set, but elevation profile data is unavailable for this route.';
+        note = 'Elevation limit is set, but elevation data is unavailable for this route.';
       } else {
-        const ok = withElevation.find((c) => (c.maxElevationMeters as number) <= ceilingM);
+        const ok = withElevation.find((x) => (x.maxFt as number) <= (elevationCeilingFt as number));
         if (ok) {
-          chosen = ok;
+          chosen = ok.c;
+          chosenMaxElevationFt = ok.maxFt as number;
         } else {
-          const lowest = [...withElevation].sort((a, b) => (a.maxElevationMeters as number) - (b.maxElevationMeters as number))[0];
-          chosen = lowest;
-          note = `No alternative route found under ${Math.round(elevationCeilingFt)} ft. Showing the lowest-elevation option (max ~${Math.round(metersToFeet(lowest.maxElevationMeters as number))} ft).`;
+          const lowest = [...withElevation].sort((a, b) => (a.maxFt as number) - (b.maxFt as number))[0];
+          chosen = lowest.c;
+          chosenMaxElevationFt = lowest.maxFt as number;
+          note = `No alternative route found under ${Math.round(elevationCeilingFt)} ft. Showing the lowest-elevation option (max ~${Math.round(chosenMaxElevationFt)} ft).`;
         }
       }
     }
 
     setElevationNote(note);
-    setRouteMaxElevationFt(
-      typeof chosen?.maxElevationMeters === 'number' && Number.isFinite(chosen.maxElevationMeters)
-        ? metersToFeet(chosen.maxElevationMeters)
-        : null
-    );
+    setRouteMaxElevationFt(chosenMaxElevationFt);
 
     const route = chosen.raw;
     
@@ -408,7 +482,7 @@ export default function TruckRouting({
       console.log('[TruckRouting] Route notices:', route.notices);
     }
     
-    const section = route.sections[0];
+    const section = chosen.section ?? route.sections[0];
     
     // Log section notices if any (these might contain restriction warnings)
     if (section.notices) {
@@ -428,17 +502,9 @@ export default function TruckRouting({
       console.log('[TruckRouting] Truck info in response:', section.truck);
     }
     
-    // Get polyline for map display and decode it
-    const encodedPolyline = section.polyline;
-    let decodedPolyline: { lat: number; lng: number }[] = [];
-    
-    if (encodedPolyline) {
-      try {
-        decodedPolyline = decodeHerePolyline(encodedPolyline);
-        console.log('[TruckRouting] Decoded polyline with', decodedPolyline.length, 'points');
-      } catch (err) {
-        console.error('[TruckRouting] Failed to decode polyline:', err);
-      }
+    const decodedPolyline = chosen.decodedPolyline ?? [];
+    if (decodedPolyline.length > 0) {
+      console.log('[TruckRouting] Decoded polyline with', decodedPolyline.length, 'points');
     }
     
     // Parse instructions
@@ -456,10 +522,7 @@ export default function TruckRouting({
       hasHighway: true, // Provider doesn't provide this directly
       steps,
       polyline: decodedPolyline, // Decoded coordinates array
-      maxElevationFt:
-        typeof chosen?.maxElevationMeters === 'number' && Number.isFinite(chosen.maxElevationMeters)
-          ? metersToFeet(chosen.maxElevationMeters)
-          : null,
+      maxElevationFt: chosenMaxElevationFt,
     };
   };
 

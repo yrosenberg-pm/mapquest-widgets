@@ -9,6 +9,8 @@ const ENDPOINTS: Record<string, string> = {
   revgeocode: 'https://revgeocode.search.hereapi.com/v1/revgeocode',
   autosuggest: 'https://autosuggest.search.hereapi.com/v1/autosuggest',
   routes: 'https://router.hereapi.com/v8/routes',
+  // HERE Terrain / Elevation
+  elevation: 'https://terrain.hereapi.com/v1/elevation',
   // HERE Search API (Places/POI)
   discover: 'https://discover.search.hereapi.com/v1/discover',
   // HERE Public Transit API - only returns subway, bus, tram, ferry (no taxi/car)
@@ -251,7 +253,6 @@ export async function GET(request: NextRequest) {
         const routeTransportMode = searchParams.get('transportMode') || 'car';
         const departureTime = searchParams.get('departureTime') || new Date().toISOString();
         const alternatives = searchParams.get('alternatives');
-        const includeElevationProfile = searchParams.get('includeElevationProfile');
 
         if (!routeOrigin || !destination) {
           return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
@@ -264,12 +265,9 @@ export async function GET(request: NextRequest) {
         }
 
         // Build the URL with return parameters
-        // NOTE: HERE supports "elevationProfile" return for generating an elevation profile along the route.
-        // We only request it when explicitly enabled to keep payloads smaller for normal traffic.
-        const returnParams =
-          includeElevationProfile === '1' || includeElevationProfile === 'true'
-            ? 'polyline,summary,actions,instructions,elevationProfile'
-            : 'polyline,summary,actions,instructions';
+        // NOTE: Elevation profile is NOT available via `return` for some accounts/tenants and can cause 400s.
+        // We fetch elevation separately via the Terrain/Elevation API when needed.
+        const returnParams = 'polyline,summary,actions,instructions';
         
         // For truck routing, we need to build the URL carefully with proper parameter encoding
         if (routeTransportMode === 'truck') {
@@ -320,6 +318,91 @@ export async function GET(request: NextRequest) {
         
         console.log('HERE Routes API URL:', url.replace(HERE_API_KEY!, '***'));
         break;
+      }
+
+      case 'elevation': {
+        // Terrain / Elevation API: lookup elevation for a set of points.
+        // We accept points as `lat,lng;lat,lng;...`
+        const points = searchParams.get('points');
+        if (!points) {
+          return NextResponse.json({ error: 'points is required (lat,lng;lat,lng;...)' }, { status: 400 });
+        }
+
+        // Basic validation and caps to protect the service.
+        const pairs = points.split(';').filter(Boolean);
+        if (pairs.length === 0) {
+          return NextResponse.json({ error: 'Invalid points format' }, { status: 400 });
+        }
+        if (pairs.length > 120) {
+          return NextResponse.json({ error: 'Too many points (max 120)' }, { status: 400 });
+        }
+        for (const p of pairs) {
+          const [latS, lngS] = p.split(',').map((s) => s.trim());
+          const lat = Number(latS);
+          const lng = Number(lngS);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            return NextResponse.json({ error: 'Invalid points format' }, { status: 400 });
+          }
+          if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+            return NextResponse.json({ error: 'Point out of range' }, { status: 400 });
+          }
+        }
+
+        // Try a small set of known Terrain/Elevation hosts (entitlements can vary).
+        const candidates: string[] = [];
+        const attempts: Array<{ url: string; status: number; errorSnippet?: string }> = [];
+        const hosts = [
+          'https://terrain.hereapi.com/v1/elevation',
+          'https://elevation.hereapi.com/v1/elevation',
+        ];
+        for (const host of hosts) {
+          const u = new URL(host);
+          u.searchParams.set('apiKey', HERE_API_KEY!);
+          u.searchParams.set('points', points);
+          candidates.push(u.toString());
+        }
+
+        let lastErrText = '';
+        for (const candidateUrl of candidates) {
+          try {
+            const resp = await fetch(candidateUrl);
+            if (!resp.ok) {
+              lastErrText = await resp.text().catch(() => '');
+              attempts.push({
+                url: candidateUrl.replace(HERE_API_KEY!, '***'),
+                status: resp.status,
+                errorSnippet: lastErrText.slice(0, 400),
+              });
+              continue;
+            }
+            const data = await resp.json();
+            return NextResponse.json(
+              {
+                ...data,
+                __debug: {
+                  providerUrl: candidateUrl.replace(HERE_API_KEY!, '***'),
+                  pointCount: pairs.length,
+                  attempts,
+                },
+              },
+              { headers: { 'Cache-Control': 'public, max-age=300' } }
+            );
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            lastErrText = message;
+            attempts.push({
+              url: candidateUrl.replace(HERE_API_KEY!, '***'),
+              status: 0,
+              errorSnippet: message.slice(0, 400),
+            });
+            continue;
+          }
+        }
+
+        return NextResponse.json(
+          { error: 'Elevation lookup failed', details: lastErrText, __debug: { attempts } },
+          { status: 502 }
+        );
       }
 
       case 'transit': {
