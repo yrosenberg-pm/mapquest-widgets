@@ -346,7 +346,7 @@ export default function TruckRouting({
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[TruckRouting] HERE API error:', response.status, errorText);
-      throw new Error('Failed to get truck route from HERE');
+      throw new Error('Failed to get truck route');
     }
 
     const data = await response.json();
@@ -381,7 +381,7 @@ export default function TruckRouting({
       const withElevation = candidates.filter((c) => typeof c.maxElevationMeters === 'number' && Number.isFinite(c.maxElevationMeters));
 
       if (withElevation.length === 0) {
-        note = 'Elevation limit is set, but HERE did not return elevation profile data for this route.';
+        note = 'Elevation limit is set, but elevation profile data is unavailable for this route.';
       } else {
         const ok = withElevation.find((c) => (c.maxElevationMeters as number) <= ceilingM);
         if (ok) {
@@ -863,7 +863,7 @@ export default function TruckRouting({
                         </span>
                       </div>
                       <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                        If set, we’ll request HERE route alternatives and pick one whose max elevation stays under this ceiling.
+                        If set, we’ll request route alternatives and pick one whose max elevation stays under this ceiling.
                       </p>
                     </div>
                   </div>
@@ -1168,7 +1168,7 @@ export default function TruckRouting({
                       background: 'var(--bg-panel)',
                       color: 'var(--text-muted)',
                     }}
-                    title="Maximum elevation along the selected route (from HERE elevation profile)"
+                    title="Maximum elevation along the selected route (from the route elevation profile)"
                   >
                     Max elev: {Math.round(routeMaxElevationFt).toLocaleString()} ft
                   </span>
