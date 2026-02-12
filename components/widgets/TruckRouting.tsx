@@ -300,6 +300,8 @@ export default function TruckRouting({
   );
   const [elevationNote, setElevationNote] = useState<string | null>(null);
   const [routeMaxElevationFt, setRouteMaxElevationFt] = useState<number | null>(null);
+  const lastAutoRecalcKeyRef = useRef<string | null>(null);
+  const pendingAutoRecalcKeyRef = useRef<string | null>(null);
 
   // Vehicle profile state
   const [vehicle, setVehicle] = useState<VehicleProfile>({
@@ -597,7 +599,7 @@ export default function TruckRouting({
   const DEMO_DONNER_TO = 'Reno, NV';
   const DEMO_DONNER_MAX_ELEV_FT = 5600;
 
-  const calculateRoute = async (opts?: { from?: string; to?: string; applyInputs?: boolean }) => {
+  const calculateRoute = async (opts?: { from?: string; to?: string; applyInputs?: boolean; preferSelectedCoords?: boolean }) => {
     const fromValue = (opts?.from ?? from).trim();
     const toValue = (opts?.to ?? to).trim();
 
@@ -625,30 +627,41 @@ export default function TruckRouting({
     setRoutePolyline(undefined);
 
     try {
-      const [fromResult, toResult] = await Promise.all([
-        geocode(fromValue),
-        geocode(toValue),
-      ]);
+      // If we already have selected coordinates (from autocomplete selection),
+      // prefer those for rerouting (prevents re-geocoding + state churn loops).
+      let fromLoc: { lat: number; lng: number } | null = null;
+      let toLoc: { lat: number; lng: number } | null = null;
 
-      if (!fromResult?.lat || !fromResult?.lng) {
-        throw new Error('Could not find start location');
+      if (opts?.preferSelectedCoords && fromCoords && toCoords) {
+        fromLoc = fromCoords;
+        toLoc = toCoords;
+      } else {
+        const [fromResult, toResult] = await Promise.all([
+          geocode(fromValue),
+          geocode(toValue),
+        ]);
+
+        if (!fromResult?.lat || !fromResult?.lng) {
+          throw new Error('Could not find start location');
+        }
+        if (!toResult?.lat || !toResult?.lng) {
+          throw new Error('Could not find destination');
+        }
+
+        fromLoc = { lat: fromResult.lat, lng: fromResult.lng };
+        toLoc = { lat: toResult.lat, lng: toResult.lng };
+
+        // Only update coords state if it actually changed (prevents reroute loops).
+        setFromCoords((prev) => (prev && prev.lat === fromLoc!.lat && prev.lng === fromLoc!.lng ? prev : fromLoc));
+        setToCoords((prev) => (prev && prev.lat === toLoc!.lat && prev.lng === toLoc!.lng ? prev : toLoc));
       }
-      if (!toResult?.lat || !toResult?.lng) {
-        throw new Error('Could not find destination');
-      }
-
-      const fromLoc = { lat: fromResult.lat, lng: fromResult.lng };
-      const toLoc = { lat: toResult.lat, lng: toResult.lng };
-
-      setFromCoords(fromLoc);
-      setToCoords(toLoc);
 
       let directions;
       
       // Use routing API for better truck routing (with vehicle dimension restrictions)
       if (useHereRouting) {
         try {
-          directions = await getHereTruckDirections(fromLoc, toLoc, vehicle, departureTime, maxElevationFt);
+          directions = await getHereTruckDirections(fromLoc!, toLoc!, vehicle, departureTime, maxElevationFt);
           if (directions.polyline && directions.polyline.length > 0) {
             setRoutePolyline(directions.polyline);
           } else {
@@ -659,8 +672,8 @@ export default function TruckRouting({
           setRoutePolyline(undefined);
           // Fallback to MapQuest
           directions = await getMapQuestTruckDirections(
-        `${fromLoc.lat},${fromLoc.lng}`, 
-        `${toLoc.lat},${toLoc.lng}`, 
+            `${fromLoc!.lat},${fromLoc!.lng}`, 
+            `${toLoc!.lat},${toLoc!.lng}`, 
         vehicle,
         departureTime
       );
@@ -670,8 +683,8 @@ export default function TruckRouting({
       } else {
         setRoutePolyline(undefined);
         directions = await getMapQuestTruckDirections(
-          `${fromLoc.lat},${fromLoc.lng}`, 
-          `${toLoc.lat},${toLoc.lng}`, 
+          `${fromLoc!.lat},${fromLoc!.lng}`, 
+          `${toLoc!.lat},${toLoc!.lng}`, 
           vehicle,
           departureTime
         );
@@ -727,19 +740,43 @@ export default function TruckRouting({
     }
   }, [vehicle, departureTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-recalculate when elevation ceiling changes (even if user hasn't pressed the button again).
+  // Auto-recalculate when elevation ceiling changes (exactly once per distinct input state).
   // Debounced so typing doesn't spam requests.
   useEffect(() => {
-    // Only auto-run once we have coordinates selected (prevents running while user is still typing).
     if (!fromCoords || !toCoords) return;
     if (!from.trim() || !to.trim()) return;
 
+    const key = `${fromCoords.lat.toFixed(6)},${fromCoords.lng.toFixed(6)}|${toCoords.lat.toFixed(6)},${toCoords.lng.toFixed(6)}|${maxElevationFt ?? 'none'}`;
+    if (key === lastAutoRecalcKeyRef.current) return;
+
+    // If a request is currently running, queue the latest key and run once after loading completes.
+    pendingAutoRecalcKeyRef.current = key;
+    if (loading) return;
+
     const t = window.setTimeout(() => {
-      calculateRoute();
+      const pending = pendingAutoRecalcKeyRef.current;
+      if (!pending) return;
+      lastAutoRecalcKeyRef.current = pending;
+      pendingAutoRecalcKeyRef.current = null;
+      calculateRoute({ preferSelectedCoords: true });
     }, 650);
 
     return () => window.clearTimeout(t);
-  }, [maxElevationFt, fromCoords, toCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [maxElevationFt, fromCoords, toCoords, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // If a queued elevation change exists, run it once when loading finishes.
+  useEffect(() => {
+    if (loading) return;
+    const pending = pendingAutoRecalcKeyRef.current;
+    if (!pending) return;
+    if (pending === lastAutoRecalcKeyRef.current) {
+      pendingAutoRecalcKeyRef.current = null;
+      return;
+    }
+    lastAutoRecalcKeyRef.current = pending;
+    pendingAutoRecalcKeyRef.current = null;
+    calculateRoute({ preferSelectedCoords: true });
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mark that we've calculated when route is set
   useEffect(() => {
