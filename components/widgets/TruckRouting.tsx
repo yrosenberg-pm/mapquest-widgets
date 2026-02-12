@@ -295,6 +295,7 @@ export default function TruckRouting({
   const [useHereRouting, setUseHereRouting] = useState(true); // Default to provider routing for better truck restrictions support
   const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | undefined>(undefined);
   const [demoMode, setDemoMode] = useState(false);
+  const [demoScenario, setDemoScenario] = useState<'durham' | 'donner' | null>(null);
   const [maxElevationFt, setMaxElevationFt] = useState<number | null>(
     typeof defaultMaxElevationFt === 'number' && Number.isFinite(defaultMaxElevationFt) ? defaultMaxElevationFt : null
   );
@@ -339,7 +340,8 @@ export default function TruckRouting({
     toCoords: { lat: number; lng: number },
     vehicleProfile: VehicleProfile,
     departure?: 'now' | Date,
-    elevationCeilingFt?: number | null
+    elevationCeilingFt?: number | null,
+    via?: string[]
   ) => {
     // Convert dimensions to centimeters for routing API
     const heightCm = Math.round(vehicleProfile.height * 30.48); // feet to cm
@@ -371,6 +373,10 @@ export default function TruckRouting({
       truckWeight: weightKg.toString(),
       truckAxles: vehicleProfile.axleCount.toString(),
     });
+
+    if (via?.length) {
+      for (const v of via) params.append('via', v);
+    }
 
     // If elevation is configured, ask for alternatives.
     if (elevationCeilingFt != null) {
@@ -598,6 +604,12 @@ export default function TruckRouting({
   const DEMO_DONNER_FROM = 'Sacramento, CA';
   const DEMO_DONNER_TO = 'Reno, NV';
   const DEMO_DONNER_MAX_ELEV_FT = 5600;
+  // Low-elevation corridor via Feather River Canyon / Beckwourth Pass area (approx).
+  // These `via` points make the demo deterministic: ceilings below ~5600 ft will route around the high summit corridor.
+  const DEMO_DONNER_LOW_VIA: string[] = [
+    '39.9368,-120.9472', // Quincy, CA
+    '39.8107,-120.4694', // Portola, CA
+  ];
 
   const calculateRoute = async (opts?: { from?: string; to?: string; applyInputs?: boolean; preferSelectedCoords?: boolean }) => {
     const fromValue = (opts?.from ?? from).trim();
@@ -661,7 +673,14 @@ export default function TruckRouting({
       // Use routing API for better truck routing (with vehicle dimension restrictions)
       if (useHereRouting) {
         try {
-          directions = await getHereTruckDirections(fromLoc!, toLoc!, vehicle, departureTime, maxElevationFt);
+          const via =
+            demoScenario === 'donner' &&
+            maxElevationFt != null &&
+            maxElevationFt < DEMO_DONNER_MAX_ELEV_FT
+              ? DEMO_DONNER_LOW_VIA
+              : undefined;
+
+          directions = await getHereTruckDirections(fromLoc!, toLoc!, vehicle, departureTime, maxElevationFt, via);
           if (directions.polyline && directions.polyline.length > 0) {
             setRoutePolyline(directions.polyline);
           } else {
@@ -1002,6 +1021,7 @@ export default function TruckRouting({
                       type="button"
                       onClick={() => {
                         setDemoMode(true);
+                        setDemoScenario('durham');
                         setMaxElevationFt(null);
                         calculateRoute({ from: DEMO_FROM, to: DEMO_TO, applyInputs: true });
                       }}
@@ -1020,6 +1040,7 @@ export default function TruckRouting({
                       type="button"
                       onClick={() => {
                         setDemoMode(true);
+                        setDemoScenario('donner');
                         setMaxElevationFt(DEMO_DONNER_MAX_ELEV_FT);
                         calculateRoute({ from: DEMO_DONNER_FROM, to: DEMO_DONNER_TO, applyInputs: true });
                       }}
@@ -1053,6 +1074,7 @@ export default function TruckRouting({
                   value={from}
                     onChange={(v) => {
                       if (demoMode) setDemoMode(false);
+                      if (demoScenario) setDemoScenario(null);
                       setFrom(v);
                       setFromCoords(null);
                       setRoute(null);
@@ -1102,6 +1124,7 @@ export default function TruckRouting({
                   value={to}
                     onChange={(v) => {
                       if (demoMode) setDemoMode(false);
+                      if (demoScenario) setDemoScenario(null);
                       setTo(v);
                       setToCoords(null);
                       setRoute(null);

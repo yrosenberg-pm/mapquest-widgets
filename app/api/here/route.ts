@@ -253,6 +253,7 @@ export async function GET(request: NextRequest) {
         const routeTransportMode = searchParams.get('transportMode') || 'car';
         const departureTime = searchParams.get('departureTime') || new Date().toISOString();
         const alternatives = searchParams.get('alternatives');
+        const viaList = searchParams.getAll('via').filter(Boolean);
 
         if (!routeOrigin || !destination) {
           return NextResponse.json({ error: 'Origin and destination are required' }, { status: 400 });
@@ -289,6 +290,7 @@ export async function GET(request: NextRequest) {
           urlParams.set('return', returnParams);
           urlParams.set('departureTime', departureTime);
           if (alternatives) urlParams.set('alternatives', alternatives);
+          for (const via of viaList) urlParams.append('via', via);
           
           // Truck dimensions and attributes
           // Note: HERE v8 uses truck[height] etc. - brackets get URL encoded automatically
@@ -313,7 +315,8 @@ export async function GET(request: NextRequest) {
           console.log('  Full URL params:', urlParams.toString());
         } else {
           const alt = alternatives ? `&alternatives=${encodeURIComponent(alternatives)}` : '';
-          url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}${alt}`;
+          const viaQuery = viaList.map((v) => `&via=${encodeURIComponent(v)}`).join('');
+          url = `${ENDPOINTS.routes}?apiKey=${HERE_API_KEY}&origin=${routeOrigin}&destination=${destination}&transportMode=${routeTransportMode}&return=${returnParams}&departureTime=${encodeURIComponent(departureTime)}${alt}${viaQuery}`;
         }
         
         console.log('HERE Routes API URL:', url.replace(HERE_API_KEY!, '***'));
