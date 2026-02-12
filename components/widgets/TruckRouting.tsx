@@ -721,14 +721,15 @@ export default function TruckRouting({
 
   return (
     <div 
-      className="prism-widget w-full md:w-[950px]"
+      className="prism-widget w-full md:w-[1120px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <div className="flex flex-col md:flex-row md:h-[835px]">
+      {/* Wider + shorter (avoid page scroll; keep settings visible) */}
+      <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map - shown first on mobile */}
         <div className="h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
@@ -748,12 +749,12 @@ export default function TruckRouting({
         </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-96 flex flex-col border-t md:border-t-0 md:border-r md:order-1"
+          className="w-full md:w-[440px] flex flex-col border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header */}
           <div 
-            className="p-4 flex-shrink-0"
+            className="p-3 flex-shrink-0"
             style={{ 
               borderBottom: '1px solid var(--border-subtle)',
               background: 'var(--bg-panel)',
@@ -761,7 +762,7 @@ export default function TruckRouting({
           >
             <div className="flex items-center gap-3">
               <div 
-                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                className="w-9 h-9 rounded-xl flex items-center justify-center"
                 style={{ background: `${accentColor}15` }}
               >
                 <span style={{ color: accentColor }}><Truck className="w-5 h-5" /></span>
@@ -783,7 +784,7 @@ export default function TruckRouting({
           {/* Body: keep inputs visible; make results scroll when needed */}
           <div className="flex-1 min-h-0 flex flex-col">
             {/* Controls (no scrolling) */}
-            <div className="p-4 space-y-3 flex-shrink-0" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
+            <div className="p-3 space-y-2 flex-shrink-0" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
               {/* Vehicle Profile Section */}
               <div className="rounded-2xl" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
                 <button
@@ -813,7 +814,7 @@ export default function TruckRouting({
                     </div>
 
                     {/* Vehicle Inputs */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                       <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
                       <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
                       <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
@@ -822,7 +823,7 @@ export default function TruckRouting({
                     </div>
 
                     {/* Compact warning */}
-                    <div className="mt-3 flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--color-warning-bg)' }}>
+                    <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--color-warning-bg)' }}>
                       <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
                       <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
                         Avoids low bridges and restricted roads using your vehicle profile.
@@ -830,7 +831,7 @@ export default function TruckRouting({
                     </div>
 
                     {/* Elevation constraint */}
-                    <div className="mt-3">
+                    <div className="mt-2">
                       <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
                         Max elevation (optional)
                       </label>
@@ -870,7 +871,7 @@ export default function TruckRouting({
               </div>
 
               {/* Address Inputs */}
-              <div className="rounded-2xl p-4" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+              <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
                     Route
@@ -1005,7 +1006,7 @@ export default function TruckRouting({
               </div>
 
               {/* Departure Time */}
-              <div className="mt-3 relative">
+              <div className="mt-2 relative">
                 <button
                   onClick={() => setShowDepartureOptions(!showDepartureOptions)}
                   className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
