@@ -688,7 +688,7 @@ export default function TruckRouting({
     const constraint = constraints[field];
     return (
       <div>
-        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
+        <label className="text-[11px] font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
           {label}
         </label>
         <div className="flex items-center gap-2">
@@ -704,14 +704,14 @@ export default function TruckRouting({
                 setVehicle(prev => ({ ...prev, [field]: newValue }));
               }
             }}
-            className="w-full px-3 py-2 rounded-lg text-sm font-medium"
+            className="w-full px-3 py-1.5 rounded-lg text-sm font-medium tabular-nums"
             style={{
               background: 'var(--bg-input)',
               border: '1px solid var(--border-subtle)',
               color: 'var(--text-main)',
             }}
           />
-          <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '30px' }}>
+          <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '24px' }}>
             {unit}
           </span>
         </div>
@@ -808,18 +808,25 @@ export default function TruckRouting({
                 {showVehicleSettings && (
                   <div className="px-4 pb-4">
                     <div className="flex items-center justify-between gap-3 mb-3">
-                      <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-                        {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L · {vehicle.weight} tons · {vehicle.axleCount} axles
-                      </p>
+                      <div className="text-[11px] font-medium leading-snug" style={{ color: 'var(--text-secondary)' }}>
+                        <div>
+                          {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L
+                        </div>
+                        <div>
+                          {vehicle.weight} tons · {vehicle.axleCount} axles
+                        </div>
+                      </div>
                     </div>
 
                     {/* Vehicle Inputs */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
                       <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
                       <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
                       <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
-                      <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
+                      <div className="col-span-2">
+                        <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
+                      </div>
                     </div>
 
                     {/* Compact warning */}
