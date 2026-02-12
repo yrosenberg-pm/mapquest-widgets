@@ -372,7 +372,7 @@ export default function TruckRouting({
 
     // If elevation is configured, ask for alternatives.
     if (elevationCeilingFt != null) {
-      params.set('alternatives', '3');
+      params.set('alternatives', '5');
     }
 
     // Add departure time if specified
@@ -725,7 +725,21 @@ export default function TruckRouting({
     if (hasCalculatedRef.current && from.trim() && to.trim()) {
       calculateRoute();
     }
-  }, [vehicle, departureTime, maxElevationFt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [vehicle, departureTime]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-recalculate when elevation ceiling changes (even if user hasn't pressed the button again).
+  // Debounced so typing doesn't spam requests.
+  useEffect(() => {
+    // Only auto-run once we have coordinates selected (prevents running while user is still typing).
+    if (!fromCoords || !toCoords) return;
+    if (!from.trim() || !to.trim()) return;
+
+    const t = window.setTimeout(() => {
+      calculateRoute();
+    }, 650);
+
+    return () => window.clearTimeout(t);
+  }, [maxElevationFt, fromCoords, toCoords]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mark that we've calculated when route is set
   useEffect(() => {
@@ -868,7 +882,7 @@ export default function TruckRouting({
               </span>
             </button>
 
-              {showVehicleSettings && (
+            {showVehicleSettings && (
                   <div className="px-4 pb-4 max-h-[200px] overflow-y-auto prism-scrollbar">
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <div className="text-[11px] font-medium leading-snug" style={{ color: 'var(--text-secondary)' }}>
