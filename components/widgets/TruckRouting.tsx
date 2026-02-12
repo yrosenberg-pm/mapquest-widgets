@@ -267,6 +267,22 @@ async function getMaxElevationFeetForPolyline(polyline: Array<{ lat: number; lng
   return metersToFeet(maxM);
 }
 
+function concatPolylines(chunks: Array<Array<{ lat: number; lng: number }>>) {
+  const out: Array<{ lat: number; lng: number }> = [];
+  for (const chunk of chunks) {
+    if (!chunk.length) continue;
+    if (!out.length) {
+      out.push(...chunk);
+      continue;
+    }
+    const last = out[out.length - 1];
+    const first = chunk[0];
+    const isDup = last.lat === first.lat && last.lng === first.lng;
+    out.push(...(isDup ? chunk.slice(1) : chunk));
+  }
+  return out;
+}
+
 export default function TruckRouting({
   defaultFrom = '',
   defaultTo = '',
@@ -418,23 +434,24 @@ export default function TruckRouting({
 
     const routes = Array.isArray(data.routes) ? data.routes : [];
     const candidates = routes.map((r: any) => {
-      const section = r?.sections?.[0];
-      const encodedPolyline = section?.polyline;
-      let decodedPolyline: { lat: number; lng: number }[] = [];
-
-      if (encodedPolyline) {
+      const sections = Array.isArray(r?.sections) ? r.sections : [];
+      const decodedSections: Array<Array<{ lat: number; lng: number }>> = [];
+      for (const s of sections) {
+        const encoded = s?.polyline;
+        if (!encoded) continue;
         try {
-          decodedPolyline = decodeHerePolyline(encodedPolyline);
+          decodedSections.push(decodeHerePolyline(encoded));
         } catch (err) {
           console.error('[TruckRouting] Failed to decode polyline:', err);
         }
       }
+      const decodedPolyline = concatPolylines(decodedSections);
 
       // Legacy fallback if elevation ever returns in routing response
       const samplesM = extractElevationSamplesMeters(r);
       const maxM = samplesM.length > 0 ? Math.max(...samplesM) : null;
 
-      return { raw: r, section, decodedPolyline, legacyMaxElevationMeters: maxM };
+      return { raw: r, sections, decodedPolyline, legacyMaxElevationMeters: maxM };
     });
 
     let chosen = candidates[0];
@@ -490,24 +507,28 @@ export default function TruckRouting({
       console.log('[TruckRouting] Route notices:', route.notices);
     }
     
-    const section = chosen.section ?? route.sections[0];
+    const sections = chosen.sections?.length ? chosen.sections : route.sections;
+    if (!sections || sections.length === 0) {
+      throw new Error('No route sections returned from routing API');
+    }
+    const section0 = sections[0];
     
     // Log section notices if any (these might contain restriction warnings)
-    if (section.notices) {
-      console.log('[TruckRouting] Section notices:', section.notices);
-      section.notices.forEach((notice: any) => {
+    if (section0.notices) {
+      console.log('[TruckRouting] Section notices:', section0.notices);
+      section0.notices.forEach((notice: any) => {
         console.log('[TruckRouting] Notice:', notice.title, '-', notice.code);
       });
     }
     
     // Log transport info for debugging
-    if (section.transport) {
-      console.log('[TruckRouting] Transport mode:', section.transport.mode);
+    if (section0.transport) {
+      console.log('[TruckRouting] Transport mode:', section0.transport.mode);
     }
     
     // Check if there are any truck-related attributes in the response
-    if (section.truck) {
-      console.log('[TruckRouting] Truck info in response:', section.truck);
+    if (section0.truck) {
+      console.log('[TruckRouting] Truck info in response:', section0.truck);
     }
     
     const decodedPolyline = chosen.decodedPolyline ?? [];
@@ -516,17 +537,22 @@ export default function TruckRouting({
     }
     
     // Parse instructions
-    const steps = section.actions?.map((action: any) => ({
+    const allActions = sections.flatMap((s: any) => s?.actions || []);
+    const steps = allActions.map((action: any) => ({
       narrative: action.instruction || action.action,
       distance: (action.length || 0) / 1609.34, // meters to miles
       time: (action.duration || 0) / 60, // seconds to minutes
-    })) || [];
+    }));
+
+    const totalLengthM = sections.reduce((sum: number, s: any) => sum + (s?.summary?.length || 0), 0);
+    const totalDurationS = sections.reduce((sum: number, s: any) => sum + (s?.summary?.duration || 0), 0);
+    const hasTolls = sections.some((s: any) => Array.isArray(s?.tolls) && s.tolls.length > 0);
 
     return {
-      distance: (section.summary?.length || 0) / 1609.34, // meters to miles
-      time: (section.summary?.duration || 0) / 60, // seconds to minutes
-      fuelUsed: section.summary?.consumption,
-      hasTolls: section.tolls && section.tolls.length > 0,
+      distance: totalLengthM / 1609.34, // meters to miles
+      time: totalDurationS / 60, // seconds to minutes
+      fuelUsed: section0.summary?.consumption,
+      hasTolls,
       hasHighway: true, // Provider doesn't provide this directly
       steps,
       polyline: decodedPolyline, // Decoded coordinates array
@@ -601,8 +627,8 @@ export default function TruckRouting({
 
   const DEMO_FROM = '126 S Gregson St, Durham, NC 27701';
   const DEMO_TO = '310 S Gregson St, Durham, NC 27701';
-  const DEMO_DONNER_FROM = 'Sacramento, CA';
-  const DEMO_DONNER_TO = 'Reno, NV';
+  const DEMO_DONNER_FROM = '700 Capitol Mall, Sacramento, CA 95814';
+  const DEMO_DONNER_TO = '100 N Sierra St, Reno, NV 89503';
   const DEMO_DONNER_MAX_ELEV_FT = 5600;
   // Low-elevation corridor via Feather River Canyon / Beckwourth Pass area (approx).
   // These `via` points make the demo deterministic: ceilings below ~5600 ft will route around the high summit corridor.
