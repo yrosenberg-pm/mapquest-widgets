@@ -61,7 +61,7 @@ interface TruckRoutingProps {
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-// HERE Flexible Polyline decoder
+// Flexible Polyline decoder (provider format)
 // Based on https://github.com/heremaps/flexible-polyline
 function decodeHerePolyline(encoded: string): { lat: number; lng: number }[] {
   const DECODING_TABLE = [
@@ -191,7 +191,7 @@ function feetToMeters(ft: number) {
 }
 
 function extractElevationSamplesMeters(route: any): number[] {
-  // NOTE: HERE Routing v8 elevation profile response shape can vary.
+  // NOTE: Routing elevation profile response shape can vary by provider/config.
   // We handle a few common patterns defensively.
   const out: number[] = [];
 
@@ -249,7 +249,7 @@ export default function TruckRouting({
   const [showVehicleSettings, setShowVehicleSettings] = useState(true);
   const [departureTime, setDepartureTime] = useState<'now' | Date>('now');
   const [showDepartureOptions, setShowDepartureOptions] = useState(false);
-  const [useHereRouting, setUseHereRouting] = useState(true); // Default to HERE for better truck routing
+  const [useHereRouting, setUseHereRouting] = useState(true); // Default to provider routing for better truck restrictions support
   const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | undefined>(undefined);
   const [demoMode, setDemoMode] = useState(false);
   const [maxElevationFt, setMaxElevationFt] = useState<number | null>(
@@ -288,7 +288,7 @@ export default function TruckRouting({
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
 
-  // Get truck directions using HERE Routing API (better truck restrictions support)
+  // Get truck directions using routing API (better truck restrictions support)
   const getHereTruckDirections = async (
     fromCoords: { lat: number; lng: number },
     toCoords: { lat: number; lng: number },
@@ -296,7 +296,7 @@ export default function TruckRouting({
     departure?: 'now' | Date,
     elevationCeilingFt?: number | null
   ) => {
-    // Convert dimensions to centimeters for HERE API
+    // Convert dimensions to centimeters for routing API
     const heightCm = Math.round(vehicleProfile.height * 30.48); // feet to cm
     const widthCm = Math.round(vehicleProfile.width * 30.48);
     const lengthCm = Math.round(vehicleProfile.length * 30.48);
@@ -327,7 +327,7 @@ export default function TruckRouting({
       truckAxles: vehicleProfile.axleCount.toString(),
     });
 
-    // If elevation is configured, ask HERE for alternatives and elevation profile data.
+    // If elevation is configured, ask for alternatives and elevation profile data.
     if (elevationCeilingFt != null) {
       params.set('alternatives', '3');
       params.set('includeElevationProfile', '1');
@@ -340,27 +340,27 @@ export default function TruckRouting({
       params.append('departureTime', new Date().toISOString());
     }
 
-    console.log('[TruckRouting] HERE request URL:', `/api/here?${params.toString()}`);
+    console.log('[TruckRouting] Routing request URL:', `/api/here?${params.toString()}`);
     const response = await fetch(`/api/here?${params.toString()}`);
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[TruckRouting] HERE API error:', response.status, errorText);
+      console.error('[TruckRouting] Routing API error:', response.status, errorText);
       throw new Error('Failed to get truck route');
     }
 
     const data = await response.json();
-    console.log('[TruckRouting] HERE API full response:', JSON.stringify(data, null, 2));
+    console.log('[TruckRouting] Routing API full response:', JSON.stringify(data, null, 2));
     
     // Check for notices (warnings about route)
     if (data.notices) {
-      console.log('[TruckRouting] HERE API notices:', data.notices);
+      console.log('[TruckRouting] Routing API notices:', data.notices);
     }
     
     if (!data.routes || data.routes.length === 0) {
       // Check if there's an error message
       if (data.error) {
-        console.error('[TruckRouting] HERE API error:', data.error);
+        console.error('[TruckRouting] Routing API error:', data.error);
         throw new Error(data.error.message || 'Failed to calculate truck route');
       }
       throw new Error('No truck-safe route found. Try adjusting vehicle dimensions.');
@@ -453,7 +453,7 @@ export default function TruckRouting({
       time: (section.summary?.duration || 0) / 60, // seconds to minutes
       fuelUsed: section.summary?.consumption,
       hasTolls: section.tolls && section.tolls.length > 0,
-      hasHighway: true, // HERE doesn't provide this directly
+      hasHighway: true, // Provider doesn't provide this directly
       steps,
       polyline: decodedPolyline, // Decoded coordinates array
       maxElevationFt:
@@ -582,7 +582,7 @@ export default function TruckRouting({
 
       let directions;
       
-      // Use HERE API for better truck routing (with vehicle dimension restrictions)
+      // Use routing API for better truck routing (with vehicle dimension restrictions)
       if (useHereRouting) {
         try {
           directions = await getHereTruckDirections(fromLoc, toLoc, vehicle, departureTime, maxElevationFt);
@@ -592,7 +592,7 @@ export default function TruckRouting({
             setRoutePolyline(undefined);
           }
         } catch (hereErr) {
-          console.warn('[TruckRouting] HERE routing failed, falling back to MapQuest:', hereErr);
+          console.warn('[TruckRouting] Routing failed, falling back to MapQuest:', hereErr);
           setRoutePolyline(undefined);
           // Fallback to MapQuest
           directions = await getMapQuestTruckDirections(
