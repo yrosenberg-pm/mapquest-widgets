@@ -6,6 +6,7 @@ import { CheckCircle2, AlertTriangle, XCircle, Loader2, ShoppingBag, Lock, MapPi
 import MapQuestMap from './MapQuestMap';
 import { geocode } from '@/lib/mapquest';
 import { useAddressAutocomplete } from '@/hooks/useAddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
 
 type ValidationState = 'idle' | 'verifying' | 'verified' | 'suggestion' | 'invalid';
 
@@ -404,18 +405,14 @@ export default function CheckoutFlowWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Checkout Flow" subtitle="Address autocomplete, validation, and delivery map preview." />
       <div className="flex flex-col md:flex-row md:h-[805px]">
         {/* Left: Shipping form */}
         <div className="w-full md:flex-1 border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="font-bold text-base" style={{ color: 'var(--text-main)' }}>
-                  Checkout
-                </h3>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Address autocomplete + validation + map preview
-                </p>
+                <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>Shipping</div>
               </div>
               <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
                 <Lock className="w-4 h-4" style={{ color: accentColor }} />
@@ -723,26 +720,37 @@ export default function CheckoutFlowWidget({
             </div>
           </div>
 
-          {showBranding && (
-            <div className="prism-footer">
-              {companyLogo && (
-                <img
-                  src={companyLogo}
-                  alt={companyName || 'Company logo'}
-                  className="prism-footer-logo"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-              <span>
-                {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-                Powered by <strong>MapQuest</strong>
-              </span>
-            </div>
-          )}
         </div>
       </div>
+
+      {showBranding && (
+        <div className="prism-footer">
+          {companyLogo && (
+            <img
+              src={companyLogo}
+              alt={companyName || 'Company logo'}
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span aria-label="Powered by MapQuest">
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by
+          </span>
+          <img
+            src="/brand/mapquest-footer-light.svg"
+            alt="MapQuest"
+            className="prism-footer-logo prism-footer-logo--light"
+          />
+          <img
+            src="/brand/mapquest-footer-dark.svg"
+            alt="MapQuest"
+            className="prism-footer-logo prism-footer-logo--dark"
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -117,9 +117,11 @@ export default function WidgetShell({
               )}
               {title && (
                 <div>
-                  <h2 className="prism-header-title">{title}</h2>
+                  <h2 className="prism-header-title" style={{ fontSize: '15px', lineHeight: '20px' }}>
+                    {title}
+                  </h2>
                   {subtitle && (
-                    <p className="prism-text-muted" style={{ fontSize: 'var(--text-sm)' }}>
+                    <p className="prism-text-muted" style={{ fontSize: '12px', lineHeight: '16px', marginTop: 2 }}>
                       {subtitle}
                     </p>
                   )}
@@ -150,10 +152,20 @@ export default function WidgetShell({
                 }}
               />
             )}
-            <span>
+            <span aria-label="Powered by MapQuest">
               {companyName && <span style={{ fontWeight: 500 }}>{companyName} · </span>}
-              {footerText || 'Powered by'} <strong>MapQuest</strong>
+              {footerText || 'Powered by'}
             </span>
+            <img
+              src="/brand/mapquest-footer-light.svg"
+              alt="MapQuest"
+              className="prism-footer-logo prism-footer-logo--light"
+            />
+            <img
+              src="/brand/mapquest-footer-dark.svg"
+              alt="MapQuest"
+              className="prism-footer-logo prism-footer-logo--dark"
+            />
           </div>
         )}
       </div>

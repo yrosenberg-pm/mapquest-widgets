@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BatteryCharging, Bolt, CheckCircle2, CircleDashed, Filter, Loader2, MapPin, PlugZap, Route, XCircle } from 'lucide-react';
 import AddressAutocomplete from '../AddressAutocomplete';
 import MapQuestMap from './MapQuestMap';
+import WidgetHeader from './WidgetHeader';
 
 type VehiclePresetId =
   | 'tesla-model-3'
@@ -1084,21 +1085,14 @@ export default function EVChargingPlanner({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="EV Charging Planner" subtitle="Plan an EV trip with charger discovery and range checks." />
       <div className="flex flex-col md:flex-row md:h-[684px]">
         {/* Left panel */}
         <div className="w-full md:w-[400px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: border }}>
           <div className="p-4" style={{ borderBottom: `1px solid ${border}` }}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="font-bold text-base truncate" style={{ color: textMain }}>
-                  EV Trip Planner
-                </h3>
-                <p className="text-xs mt-0.5" style={{ color: textMuted }}>
-                  Charger discovery + range checks + auto charging stops
-                </p>
-              </div>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accentColor}12`, color: accentColor }}>
-                <BatteryCharging className="w-4 h-4" />
+                <div className="text-sm font-semibold" style={{ color: textMain }}>Controls</div>
               </div>
             </div>
 
@@ -1738,25 +1732,6 @@ export default function EVChargingPlanner({
               </div>
             )}
           </div>
-
-          {showBranding && (
-            <div className="prism-footer">
-              {companyLogo && (
-                <img
-                  src={companyLogo}
-                  alt={companyName || 'Company logo'}
-                  className="prism-footer-logo"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-              <span>
-                {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-                Powered by <strong>MapQuest</strong>
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Map */}
@@ -1808,6 +1783,27 @@ export default function EVChargingPlanner({
           )}
         </div>
       </div>
+
+      {showBranding && (
+        <div className="prism-footer">
+          {companyLogo && (
+            <img
+              src={companyLogo}
+              alt={companyName || 'Company logo'}
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span aria-label="Powered by MapQuest">
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by
+          </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+        </div>
+      )}
     </div>
   );
 }

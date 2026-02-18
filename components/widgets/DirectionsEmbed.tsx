@@ -6,6 +6,7 @@ import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp,
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
 
 interface RouteStep {
   narrative: string;
@@ -189,6 +190,7 @@ export default function DirectionsEmbed({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Directions" subtitle="Get a route, ETA, and turn-by-turn directions." />
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map - shown first on mobile */}
         <div className="h-[300px] md:h-auto md:flex-1 md:order-2">
@@ -211,30 +213,6 @@ export default function DirectionsEmbed({
           className="w-full md:w-80 flex flex-col border-t md:border-t-0 md:border-r overflow-y-auto md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
-          {/* Header */}
-          <div 
-            className="p-5 flex-shrink-0"
-            style={{ 
-              borderBottom: '1px solid var(--border-subtle)',
-              background: 'var(--bg-panel)',
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <div 
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: `${accentColor}15` }}
-              >
-                <span style={{ color: accentColor }}><Navigation className="w-4 h-4" /></span>
-              </div>
-              <h3 
-                className="font-bold text-lg"
-                style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
-              >
-                Get Directions
-              </h3>
-            </div>
-          </div>
-
           {/* Inputs */}
           <div 
             className="p-5 flex-shrink-0"
@@ -634,10 +612,12 @@ export default function DirectionsEmbed({
               }}
             />
           )}
-          <span>
+          <span aria-label="Powered by MapQuest">
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
+            Powered by
           </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
         </div>
       )}
     </div>

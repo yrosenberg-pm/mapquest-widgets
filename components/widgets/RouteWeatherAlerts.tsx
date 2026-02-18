@@ -21,6 +21,7 @@ import {
   Link2,
 } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
+import WidgetHeader from './WidgetHeader';
 
 type Severity = 'warning' | 'watch' | 'advisory';
 
@@ -1042,16 +1043,14 @@ export default function RouteWeatherAlerts({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Route Weather Alerts" subtitle="See forecast and active alerts along a route." />
       <div className="flex flex-col md:flex-row md:h-[870px]">
         {/* Left panel */}
         <div className="w-full md:w-[630px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-base" style={{ color: 'var(--text-main)' }}>Route Weather Alerts</h3>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Weather + alerts along your route
-                </p>
+                <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>Controls</div>
               </div>
               {(loadingWeather || loadingRoute || loadingAlerts) && <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />}
             </div>
@@ -1381,24 +1380,6 @@ export default function RouteWeatherAlerts({
             </div>
           </div>
 
-          {showBranding && (
-            <div className="prism-footer">
-              {companyLogo && (
-                <img
-                  src={companyLogo}
-                  alt={companyName || 'Company logo'}
-                  className="prism-footer-logo"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-              <span>
-                {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-                Powered by <strong>MapQuest</strong>
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Map */}
@@ -1417,6 +1398,27 @@ export default function RouteWeatherAlerts({
           />
         </div>
       </div>
+
+      {showBranding && (
+        <div className="prism-footer">
+          {companyLogo && (
+            <img
+              src={companyLogo}
+              alt={companyName || 'Company logo'}
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span aria-label="Powered by MapQuest">
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by
+          </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+        </div>
+      )}
     </div>
   );
 }

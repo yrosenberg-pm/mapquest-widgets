@@ -22,6 +22,8 @@ import {
   CheckoutFlowWidget,
   EVChargingPlanner,
   HeatmapDensity,
+  LiveTrafficWidget,
+  CustomRouteWidget,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -45,6 +47,8 @@ const VALID_WIDGETS = [
   'heatmap',
   'checkout',
   'ev-charging',
+  'traffic',
+  'custom-route',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -221,6 +225,49 @@ export default function WidgetPage() {
         return <EVChargingPlanner {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
+      case 'traffic':
+        return (
+          <LiveTrafficWidget
+            apiKey={API_KEY}
+            center={{ lat: 34.0522, lng: -118.2437 }}
+            title="Downtown Los Angeles"
+            theme={darkMode ? 'dark' : 'light'}
+            accentColor={accentColor}
+            fontFamily={fontFamily}
+            borderRadius={borderRadius}
+            refreshInterval={120}
+            zoom={14}
+            height={860}
+            width={1120}
+          />
+        );
+      case 'custom-route':
+        return (
+          <CustomRouteWidget
+            mode="builder"
+            apiKey={API_KEY}
+            theme={darkMode ? 'dark' : 'light'}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            fontFamily={fontFamily}
+            borderRadius={borderRadius}
+            showBranding={showBranding}
+            companyName={showBranding ? companyName : undefined}
+            companyLogo={showBranding ? companyLogo : undefined}
+            width={1120}
+            height={920}
+            title="Coastal Delivery Route"
+            description="Prepared for Acme Logistics"
+            waypoints={[]}
+            routeType="fastest"
+            unit="m"
+            markerStyle="lettered"
+            showManeuvers={true}
+            showLegBreakdown={true}
+            lineColor="#2563EB"
+            lineWeight={4}
+          />
+        );
       case 'neighborhood':
         return <NeighborhoodScore {...commonProps} />;
       case 'multistop':

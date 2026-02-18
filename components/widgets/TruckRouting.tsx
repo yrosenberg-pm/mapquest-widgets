@@ -6,6 +6,8 @@ import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2, A
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
+import CollapsibleSection from './CollapsibleSection';
 
 interface RouteStep {
   narrative: string;
@@ -887,6 +889,7 @@ export default function TruckRouting({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Truck Routing" subtitle="Plan a truck-safe route with constraints and restrictions." />
       {/* Wider + shorter (avoid page scroll; keep settings visible) */}
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map - shown first on mobile */}
@@ -946,94 +949,84 @@ export default function TruckRouting({
             <div className="p-3 space-y-2 flex-shrink-0" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
           {/* Vehicle Profile Section */}
               <div className="rounded-2xl" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
-            <button
-              onClick={() => setShowVehicleSettings(!showVehicleSettings)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors"
-              style={{ background: 'transparent' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >
-              <div className="flex items-center gap-2">
-                <Settings2 className="w-4 h-4" style={{ color: accentColor }} />
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                  Vehicle Profile
-                </span>
-              </div>
-              <span style={{ color: 'var(--text-muted)' }}>
-                {showVehicleSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </span>
-            </button>
-
-            {showVehicleSettings && (
-                  <div className="px-4 pb-4 max-h-[200px] overflow-y-auto prism-scrollbar">
-                    <div className="flex items-center justify-between gap-3 mb-3">
-                      <div className="text-[11px] font-medium leading-snug" style={{ color: 'var(--text-secondary)' }}>
-                        <div>
-                          {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L
-                  </div>
-                        <div>
-                          {vehicle.weight} tons · {vehicle.axleCount} axles
+                <div className="px-4 py-3">
+                  <CollapsibleSection
+                    title="Vehicle Profile"
+                    summary={`${vehicle.height} ft H × ${vehicle.width} ft W × ${vehicle.length} ft L · ${vehicle.weight} tons · ${vehicle.axleCount} axles`}
+                    open={showVehicleSettings}
+                    defaultOpen={true}
+                    onOpenChange={setShowVehicleSettings}
+                  >
+                    <div className="pt-3 max-h-[200px] overflow-y-auto prism-scrollbar">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="text-[11px] font-medium leading-snug" style={{ color: 'var(--text-secondary)' }}>
+                          <div>
+                            {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L
+                          </div>
+                          <div>
+                            {vehicle.weight} tons · {vehicle.axleCount} axles
+                          </div>
                         </div>
                       </div>
-                </div>
 
-                {/* Vehicle Inputs */}
-                    <div className="grid grid-cols-2 gap-2">
-                  <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
-                  <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
-                  <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
-                  <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
-                      <div className="col-span-2">
-                  <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
+                      {/* Vehicle Inputs */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
+                        <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
+                        <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
+                        <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
+                        <div className="col-span-2">
+                          <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
+                        </div>
                       </div>
-                </div>
 
-                    {/* Compact warning */}
-                    <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--color-warning-bg)' }}>
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
-                  <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
-                        Avoids low bridges and restricted roads using your vehicle profile.
-                      </p>
+                      {/* Compact warning */}
+                      <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--color-warning-bg)' }}>
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
+                        <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
+                          Avoids low bridges and restricted roads using your vehicle profile.
+                        </p>
+                      </div>
+
+                      {/* Elevation constraint */}
+                      <div className="mt-2">
+                        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
+                          Max elevation (optional)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={maxElevationFt ?? ''}
+                            min={0}
+                            step={100}
+                            placeholder="No limit"
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              if (raw === '') {
+                                setMaxElevationFt(null);
+                                return;
+                              }
+                              const next = Number(raw);
+                              if (Number.isFinite(next) && next >= 0) setMaxElevationFt(next);
+                            }}
+                            className="w-full px-3 py-2 rounded-lg text-sm font-medium"
+                            style={{
+                              background: 'var(--bg-input)',
+                              border: '1px solid var(--border-subtle)',
+                              color: 'var(--text-main)',
+                            }}
+                          />
+                          <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '30px' }}>
+                            ft
+                          </span>
+                        </div>
+                        <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                          If set, we’ll request route alternatives and pick one whose max elevation stays under this ceiling.
+                        </p>
+                      </div>
                     </div>
-
-                    {/* Elevation constraint */}
-                    <div className="mt-2">
-                      <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
-                        Max elevation (optional)
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={maxElevationFt ?? ''}
-                          min={0}
-                          step={100}
-                          placeholder="No limit"
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            if (raw === '') {
-                              setMaxElevationFt(null);
-                              return;
-                            }
-                            const next = Number(raw);
-                            if (Number.isFinite(next) && next >= 0) setMaxElevationFt(next);
-                          }}
-                          className="w-full px-3 py-2 rounded-lg text-sm font-medium"
-                          style={{
-                            background: 'var(--bg-input)',
-                            border: '1px solid var(--border-subtle)',
-                            color: 'var(--text-main)',
-                          }}
-                        />
-                        <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '30px' }}>
-                          ft
-                        </span>
-                      </div>
-                      <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                        If set, we’ll request route alternatives and pick one whose max elevation stays under this ceiling.
-                  </p>
+                  </CollapsibleSection>
                 </div>
-              </div>
-            )}
           </div>
 
           {/* Address Inputs */}
@@ -1370,34 +1363,23 @@ export default function TruckRouting({
                 {route.steps.length > 0 && (
                   <div className="flex flex-col">
 
-              <button
-                onClick={() => setStepsExpanded(!stepsExpanded)}
-                className="flex items-center justify-between px-4 py-3 transition-colors"
-                style={{ background: 'transparent' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                <span 
-                  className="text-sm font-semibold"
-                  style={{ color: 'var(--text-main)' }}
+              <div className="px-4 py-3">
+                <CollapsibleSection
+                  title="Turn-by-turn directions"
+                  summary="Step-by-step instructions for the selected route."
+                  open={stepsExpanded}
+                  defaultOpen={false}
+                  onOpenChange={setStepsExpanded}
+                  rightHint={
+                    <span
+                      className="text-xs font-medium px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
+                    >
+                      {route.steps.length} steps
+                    </span>
+                  }
                 >
-                  Turn-by-turn directions
-                </span>
-                <div className="flex items-center gap-2">
-                  <span 
-                    className="text-xs font-medium px-2 py-0.5 rounded-full"
-                    style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
-                  >
-                    {route.steps.length} steps
-                  </span>
-                  <span style={{ color: 'var(--text-muted)' }}>
-                    {stepsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </span>
-                </div>
-              </button>
-
-              {stepsExpanded && (
-                    <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                  <div className="mt-3 -mx-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   {route.steps.map((step, index) => (
                     <div 
                       key={index} 
@@ -1434,7 +1416,8 @@ export default function TruckRouting({
                     </div>
                   ))}
                 </div>
-              )}
+                </CollapsibleSection>
+              </div>
             </div>
           )}
         </div>
@@ -1497,10 +1480,20 @@ export default function TruckRouting({
               }}
             />
           )}
-          <span>
+          <span aria-label="Powered by MapQuest">
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
+            Powered by
           </span>
+          <img
+            src="/brand/mapquest-footer-light.svg"
+            alt="MapQuest"
+            className="prism-footer-logo prism-footer-logo--light"
+          />
+          <img
+            src="/brand/mapquest-footer-dark.svg"
+            alt="MapQuest"
+            className="prism-footer-logo prism-footer-logo--dark"
+          />
         </div>
       )}
     </div>

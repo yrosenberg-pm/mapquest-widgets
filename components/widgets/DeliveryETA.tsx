@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Package, Truck, MapPin, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import WidgetHeader from './WidgetHeader';
 
 type DeliveryStatus = 'preparing' | 'in_transit' | 'nearby' | 'delivered';
 
@@ -167,6 +168,7 @@ export default function DeliveryETA({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Delivery ETA" subtitle="Estimate delivery status and arrival time to an address." />
       {/* Header */}
       <div 
         className="px-4 py-3 flex items-center justify-between"
@@ -303,10 +305,12 @@ export default function DeliveryETA({
               }}
             />
           )}
-          <span>
+          <span aria-label="Powered by MapQuest">
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
+            Powered by
           </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
         </div>
       )}
     </div>

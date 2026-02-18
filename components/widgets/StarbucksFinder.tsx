@@ -629,8 +629,9 @@ export default function StarbucksFinder({
             <span>
               <span style={{ fontWeight: 600, color: STARBUCKS_GREEN }}>Starbucks Finder</span>
               <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
-              <strong>MapQuest</strong>
             </span>
+            <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+            <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
           </div>
         </div>
       )}

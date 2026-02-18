@@ -365,11 +365,37 @@
   color: var(--text-muted);
 }
 
+/* Make "MapQuest" bold in "Powered by MapQuest" for consistency across widgets */
+.prism-footer strong {
+  font-weight: var(--font-bold);
+  color: var(--text-secondary);
+}
+
 .prism-footer-logo {
-  height: 20px;
+  /* Match "Powered by" text size (var(--text-xs) = 12px) */
+  height: 14px;
   width: auto;
   object-fit: contain;
-  opacity: 0.8;
+  opacity: 0.9;
+  display: block;
+}
+
+/* Footer logo variant switching based on widget theme */
+.prism-footer-logo--dark {
+  display: none;
+  /* Render the provided dark-mode asset as-is (no filters) */
+  filter: none;
+  opacity: 0.9;
+}
+
+[data-theme='dark'] .prism-footer-logo--light,
+.dark-theme .prism-footer-logo--light {
+  display: none;
+}
+
+[data-theme='dark'] .prism-footer-logo--dark,
+.dark-theme .prism-footer-logo--dark {
+  display: block;
 }
 
 /* ========================================

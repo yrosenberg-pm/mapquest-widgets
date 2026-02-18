@@ -13,6 +13,8 @@ const ENDPOINTS: Record<string, string> = {
   optimizedroute: 'https://www.mapquestapi.com/directions/v2/optimizedroute',
   traffic: 'https://www.mapquestapi.com/traffic/v2/incidents',
   // Isoline API (v1): driving / walking / bicycling
+  // NOTE: We also accept `endpoint=isoline` (see switch) and select the correct mode below.
+  isoline: 'https://www.mapquestapi.com/isolines/v1/driving',
   isoline_driving: 'https://www.mapquestapi.com/isolines/v1/driving',
   isoline_walking: 'https://www.mapquestapi.com/isolines/v1/walking',
   isoline_bicycling: 'https://www.mapquestapi.com/isolines/v1/bicycling',

@@ -6,6 +6,7 @@ import { Briefcase, MapPin, Clock, Car, Train, Bike, PersonStanding, Loader2, Su
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -252,6 +253,7 @@ export default function CommuteTimeCalculator({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Commute Time" subtitle="Compare travel time between two locations." />
       <div className="flex flex-col md:flex-row md:h-[600px]">
         {/* Map - shown first on mobile */}
         <div className="h-[300px] md:h-auto md:flex-1 md:order-2">
@@ -273,38 +275,6 @@ export default function CommuteTimeCalculator({
           className="w-full md:w-80 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
-          {/* Header */}
-          <div 
-            className="p-4"
-            style={{ 
-              borderBottom: '1px solid var(--border-subtle)',
-              background: 'var(--bg-panel)',
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <div 
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: `${accentColor}15` }}
-              >
-                <span style={{ color: accentColor }}><Clock className="w-4 h-4" /></span>
-              </div>
-              <div>
-                <h3 
-                  className="font-bold"
-                  style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
-                >
-                  Commute Calculator
-                </h3>
-                <p 
-                  className="text-xs"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  Time to your {baseLabel.toLowerCase()}
-                </p>
-              </div>
-            </div>
-          </div>
-
           {!baseLocationSet ? (
             /* Base Location Setup */
             <div className="p-4 flex-1">
@@ -687,10 +657,12 @@ export default function CommuteTimeCalculator({
               }}
             />
           )}
-          <span>
+          <span aria-label="Powered by MapQuest">
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
+            Powered by
           </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
         </div>
       )}
     </div>

@@ -467,7 +467,8 @@ export default function InstacartDeliveryETA({
               instacart
             </span>
             <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
-            <strong>MapQuest</strong>
+            <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+            <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
           </div>
         </div>
       )}

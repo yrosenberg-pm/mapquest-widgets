@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Flame, CloudLightning, Database, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
+import WidgetHeader from './WidgetHeader';
 
 type HeatMode = 'traffic' | 'weather' | 'custom';
 type RegionId = 'los-angeles' | 'new-york' | 'chicago';
@@ -304,21 +305,14 @@ export default function HeatmapDensity({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Heatmap Density" subtitle="Visualize hotspots for traffic, weather, or custom data." />
       <div className="flex flex-col md:flex-row md:h-[760px]">
         {/* Left panel */}
         <div className="w-full md:w-[420px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: border }}>
           <div className="p-4" style={{ borderBottom: `1px solid ${border}` }}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="font-bold text-base truncate" style={{ color: textMain }}>
-                  Heatmap Density
-                </h3>
-                <p className="text-xs mt-0.5" style={{ color: textMuted }}>
-                  Visualize hotspots for traffic, extreme weather, or custom data
-                </p>
-              </div>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accentColor}12`, color: accentColor }}>
-                {icon}
+                <div className="text-sm font-semibold" style={{ color: textMain }}>Controls</div>
               </div>
             </div>
           </div>
@@ -502,24 +496,6 @@ export default function HeatmapDensity({
             )}
           </div>
 
-          {showBranding && (
-            <div className="prism-footer">
-              {companyLogo && (
-                <img
-                  src={companyLogo}
-                  alt={companyName || 'Company logo'}
-                  className="prism-footer-logo"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              )}
-              <span>
-                {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-                Powered by <strong>MapQuest</strong>
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Map */}
@@ -538,6 +514,27 @@ export default function HeatmapDensity({
           />
         </div>
       </div>
+
+      {showBranding && (
+        <div className="prism-footer">
+          {companyLogo && (
+            <img
+              src={companyLogo}
+              alt={companyName || 'Company logo'}
+              className="prism-footer-logo"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <span aria-label="Powered by MapQuest">
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by
+          </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+        </div>
+      )}
     </div>
   );
 }

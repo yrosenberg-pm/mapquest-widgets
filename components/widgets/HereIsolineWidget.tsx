@@ -6,6 +6,7 @@ import { Clock, Car, Bike, PersonStanding, Loader2, MapPin, AlertCircle } from '
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
 
 type TransportMode = 'car' | 'pedestrian' | 'bicycle';
 
@@ -322,6 +323,7 @@ export default function HereIsolineWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Isochrone" subtitle="Generate travel-time polygons from a starting location." />
       <div className="flex flex-col md:flex-row md:h-[560px]">
         {/* Map - shown first on mobile */}
         <div className="h-[300px] md:h-auto md:flex-1 md:order-2">
@@ -541,10 +543,12 @@ export default function HereIsolineWidget({
               }}
             />
           )}
-          <span>
+          <span aria-label="Powered by MapQuest">
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
+            Powered by
           </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
         </div>
       )}
     </div>

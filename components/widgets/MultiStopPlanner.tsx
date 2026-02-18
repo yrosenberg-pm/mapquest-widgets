@@ -12,6 +12,7 @@ import {
 import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
 
 interface Stop {
   id: string;
@@ -795,6 +796,7 @@ export default function MultiStopPlanner({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Multi-Stop Planner" subtitle="Build, optimize, and share multi-stop routes." />
       <div className="flex flex-col md:flex-row md:h-[715px]">
         {/* Map - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
@@ -1803,10 +1805,12 @@ export default function MultiStopPlanner({
           {companyLogo && (
             <img src={companyLogo} alt={companyName || 'Company logo'} className="prism-footer-logo" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
           )}
-          <span>
+          <span aria-label="Powered by MapQuest">
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
+            Powered by
           </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
         </div>
       )}
     </div>

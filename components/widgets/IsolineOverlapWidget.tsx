@@ -7,6 +7,7 @@ import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { reverseGeocode } from '@/lib/mapquest';
+import WidgetHeader from './WidgetHeader';
 
 type TravelTimePreset = 15 | 30 | 45 | 60;
 type ModeOption = 'drive' | 'walk' | 'bike';
@@ -595,6 +596,7 @@ export default function IsolineOverlapWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Isochrone Overlap" subtitle="Compare reachability between multiple starting points." />
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map */}
         <div className="h-[320px] md:h-auto md:flex-1 md:order-2">
@@ -867,10 +869,12 @@ export default function IsolineOverlapWidget({
               }}
             />
           )}
-          <span>
+          <span aria-label="Powered by MapQuest">
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
+            Powered by
           </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
         </div>
       )}
     </div>

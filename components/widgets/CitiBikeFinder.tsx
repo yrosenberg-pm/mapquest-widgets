@@ -6,6 +6,7 @@ import { Search, Bike, Navigation, Loader2, ChevronRight, X, RefreshCw, CreditCa
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
 
 interface BikeStation {
   id: string;
@@ -338,6 +339,7 @@ export default function CitiBikeFinder({
         '--brand-primary': CITIBIKE_BLUE,
       } as React.CSSProperties}
     >
+      <WidgetHeader title="Citi Bike Finder" subtitle="Find nearby bike stations and availability." />
       <div className="flex flex-col md:flex-row md:h-[520px]">
         {/* Map - shown first on mobile */}
         <div className="min-w-0 h-[300px] md:h-auto md:flex-1 md:order-2">
@@ -712,7 +714,16 @@ export default function CitiBikeFinder({
               powered by <span style={{ color: LYFT_PINK, fontWeight: 600, fontStyle: 'italic' }}>lyft</span>
             </span>
             <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}> · Powered by </span>
-            <strong style={{ fontSize: '12px' }}>MapQuest</strong>
+            <img
+              src="/brand/mapquest-footer-light.svg"
+              alt="MapQuest"
+              className="prism-footer-logo prism-footer-logo--light"
+            />
+            <img
+              src="/brand/mapquest-footer-dark.svg"
+              alt="MapQuest"
+              className="prism-footer-logo prism-footer-logo--dark"
+            />
           </div>
         </div>
       )}

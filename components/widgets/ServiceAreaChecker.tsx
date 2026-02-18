@@ -6,6 +6,7 @@ import { Loader2, CheckCircle2, XCircle, Navigation, MapPin, Eye, EyeOff } from 
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
 
 interface ServiceAreaCheckerProps {
   accentColor?: string;
@@ -189,37 +190,7 @@ export default function ServiceAreaChecker({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      {/* Header */}
-      <div 
-        className="px-5 py-4"
-        style={{ 
-          borderBottom: '1px solid var(--border-subtle)',
-          background: 'var(--bg-panel)',
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <div 
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: `${accentColor}15` }}
-          >
-            <span style={{ color: accentColor }}><MapPin className="w-4 h-4" /></span>
-          </div>
-          <div>
-            <h3 
-              className="font-bold"
-              style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
-            >
-              Check Service Area
-            </h3>
-            <p 
-              className="text-xs"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              Enter an address or click on the map to check delivery availability
-            </p>
-          </div>
-        </div>
-      </div>
+      <WidgetHeader title="Service Area Checker" subtitle="Check delivery availability by address or map click." />
 
       {/* Content - Side by Side Layout */}
       <div className="flex flex-col md:flex-row" style={{ minHeight: '400px' }}>
@@ -376,10 +347,12 @@ export default function ServiceAreaChecker({
               }}
             />
           )}
-          <span>
+          <span aria-label="Powered by MapQuest">
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
-            Powered by <strong>MapQuest</strong>
+            Powered by
           </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
         </div>
       )}
     </div>

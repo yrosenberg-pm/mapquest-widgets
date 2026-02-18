@@ -23,7 +23,10 @@ import {
   CheckoutFlowWidget,
   HeatmapDensity,
   EVChargingPlanner,
+  LiveTrafficWidget,
+  CustomRouteWidget,
 } from '@/components/widgets';
+import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -44,7 +47,9 @@ type WidgetId =
   | 'isoline-overlap'
   | 'checkout'
   | 'heatmap'
-  | 'ev-charging';
+  | 'ev-charging'
+  | 'traffic'
+  | 'custom-route';
 
 const WIDGETS = [
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
@@ -54,6 +59,8 @@ const WIDGETS = [
   { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', category: 'Quick Win' },
   { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', category: 'Quick Win' },
   { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', category: 'Quick Win' },
+  { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents + static map markers', category: 'Quick Win' },
+  { id: 'custom-route' as WidgetId, name: 'Custom Route', description: 'Build & embed forced waypoint routes (static map)', category: 'Quick Win' },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', category: 'Bigger Bet' },
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', category: 'Bigger Bet' },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', category: 'Bigger Bet' },
@@ -122,6 +129,9 @@ function HomeContent() {
   const [brandingMode, setBrandingMode] = useState<'mapquest' | 'cobranded' | 'whitelabel'>('mapquest');
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
+
+  // Custom Route: keep the latest builder config so the Customize → Embed Code tab can generate a real embed.
+  const [customRouteConfig, setCustomRouteConfig] = useState<any>(null);
 
   // Load preferences from localStorage on mount
   useEffect(() => {
@@ -229,6 +239,57 @@ function HomeContent() {
 
   const generateEmbedCode = () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    // Custom Route uses /embed/route with a compact config parameter.
+    if (activeWidget === 'custom-route') {
+      const cfg = customRouteConfig || {
+        apiKey: API_KEY,
+        title: 'Custom Route',
+        description: '',
+        waypoints: [],
+        routeType: 'fastest',
+        unit: 'm',
+        theme: darkMode ? 'dark' : 'light',
+        darkMode,
+        accentColor,
+        fontFamily,
+        borderRadius,
+        showBranding: brandingMode !== 'whitelabel',
+        companyName: brandingMode === 'cobranded' ? companyName : undefined,
+        companyLogo: brandingMode === 'cobranded' ? companyLogo : undefined,
+        lineColor: '#2563EB',
+        lineWeight: 4,
+        markerStyle: 'lettered',
+        showManeuvers: true,
+        showLegBreakdown: true,
+        width: 1120,
+        height: 820,
+      };
+
+      // Ensure current customization values apply even if the widget didn't emit yet.
+      cfg.theme = darkMode ? 'dark' : 'light';
+      cfg.darkMode = darkMode;
+      cfg.accentColor = accentColor;
+      cfg.fontFamily = fontFamily;
+      cfg.borderRadius = borderRadius;
+      cfg.showBranding = brandingMode !== 'whitelabel';
+      cfg.companyName = brandingMode === 'cobranded' ? companyName : undefined;
+      cfg.companyLogo = brandingMode === 'cobranded' ? companyLogo : undefined;
+
+      const url = new URL(`${baseUrl}/embed/route`);
+      url.searchParams.set('config', encodeEmbedConfig(cfg));
+      const safeSrc = url.toString();
+      const iframeHeight = 820;
+      return [
+        `<iframe`,
+        `  src="${safeSrc}"`,
+        `  width="100%"`,
+        `  height="${iframeHeight}"`,
+        `  style="border:0;border-radius:12px;overflow:hidden"`,
+        `  loading="lazy"`,
+        `></iframe>`,
+      ].join('\n');
+    }
+
     const url = new URL(`${baseUrl}/${activeWidget}`);
 
     // Make embed self-contained via URL params
@@ -316,6 +377,50 @@ function HomeContent() {
         return <EVChargingPlanner {...commonProps} />;
       case 'service':
         return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
+      case 'traffic':
+        return (
+          <LiveTrafficWidget
+            apiKey={API_KEY}
+            center={{ lat: 34.0522, lng: -118.2437 }}
+            title="Downtown Los Angeles"
+            theme={darkMode ? 'dark' : 'light'}
+            accentColor={accentColor}
+            fontFamily={fontFamily}
+            borderRadius={borderRadius}
+            refreshInterval={120}
+            zoom={14}
+            height={860}
+            width={1120}
+          />
+        );
+      case 'custom-route':
+        return (
+          <CustomRouteWidget
+            mode="builder"
+            apiKey={API_KEY}
+            theme={darkMode ? 'dark' : 'light'}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            fontFamily={fontFamily}
+            borderRadius={borderRadius}
+            showBranding={brandingMode !== 'whitelabel'}
+            companyName={brandingMode === 'cobranded' ? companyName : undefined}
+            companyLogo={brandingMode === 'cobranded' ? companyLogo : undefined}
+            onBuilderConfigChange={setCustomRouteConfig}
+            width={1120}
+            height={920}
+            title="Coastal Delivery Route"
+            description="Prepared for Acme Logistics"
+            waypoints={[]}
+            routeType="fastest"
+            unit="m"
+            markerStyle="lettered"
+            showManeuvers={true}
+            showLegBreakdown={true}
+            lineColor="#2563EB"
+            lineWeight={4}
+          />
+        );
       case 'neighborhood':
         return <NeighborhoodScore {...commonProps} />;
       case 'multistop':
@@ -568,7 +673,14 @@ function HomeContent() {
               </div>
               {activeWidget === 'address' && (
                 <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-3`}>
-                  Powered by <strong>MapQuest</strong>
+                  <span className="inline-flex items-center gap-2" aria-label="Powered by MapQuest">
+                    <span>Powered by</span>
+                    <img
+                      src={darkMode ? '/brand/mapquest-footer-dark.svg' : '/brand/mapquest-footer-light.svg'}
+                      alt="MapQuest"
+                      className="h-3.5 w-auto opacity-90"
+                    />
+                  </span>
                 </div>
               )}
             </div>
