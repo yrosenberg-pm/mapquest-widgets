@@ -800,6 +800,8 @@ export default function MultiStopPlanner({
         title="Multi-Stop Planner"
         subtitle="Build, optimize, and share multi-stop routes."
         variant="impressive"
+        layout="inline"
+        icon={<Route className="w-4.5 h-4.5" />}
       />
       <div className="flex flex-col md:flex-row md:h-[715px]">
         {/* Map - shown first on mobile */}
@@ -842,20 +844,71 @@ export default function MultiStopPlanner({
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           
-          {/* Header */}
-          <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}15` }}>
-                <Route className="w-5 h-5" style={{ color: accentColor }} />
-              </div>
+          {/* Optimizing Banner */}
+          {optimizing && (
+            <div 
+              className="px-5 py-3 flex items-center gap-3"
+              style={{ background: `${accentColor}10`, borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />
               <div>
-                <h3 className="font-bold text-base" style={{ color: 'var(--text-main)' }}>Multi-Stop Planner</h3>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{stops.length} stops · Drag to reorder</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>Optimizing route...</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Finding the most efficient order</p>
               </div>
             </div>
-            
+          )}
+
+          {/* View Toggle Tabs + More Menu */}
+          <div className="px-3 pt-3 pb-2 flex items-center gap-1.5">
+            <div 
+              className="flex p-1 rounded-xl gap-0.5 flex-1 min-w-0"
+              style={{ background: 'var(--bg-input)' }}
+            >
+              <button
+                onClick={() => setSidebarView('stops')}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all"
+                style={{ 
+                  background: sidebarView === 'stops' ? 'var(--bg-widget)' : 'transparent',
+                  color: sidebarView === 'stops' ? accentColor : 'var(--text-muted)',
+                  boxShadow: sidebarView === 'stops' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                <List className="w-3.5 h-3.5" />
+                Stops
+              </button>
+              <button
+                onClick={() => setSidebarView('segments')}
+                disabled={!routeResult}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
+                style={{ 
+                  background: sidebarView === 'segments' ? 'var(--bg-widget)' : 'transparent',
+                  color: sidebarView === 'segments' ? accentColor : 'var(--text-muted)',
+                  boxShadow: sidebarView === 'segments' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                Segments
+              </button>
+              <button
+                onClick={() => {
+                  setSidebarView('route');
+                  setHighlightedSegment(null);
+                }}
+                disabled={!routeResult}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
+                style={{ 
+                  background: sidebarView === 'route' ? 'var(--bg-widget)' : 'transparent',
+                  color: sidebarView === 'route' ? accentColor : 'var(--text-muted)',
+                  boxShadow: sidebarView === 'route' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                <Route className="w-3.5 h-3.5" />
+                Summary
+              </button>
+            </div>
+
             {/* More Menu */}
-            <div className="relative" ref={moreMenuRef}>
+            <div className="relative flex-shrink-0" ref={moreMenuRef}>
               <button
                 onClick={() => setShowMoreMenu(!showMoreMenu)}
                 className="p-2 rounded-lg transition-colors hover:bg-black/5"
@@ -889,70 +942,6 @@ export default function MultiStopPlanner({
                   </button>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Optimizing Banner */}
-          {optimizing && (
-            <div 
-              className="px-5 py-3 flex items-center gap-3"
-              style={{ background: `${accentColor}10`, borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />
-              <div>
-                <p className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>Optimizing route...</p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Finding the most efficient order</p>
-              </div>
-            </div>
-          )}
-
-          {/* View Toggle Tabs */}
-          <div className="px-3 pt-3 pb-2">
-            <div 
-              className="flex p-1 rounded-xl gap-0.5"
-              style={{ background: 'var(--bg-input)' }}
-            >
-              <button
-                onClick={() => setSidebarView('stops')}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all"
-                style={{ 
-                  background: sidebarView === 'stops' ? 'var(--bg-widget)' : 'transparent',
-                  color: sidebarView === 'stops' ? accentColor : 'var(--text-muted)',
-                  boxShadow: sidebarView === 'stops' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                }}
-              >
-                <List className="w-3.5 h-3.5" />
-                Stops
-              </button>
-              <button
-                onClick={() => setSidebarView('segments')}
-                disabled={!routeResult}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
-                style={{ 
-                  background: sidebarView === 'segments' ? 'var(--bg-widget)' : 'transparent',
-                  color: sidebarView === 'segments' ? accentColor : 'var(--text-muted)',
-                  boxShadow: sidebarView === 'segments' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                }}
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                Segments
-              </button>
-              <button
-                onClick={() => {
-                  setSidebarView('route');
-                  setHighlightedSegment(null); // Clear highlight to zoom out and show full route
-                }}
-                disabled={!routeResult}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
-                style={{ 
-                  background: sidebarView === 'route' ? 'var(--bg-widget)' : 'transparent',
-                  color: sidebarView === 'route' ? accentColor : 'var(--text-muted)',
-                  boxShadow: sidebarView === 'route' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                }}
-              >
-                <Route className="w-3.5 h-3.5" />
-                Summary
-              </button>
             </div>
           </div>
 

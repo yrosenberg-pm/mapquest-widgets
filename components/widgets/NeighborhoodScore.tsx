@@ -430,6 +430,8 @@ export default function NeighborhoodScore({
         title="Neighborhood Score"
         subtitle="Score an area based on nearby amenities."
         variant="impressive"
+        layout="inline"
+        icon={<MapPin className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[600px]">
         {/* Map - shown first on mobile */}
@@ -511,55 +513,39 @@ export default function NeighborhoodScore({
               background: 'var(--bg-panel)',
             }}
           >
-            <div className="mb-2">
-              <div className="flex items-center gap-2">
-                <div 
-                  className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: `${accentColor}15` }}
-                >
-                  <span style={{ color: accentColor }}><MapPin className="w-4 h-4" /></span>
-                </div>
-                <div>
-                  <h3 
-                    className="font-bold"
-                    style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
-                  >
-                    Neighborhood Score
-                  </h3>
-                  <p 
-                    className="text-xs"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Walk score-style analysis
-                  </p>
-                </div>
-              </div>
+            <div
+              className="rounded-xl flex items-center gap-2.5"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+            >
+              <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+              <AddressAutocomplete
+                value={address}
+                onChange={(newAddress) => {
+                  setAddress(newAddress);
+                  if ((scores.length > 0 || overallScore !== null) && newAddress !== address) {
+                    setScores([]);
+                    setOverallScore(null);
+                    setSelectedCategory(null);
+                    setSelectedPlace(null);
+                    setLocation(null);
+                    setError(null);
+                  }
+                }}
+                onSelect={(result) => {
+                  if (result.lat && result.lng) {
+                    setLocation({ lat: result.lat, lng: result.lng });
+                  }
+                }}
+                placeholder="Enter an address..."
+                darkMode={darkMode}
+                inputBg={inputBg}
+                textColor={textColor}
+                mutedText={mutedText}
+                borderColor={borderColor}
+                className="flex-1"
+                hideIcon
+              />
             </div>
-            <AddressAutocomplete
-              value={address}
-              onChange={(newAddress) => {
-                setAddress(newAddress);
-                if ((scores.length > 0 || overallScore !== null) && newAddress !== address) {
-                  setScores([]);
-                  setOverallScore(null);
-                  setSelectedCategory(null);
-                  setSelectedPlace(null);
-                  setLocation(null);
-                  setError(null);
-                }
-              }}
-              onSelect={(result) => {
-                if (result.lat && result.lng) {
-                  setLocation({ lat: result.lat, lng: result.lng });
-                }
-              }}
-              placeholder="Enter an address..."
-              darkMode={darkMode}
-              inputBg={inputBg}
-              textColor={textColor}
-              mutedText={mutedText}
-              borderColor={borderColor}
-            />
             <button
               onClick={calculateScores}
               disabled={loading || (!address && !location)}

@@ -257,6 +257,8 @@ export default function CommuteTimeCalculator({
         title="Commute Time"
         subtitle="Compare travel time between two locations."
         variant="impressive"
+        layout="inline"
+        icon={<Clock className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[600px]">
         {/* Map - shown first on mobile */}
@@ -327,32 +329,39 @@ export default function CommuteTimeCalculator({
 
                   <div>
                     <label 
-                      className="block text-xs mb-1"
+                      className="block text-xs mb-1.5"
                       style={{ color: 'var(--text-muted)' }}
                     >
                       Address
                     </label>
-                    <AddressAutocomplete
-                      value={baseLocation}
-                      onChange={(v) => {
-                        setBaseLocation(v);
-                        setBaseCoords(null);
-                        setBaseResult(null);
-                        setResult(null);
-                      }}
-                      onSelect={(result) => {
-                        if (result.lat && result.lng) {
-                          setBaseCoords({ lat: result.lat, lng: result.lng });
-                        }
-                      }}
-                      placeholder={`Enter your ${baseLabel.toLowerCase()} address`}
-                      darkMode={darkMode}
-                      inputBg={inputBg}
-                      textColor={textColor}
-                      mutedText={mutedText}
-                      borderColor={borderColor}
-                      className="w-full"
-                    />
+                    <div
+                      className="rounded-xl flex items-center gap-2.5"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+                    >
+                      <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+                      <AddressAutocomplete
+                        value={baseLocation}
+                        onChange={(v) => {
+                          setBaseLocation(v);
+                          setBaseCoords(null);
+                          setBaseResult(null);
+                          setResult(null);
+                        }}
+                        onSelect={(result) => {
+                          if (result.lat && result.lng) {
+                            setBaseCoords({ lat: result.lat, lng: result.lng });
+                          }
+                        }}
+                        placeholder={`Enter your ${baseLabel.toLowerCase()} address`}
+                        darkMode={darkMode}
+                        inputBg={inputBg}
+                        textColor={textColor}
+                        mutedText={mutedText}
+                        borderColor={borderColor}
+                        className="flex-1"
+                        hideIcon
+                      />
+                    </div>
                   </div>
 
                   <button
@@ -467,13 +476,11 @@ export default function CommuteTimeCalculator({
                 >
                   Check commute from:
                 </label>
-                <div className="flex items-center gap-2">
-                  <div 
-                    className="w-6 h-6 rounded-full flex items-center justify-center"
-                    style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-default)' }}
-                  >
-                    <span style={{ color: 'var(--text-muted)' }}><MapPin className="w-3 h-3" /></span>
-                  </div>
+                <div
+                  className="rounded-xl flex items-center gap-2.5"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+                >
+                  <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
                   <AddressAutocomplete
                     value={destination}
                     onChange={(v) => {
@@ -488,11 +495,12 @@ export default function CommuteTimeCalculator({
                     }}
                     placeholder="Property address, job location..."
                     darkMode={darkMode}
+                    className="flex-1"
+                    hideIcon
                     inputBg={inputBg}
                     textColor={textColor}
                     mutedText={mutedText}
                     borderColor={borderColor}
-                    className="flex-1"
                   />
                 </div>
               </div>

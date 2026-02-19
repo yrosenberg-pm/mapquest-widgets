@@ -194,6 +194,8 @@ export default function DirectionsEmbed({
         title="Directions"
         subtitle="Get a route, ETA, and turn-by-turn directions."
         variant="impressive"
+        layout="inline"
+        icon={<Navigation className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map - shown first on mobile */}
@@ -222,16 +224,15 @@ export default function DirectionsEmbed({
             className="p-5 flex-shrink-0"
             style={{ borderBottom: '1px solid var(--border-subtle)' }}
           >
-            <div className="space-y-1">
+            <div className="space-y-2">
               {/* From Input */}
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ 
-                    background: 'var(--bg-panel)',
-                    border: '2px solid var(--border-default)',
-                    color: 'var(--text-secondary)',
-                  }}
+              <div
+                className="rounded-xl flex items-center gap-2.5"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                  style={{ background: accentColor, color: 'white' }}
                 >
                   A
                 </div>
@@ -260,25 +261,14 @@ export default function DirectionsEmbed({
                 />
               </div>
 
-              {/* Connection Line */}
-              <div className="flex items-center gap-3">
-                <div className="w-8 flex justify-center">
-                  <div 
-                    className="w-0.5 h-2 rounded-full"
-                    style={{ background: 'var(--border-default)' }}
-                  />
-                </div>
-              </div>
-
               {/* To Input */}
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ 
-                    background: `${accentColor}15`,
-                    border: `2px solid ${accentColor}`,
-                    color: accentColor,
-                  }}
+              <div
+                className="rounded-xl flex items-center gap-2.5"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                  style={{ background: accentColor, color: 'white' }}
                 >
                   B
                 </div>

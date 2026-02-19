@@ -18,6 +18,7 @@ import {
   Thermometer,
   Wind,
   AlertTriangle,
+  CloudSun,
   Link2,
 } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
@@ -141,10 +142,11 @@ function alertMarkerIconUri(sev: Severity) {
     <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
       <circle cx="24" cy="24" r="21" fill="${fill}" stroke="white" stroke-width="3.5"/>
       <g transform="translate(24 24)">
-        <g fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M0 -13.5 L13.5 10.5 H-13.5 Z" />
-          <line x1="0" y1="-5" x2="0" y2="3.5" />
-          <circle cx="0" cy="7.5" r="1.2" fill="white" stroke="none" />
+        <g fill="none" stroke="white" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Slightly smaller inner mark to match the visual weight of the condition icons -->
+          <path d="M0 -12.2 L12.2 9.6 H-12.2 Z" />
+          <line x1="0" y1="-4.4" x2="0" y2="3.0" />
+          <circle cx="0" cy="6.8" r="1.1" fill="white" stroke="none" />
         </g>
       </g>
     </svg>
@@ -505,6 +507,51 @@ function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: nu
   return R * c;
 }
 
+function pointToSegmentDistanceMiles(
+  p: { lat: number; lng: number },
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): number {
+  // Equirectangular approximation for short distances: project to meters around p.lat
+  const latRad = (p.lat * Math.PI) / 180;
+  const mx = (lng: number) => lng * 111_320 * Math.cos(latRad);
+  const my = (lat: number) => lat * 110_574;
+
+  const px = mx(p.lng);
+  const py = my(p.lat);
+  const ax = mx(a.lng);
+  const ay = my(a.lat);
+  const bx = mx(b.lng);
+  const by = my(b.lat);
+
+  const abx = bx - ax;
+  const aby = by - ay;
+  const apx = px - ax;
+  const apy = py - ay;
+  const abLen2 = abx * abx + aby * aby;
+  let t = abLen2 === 0 ? 0 : (apx * abx + apy * aby) / abLen2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * abx;
+  const cy = ay + t * aby;
+  const dx = px - cx;
+  const dy = py - cy;
+  const meters = Math.sqrt(dx * dx + dy * dy);
+  return meters / 1609.34;
+}
+
+function pointToPolylineDistanceMiles(
+  p: { lat: number; lng: number },
+  poly: Array<{ lat: number; lng: number }>
+): number | null {
+  if (!poly || poly.length < 2) return null;
+  let best = Infinity;
+  for (let i = 1; i < poly.length; i++) {
+    const d = pointToSegmentDistanceMiles(p, poly[i - 1], poly[i]);
+    if (d < best) best = d;
+  }
+  return Number.isFinite(best) ? best : null;
+}
+
 function classifyRouteCondition(opts: {
   desc: string;
   tempF: number | null;
@@ -839,23 +886,32 @@ function AutosuggestInput({
       <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
         {label}
       </label>
-      <div className="relative">
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-        <input
-          value={query}
-          onChange={(e) => {
-            lastSelectedQueryRef.current = null;
-            setQuery(e.target.value);
-            onChange(e.target.value);
-          }}
-          onFocus={() => !selectionLockRef.current && items.length > 0 && setOpen(true)}
-          onBlur={() => setOpen(false)}
-          placeholder={placeholder}
-          className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium outline-none transition-all"
-          style={{ background: bgInput, border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
-        />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} /> : null}
+      <div
+        className="rounded-xl flex items-center gap-2.5"
+        style={{
+          background: 'var(--bg-input)',
+          border: '1px solid var(--border-subtle)',
+          padding: '10px 12px',
+        }}
+      >
+        <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+        <div className="relative flex-1">
+          <input
+            value={query}
+            onChange={(e) => {
+              lastSelectedQueryRef.current = null;
+              setQuery(e.target.value);
+              onChange(e.target.value);
+            }}
+            onFocus={() => !selectionLockRef.current && items.length > 0 && setOpen(true)}
+            onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+            placeholder={placeholder}
+            className="w-full pr-8 py-0 text-sm font-medium outline-none bg-transparent"
+            style={{ color: 'var(--text-main)' }}
+          />
+          <div className="absolute right-0 top-1/2 -translate-y-1/2">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} /> : null}
+          </div>
         </div>
       </div>
       {open && items.length > 0 && (
@@ -864,37 +920,53 @@ function AutosuggestInput({
           style={{ background: bgWidget, border: '1px solid var(--border-subtle)', boxShadow: '0 18px 50px rgba(0,0,0,0.22)' }}
         >
           {items.map((it, idx) => {
-            const labelText = it.title || it.address?.label || 'Result';
+            // Always prefer the full formatted label for the selected value.
+            // (Some HERE results have a short `title`, but a more complete `address.label`.)
+            const fullLabel = it.address?.label || it.title || 'Result';
+            const primaryTitle = it.title || fullLabel;
             const pos = it.position || it.access?.[0];
+            const applySelection = () => {
+              if (!pos) return;
+              selectionLockRef.current = true;
+              // Invalidate any in-flight autosuggest request to prevent reopen
+              requestIdRef.current += 1;
+              onSelect({ label: fullLabel, lat: pos.lat, lng: pos.lng });
+              setQuery(fullLabel);
+              onChange(fullLabel);
+              lastSelectedQueryRef.current = fullLabel;
+              setOpen(false);
+              setItems([]);
+              // Give any in-flight request time to settle without reopening the dropdown
+              window.setTimeout(() => {
+                selectionLockRef.current = false;
+              }, 500);
+            };
             return (
               <button
-                key={`${it.id || idx}-${labelText}`}
+                key={`${it.id || idx}-${fullLabel}`}
                 type="button"
                 className="w-full px-4 py-3 text-left text-sm flex items-start gap-3 hover:bg-black/5"
                 style={{ color: 'var(--text-main)' }}
-                onClick={() => {
-                  if (!pos) return;
-                  selectionLockRef.current = true;
-                  // Invalidate any in-flight autosuggest request to prevent reopen
-                  requestIdRef.current += 1;
-                  onSelect({ label: labelText, lat: pos.lat, lng: pos.lng });
-                  setQuery(labelText);
-                  onChange(labelText);
-                  lastSelectedQueryRef.current = labelText;
-                  setOpen(false);
-                  setItems([]);
-                  // Give any in-flight request time to settle without reopening the dropdown
-                  window.setTimeout(() => {
-                    selectionLockRef.current = false;
-                  }, 500);
+                // Use onMouseDown so the selection applies *before* the input blurs.
+                // This guarantees the input field immediately populates with the full label.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  applySelection();
+                }}
+                // Keep click for keyboard activation / accessibility fallback.
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  applySelection();
                 }}
               >
                 <span className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${accentColor}12`, color: accentColor }}>
                   <MapPin className="w-4 h-4" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block font-medium truncate">{labelText}</span>
-                  {it.address?.label && it.address.label !== labelText ? (
+                  <span className="block font-medium truncate">{primaryTitle}</span>
+                  {it.address?.label && it.address.label !== primaryTitle ? (
                     <span className="block text-xs truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>
                       {it.address.label}
                     </span>
@@ -954,8 +1026,8 @@ export default function RouteWeatherAlerts({
 
   const markers = useMemo(() => {
     const m: any[] = [];
-    if (start) m.push({ lat: start.lat, lng: start.lng, label: `Start: ${start.label}`, color: '#64748B', type: 'default' });
-    if (dest) m.push({ lat: dest.lat, lng: dest.lng, label: `Destination: ${dest.label}`, color: accentColor, type: 'default' });
+    if (start) m.push({ lat: start.lat, lng: start.lng, label: `Start: ${start.label}`, color: '#64748B', type: 'default', clusterable: false });
+    if (dest) m.push({ lat: dest.lat, lng: dest.lng, label: `Destination: ${dest.label}`, color: accentColor, type: 'default', clusterable: false });
     if (routeConditions.length > 0) {
       for (const p of routeConditions) {
         const s = conditionStyles(p.kind);
@@ -998,7 +1070,14 @@ export default function RouteWeatherAlerts({
       }
     }
     return m;
-  }, [start, dest, accentColor, routeConditions, alerts, routeMiles]);
+  }, [
+    start,
+    dest,
+    accentColor,
+    routeConditions,
+    alerts,
+    routeMiles,
+  ]);
 
   const geocodeOne = async (q: string): Promise<PlaceSelection | null> => {
     const query = q.trim();
@@ -1148,26 +1227,36 @@ export default function RouteWeatherAlerts({
       }
 
       const sortedHours = Array.from(byHour.values()).sort((a, b) => a.dt.getTime() - b.dt.getTime());
-      // Only show hours for the first available forecast day (prevents spilling into the next day).
-      const first = sortedHours[0]?.dt;
-      const dayKey = first
-        ? `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(first.getDate()).padStart(2, '0')}`
-        : null;
+      // Hourly forecast should run from "now" through local midnight.
+      // Some feeds provide hours that start later; we prefer current-hour → end-of-day for a better UX.
+      const now = new Date();
+      const currentHour = new Date(now);
+      currentHour.setMinutes(0, 0, 0);
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 0, 0); // next day at 00:00 local
 
-      const uniqueHours = sortedHours
-        .filter(({ dt }) => {
+      let windowed = sortedHours.filter(({ dt }) => dt.getTime() >= currentHour.getTime() && dt.getTime() < midnight.getTime());
+
+      // Fallback: if the feed doesn't include "today", show the first available day to avoid empty UI.
+      if (windowed.length === 0) {
+        const first = sortedHours[0]?.dt;
+        const dayKey = first
+          ? `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(first.getDate()).padStart(2, '0')}`
+          : null;
+        windowed = sortedHours.filter(({ dt }) => {
           if (!dayKey) return true;
           const k = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
           return k === dayKey;
-        })
-        .slice(0, 24)
-        .map(({ dt, x }) => ({
-          localTime: dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-          temperature: x.temperature,
-          description: x.description,
-          iconName: x.iconName,
-          precipitationProbability: x.precipitationProbability,
-        }));
+        });
+      }
+
+      const uniqueHours = windowed.slice(0, 24).map(({ dt, x }) => ({
+        localTime: dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+        temperature: x.temperature,
+        description: x.description,
+        iconName: x.iconName,
+        precipitationProbability: x.precipitationProbability,
+      }));
 
       setForecastHours(uniqueHours);
       setLoadingWeather(false);
@@ -1283,7 +1372,7 @@ export default function RouteWeatherAlerts({
 
   return (
     <div
-      className="prism-widget w-full md:w-[1340px]"
+      className="prism-widget w-full md:w-[1240px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',
@@ -1294,20 +1383,18 @@ export default function RouteWeatherAlerts({
         title="Route Weather Alerts"
         subtitle="See forecast and active alerts along a route."
         variant="impressive"
+        layout="inline"
+        icon={<CloudSun className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[870px]">
         {/* Left panel */}
         <div className="w-full md:w-[600px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>Controls</div>
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 relative" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            {(loadingWeather || loadingRoute || loadingAlerts) && (
+              <div className="absolute right-4 top-4 pointer-events-none">
+                <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />
               </div>
-              {(loadingWeather || loadingRoute || loadingAlerts) && <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />}
-            </div>
-          </div>
-
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            )}
             <AutosuggestInput
               label="Starting point"
               placeholder="Enter a starting address"
@@ -1643,6 +1730,11 @@ export default function RouteWeatherAlerts({
                           })}
                         </div>
                       </div>
+                      {routeConditions.length > 4 && (
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          Scroll to view all conditions
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1780,6 +1872,8 @@ export default function RouteWeatherAlerts({
             accentColor={accentColor}
             height="100%"
             markers={markers}
+            clusterMarkers={false}
+            clusterRadiusPx={56}
             showRoute={!!routePolyline}
             routePolyline={routePolyline || undefined}
           />

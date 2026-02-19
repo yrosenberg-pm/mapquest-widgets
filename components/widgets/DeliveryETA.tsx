@@ -161,7 +161,7 @@ export default function DeliveryETA({
 
   return (
     <div 
-      className="prism-widget w-full md:w-[550px]"
+      className="prism-widget w-full md:w-[620px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
@@ -172,6 +172,8 @@ export default function DeliveryETA({
         title="Delivery ETA"
         subtitle="Estimate delivery status and arrival time to an address."
         variant="impressive"
+        layout="inline"
+        icon={<Package className="w-4 h-4" />}
       />
       {/* Header */}
       <div 

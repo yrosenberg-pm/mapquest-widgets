@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, RefreshCw, Route } from 'lucide-react';
+import { AlertTriangle, Loader2, MapPin, RefreshCw, Route } from 'lucide-react';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
 import * as turf from '@turf/turf';
@@ -694,6 +694,7 @@ export default function LiveTrafficWidget({
   const incidentMarkers = useMemo(() => {
     const base = mode === 'route' ? routeFilteredIncidents : incidents;
     const filtered = base.filter((i) => severityFilter.has(i.severity));
+
     // Area mode can be very dense; keep a safety cap there. Route corridor should show all events.
     const visible = mode === 'area' ? filtered.slice(0, 250) : filtered;
     return visible.map((i) => {
@@ -716,7 +717,13 @@ export default function LiveTrafficWidget({
         },
       };
     });
-  }, [mode, incidents, routeFilteredIncidents, severityFilter, selectedId]);
+  }, [
+    mode,
+    incidents,
+    routeFilteredIncidents,
+    severityFilter,
+    selectedId,
+  ]);
 
   const radiusCircle = useMemo(() => {
     if (mode !== 'area') return [];
@@ -753,17 +760,15 @@ export default function LiveTrafficWidget({
           ? routeFromLL
           : areaCenter;
 
-      const { incidents: nextRaw, ts } = await fetchIncidentsByBbox({
+      const r = await fetchIncidentsByBbox({
         apiKey,
         centerForDistance,
         bbox,
         filters,
         cacheTtlMs: refreshMs,
       });
-
-      const next = mode === 'route' ? nextRaw : nextRaw;
-      setIncidents(next);
-      setLastUpdated(ts);
+      setIncidents(r.incidents);
+      setLastUpdated(r.ts || Date.now());
     } catch (e: any) {
       setError(e?.message ? String(e.message) : 'Failed to load traffic data.');
     } finally {
@@ -794,19 +799,22 @@ export default function LiveTrafficWidget({
     height: `${widgetH}px`,
   };
 
-  const listBase = mode === 'route' ? routeFilteredIncidents : incidents;
+  const listBase = useMemo(
+    () => (mode === 'route' ? routeFilteredIncidents : incidents),
+    [mode, routeFilteredIncidents, incidents]
+  );
+
   const list = useMemo(() => listBase.filter((i) => severityFilter.has(i.severity)), [listBase, severityFilter]);
 
   const countsForListBase = useMemo(() => {
     const counts: Record<Severity, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    for (const i of listBase) counts[i.severity] += 1;
+    for (const i of listBase as any[]) counts[i.severity] += 1;
     return counts;
   }, [listBase]);
 
   useEffect(() => {
     // If the currently selected incident is filtered out, clear the selection to avoid confusion.
-    if (!selectedId) return;
-    if (!list.some((i) => i.id === selectedId)) setSelectedId(null);
+    if (selectedId && !list.some((i: any) => i.id === selectedId)) setSelectedId(null);
   }, [severityFilter, list, selectedId]);
 
   const calcRoute = async () => {
@@ -848,13 +856,14 @@ export default function LiveTrafficWidget({
     // In Area mode we want the map to stay fit to the radius bounds, not zoom into a single incident.
     if (mode === 'area') return;
     if (didAutoSelectRef.current) return;
-    if (!incidents || incidents.length === 0) return;
-    const best = incidents.find((i) => i.severity >= 3) || incidents[0];
+    const candidates = listBase as any[];
+    if (!candidates || candidates.length === 0) return;
+    const best = candidates.find((i) => i.severity >= 3) || candidates[0];
     if (!best) return;
     didAutoSelectRef.current = true;
     setSelectedId(best.id);
     setZoomToLocation({ lat: best.lat, lng: best.lng, zoom: 14 });
-  }, [incidents, mode]);
+  }, [listBase, mode]);
 
   return (
     <div
@@ -871,6 +880,8 @@ export default function LiveTrafficWidget({
       <WidgetHeader
         title="Live Traffic"
         variant="impressive"
+        layout="inline"
+        icon={<AlertTriangle className="w-4 h-4" />}
         subtitle={
           lastUpdated
             ? `${
@@ -962,7 +973,7 @@ export default function LiveTrafficWidget({
                   ? incidentMarkers
                   : routeState.status === 'ready'
                     ? incidentMarkers
-                    : selectedMapMarker
+                    : (selectedId ? selectedMapMarker : [])
               }
               clusterMarkers={mode === 'area' || (mode === 'route' && routeState.status === 'ready')}
               clusterRadiusPx={56}
@@ -989,7 +1000,8 @@ export default function LiveTrafficWidget({
           className="w-full md:w-[420px] flex-shrink-0 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
-          <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar p-4">
+          {/* Fixed controls header */}
+          <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             {/* Status */}
             {(loading || error) && (
               <div className="mb-3">
@@ -1028,24 +1040,35 @@ export default function LiveTrafficWidget({
                   onOpenChange={setAreaSettingsOpen}
                 >
                   <div className="mt-3">
-                    <div className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                    <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
                       Starting location
                     </div>
-                    <AddressAutocomplete
-                      value={areaQuery}
-                      onChange={setAreaQuery}
-                      placeholder="Search address or place…"
-                      darkMode={isDark}
-                      className="mt-1"
-                      onSelect={(a) => {
-                        if (typeof a.lat === 'number' && typeof a.lng === 'number') {
-                          setAreaCenter({ lat: a.lat, lng: a.lng });
-                          setZoomToLocation({ lat: a.lat, lng: a.lng, zoom: 12 });
-                          setSelectedId(null);
-                          setTimeout(() => void load(), 0);
-                        }
+                    <div
+                      className="rounded-xl flex items-center gap-2.5"
+                      style={{
+                        background: 'var(--bg-input)',
+                        border: '1px solid var(--border-subtle)',
+                        padding: '10px 12px',
                       }}
-                    />
+                    >
+                      <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+                      <AddressAutocomplete
+                        value={areaQuery}
+                        onChange={setAreaQuery}
+                        placeholder="Search address or place…"
+                        darkMode={isDark}
+                        className="flex-1"
+                        hideIcon
+                        onSelect={(a) => {
+                          if (typeof a.lat === 'number' && typeof a.lng === 'number') {
+                            setAreaCenter({ lat: a.lat, lng: a.lng });
+                            setZoomToLocation({ lat: a.lat, lng: a.lng, zoom: 12 });
+                            setSelectedId(null);
+                            setTimeout(() => void load(), 0);
+                          }
+                        }}
+                      />
+                    </div>
                   </div>
 
                   <div className="mt-3 flex items-end justify-between gap-3">
@@ -1108,27 +1131,61 @@ export default function LiveTrafficWidget({
                 <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-main)' }}>
                   Route
                 </div>
-                <div className="grid grid-cols-1 gap-2">
-                  <AddressAutocomplete
-                    value={routeFrom}
-                    onChange={setRouteFrom}
-                    placeholder="Start address…"
-                    darkMode={isDark}
-                    onSelect={(a) => {
-                      setRouteFrom(a.displayString);
-                      if (typeof a.lat === 'number' && typeof a.lng === 'number') setRouteFromLL({ lat: a.lat, lng: a.lng });
+                <div className="space-y-2">
+                  <div
+                    className="rounded-xl flex items-center gap-2.5"
+                    style={{
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      padding: '10px 12px',
                     }}
-                  />
-                  <AddressAutocomplete
-                    value={routeTo}
-                    onChange={setRouteTo}
-                    placeholder="End address…"
-                    darkMode={isDark}
-                    onSelect={(a) => {
-                      setRouteTo(a.displayString);
-                      if (typeof a.lat === 'number' && typeof a.lng === 'number') setRouteToLL({ lat: a.lat, lng: a.lng });
+                  >
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                      style={{ background: accentColor, color: 'white' }}
+                    >
+                      A
+                    </div>
+                    <AddressAutocomplete
+                      value={routeFrom}
+                      onChange={setRouteFrom}
+                      placeholder="Start address…"
+                      darkMode={isDark}
+                      className="flex-1"
+                      hideIcon
+                      onSelect={(a) => {
+                        setRouteFrom(a.displayString);
+                        if (typeof a.lat === 'number' && typeof a.lng === 'number') setRouteFromLL({ lat: a.lat, lng: a.lng });
+                      }}
+                    />
+                  </div>
+                  <div
+                    className="rounded-xl flex items-center gap-2.5"
+                    style={{
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border-subtle)',
+                      padding: '10px 12px',
                     }}
-                  />
+                  >
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                      style={{ background: accentColor, color: 'white' }}
+                    >
+                      B
+                    </div>
+                    <AddressAutocomplete
+                      value={routeTo}
+                      onChange={setRouteTo}
+                      placeholder="End address…"
+                      darkMode={isDark}
+                      className="flex-1"
+                      hideIcon
+                      onSelect={(a) => {
+                        setRouteTo(a.displayString);
+                        if (typeof a.lat === 'number' && typeof a.lng === 'number') setRouteToLL({ lat: a.lat, lng: a.lng });
+                      }}
+                    />
+                  </div>
                   <div className="flex items-center justify-between gap-3">
                     <label className="text-xs" style={{ color: 'var(--text-muted)' }}>
                       Corridor (mi):{' '}
@@ -1200,151 +1257,143 @@ export default function LiveTrafficWidget({
               </div>
             )}
 
-            {/* Summary */}
-            <div className="mb-4">
-              <div className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
-                Events in {mode === 'route' ? 'route corridor' : 'area'}:{' '}
-                <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{list.length}</span>
-                <span style={{ color: 'var(--text-muted)' }}> / {listBase.length}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {([4, 3, 2, 1] as Severity[]).map((sev) => {
-                  const meta = severityMeta[sev];
-                  const count = countsForListBase[sev] ?? 0;
-                  const chipClass = severityChipClass(sev, isDark);
-                  const isOn = severityFilter.has(sev);
-                  return (
-                    <button
-                      key={sev}
-                      type="button"
-                      onClick={() => {
-                        setSeverityFilter((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(sev)) next.delete(sev);
-                          else next.add(sev);
-                          return next;
-                        });
-                      }}
-                      className={[
-                        'inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold',
-                        chipClass,
-                        isOn ? '' : (isDark ? 'opacity-40' : 'opacity-45'),
-                      ].join(' ')}
-                      aria-label={`${count} ${meta.label} incidents`}
-                      aria-pressed={isOn}
-                    >
-                      <span className={['h-2 w-2 rounded-full', meta.dot].join(' ')} aria-hidden="true" />
-                      {count} {meta.label}
-                    </button>
-                  );
-                })}
-                <span className="ml-auto text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {mode === 'route' ? `${list.length} along route` : `Viewport: ±${getBoundingBox(center, z).offset.toFixed(2)}°`}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
+            {/* Summary + Filter */}
+            <div>
+              <div className="flex items-center justify-between gap-3">
                 <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Filter:{' '}
-                  {[1, 2, 3, 4].every((s) => severityFilter.has(s as Severity))
-                    ? 'All'
-                    : severityFilter.size === 0
-                      ? 'None'
-                      : 'Custom'}
+                  Events:{' '}
+                  <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{list.length}</span>
+                  <span style={{ color: 'var(--text-muted)' }}> / {listBase.length}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSeverityFilter(new Set<Severity>([1, 2, 3, 4]))}
-                    className="text-xs font-semibold"
-                    style={{ color: 'var(--text-main)' }}
-                  >
-                    Show all
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSeverityFilter(new Set<Severity>())}
-                    className="text-xs font-semibold"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    Hide all
-                  </button>
-                </div>
+                <select
+                  value={
+                    [1, 2, 3, 4].every((s) => severityFilter.has(s as Severity))
+                      ? 'all'
+                      : severityFilter.size === 1
+                        ? String([...severityFilter][0])
+                        : 'custom'
+                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === 'all') {
+                      setSeverityFilter(new Set<Severity>([1, 2, 3, 4]));
+                    } else if (v === 'critical') {
+                      setSeverityFilter(new Set<Severity>([4]));
+                    } else if (v === 'major') {
+                      setSeverityFilter(new Set<Severity>([3, 4]));
+                    } else if (v === 'minor') {
+                      setSeverityFilter(new Set<Severity>([2, 3, 4]));
+                    } else if (v === 'low') {
+                      setSeverityFilter(new Set<Severity>([1, 2, 3, 4]));
+                    }
+                  }}
+                  className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold outline-none cursor-pointer"
+                  style={{
+                    borderColor: 'var(--border-subtle)',
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-main)',
+                  }}
+                  aria-label="Filter events by severity"
+                >
+                  <option value="all">All severities ({listBase.length})</option>
+                  <option value="critical">Critical only ({countsForListBase[4]})</option>
+                  <option value="major">Major+ ({(countsForListBase[3] ?? 0) + (countsForListBase[4] ?? 0)})</option>
+                  <option value="minor">Minor+ ({(countsForListBase[2] ?? 0) + (countsForListBase[3] ?? 0) + (countsForListBase[4] ?? 0)})</option>
+                </select>
               </div>
             </div>
+          </div>
 
-            {/* Incident list */}
+          {/* Scrollable events list */}
+          <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar p-4">
             {(!loading && !error && list.length === 0) ? (
               <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-main)' }}>
-                No incidents reported — traffic is clear!
+                No events reported — traffic is clear!
               </div>
             ) : (
-              <ul className="space-y-2" aria-label="Traffic incidents list">
-                {list.slice(0, 80).map((i) => {
-                  const meta = severityMeta[i.severity];
-                  const isSelected = selectedId === i.id;
-                  const locLine =
-                    i.between
-                      ? `${i.road ? i.road + ' ' : ''}between ${i.between}`
-                      : i.road && i.crossStreet
-                        ? `${i.road} @ ${i.crossStreet}`
-                        : i.road
-                          ? i.road
-                          : i.crossStreet
-                            ? i.crossStreet
-                            : null;
-                  const titleLine = locLine || i.shortDesc;
-                  const secondaryLine =
-                    locLine && i.shortDesc && i.shortDesc !== locLine
-                      ? i.shortDesc
-                      : (isSelected && i.fullDesc && i.fullDesc !== i.shortDesc ? i.fullDesc : null);
-                  return (
-                    <li
-                      key={i.id}
-                      onClick={() => {
-                        setSelectedId(i.id);
-                        setZoomToLocation({ lat: i.lat, lng: i.lng, zoom: 15 });
-                      }}
-                      className={[
-                        'rounded-xl border p-2 cursor-pointer',
-                        'transition-colors duration-150',
-                        isSelected ? 'bg-[var(--bg-panel)]' : 'bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)]',
-                      ].join(' ')}
-                      style={{
-                        borderColor: isSelected ? 'rgba(59,130,246,0.35)' : 'var(--border-subtle)',
-                        opacity: refreshing ? 0.85 : 1,
-                        boxShadow: isSelected
-                          ? '0 0 0 2px rgba(59,130,246,0.25)'
-                          : 'none',
-                      }}
-                    >
-                      <div className="flex items-start gap-2">
-                        <span className={['mt-1 h-2.5 w-2.5 rounded-full', meta.dot].join(' ')} aria-hidden="true" />
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                            {titleLine}
-                          </div>
-                          {secondaryLine && (
-                            <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                              {secondaryLine}{i.direction ? ` · ${i.direction}` : ''}
+              <>
+                <ul className="space-y-2" aria-label="Traffic events list">
+                  {list.slice(0, 120).map((i: any) => {
+                    const isSelected = selectedId === i.id;
+                    const markerColor = kindToMarkerColor(i.kind);
+                    const iconUrl = incidentIconDataUri(i.kind, markerColor);
+
+                    const locLine =
+                      i.between
+                        ? `${i.road ? i.road + ' ' : ''}between ${i.between}`
+                        : i.road && i.crossStreet
+                          ? `${i.road} @ ${i.crossStreet}`
+                          : i.road
+                            ? i.road
+                            : i.crossStreet
+                              ? i.crossStreet
+                              : null;
+
+                    const titleLine = locLine || i.shortDesc;
+
+                    const secondaryLine =
+                      (locLine && i.shortDesc && i.shortDesc !== locLine
+                        ? i.shortDesc
+                        : (isSelected && i.fullDesc && i.fullDesc !== i.shortDesc ? i.fullDesc : null));
+
+                    return (
+                      <li
+                        key={i.id}
+                        onClick={() => {
+                          setSelectedId(i.id);
+                          setZoomToLocation({ lat: i.lat, lng: i.lng, zoom: 15 });
+                        }}
+                        className={[
+                          'rounded-xl border p-2 cursor-pointer',
+                          'transition-colors duration-150',
+                          isSelected ? 'bg-[var(--bg-panel)]' : 'bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)]',
+                        ].join(' ')}
+                        style={{
+                          borderColor: isSelected ? 'rgba(59,130,246,0.35)' : 'var(--border-subtle)',
+                          opacity: refreshing ? 0.85 : 1,
+                          boxShadow: isSelected ? '0 0 0 2px rgba(59,130,246,0.25)' : 'none',
+                        }}
+                      >
+                        <div className="flex items-start gap-2">
+                          <img
+                            src={iconUrl}
+                            alt=""
+                            className="mt-0.5 h-6 w-6 flex-shrink-0"
+                            style={{ borderRadius: 999 }}
+                          />
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                              {titleLine}
                             </div>
-                          )}
-                          <div className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
-                            <span>{i.distanceMiles.toFixed(1)} mi from center</span>
-                            {mode === 'route' && typeof i.delayMinutes === 'number' && i.delayMinutes > 0 && (
-                              <span className="ml-2">· +{i.delayMinutes} min delay</span>
+                            {secondaryLine && (
+                              <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                {secondaryLine}
+                                {i.direction ? ` · ${i.direction}` : ''}
+                              </div>
+                            )}
+                            <div className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
+                              <span>{i.distanceMiles.toFixed(1)} mi from center</span>
+                              {mode === 'route' && typeof i.delayMinutes === 'number' && i.delayMinutes > 0 && (
+                                <span className="ml-2">· +{i.delayMinutes} min delay</span>
+                              )}
+                            </div>
+                            {isSelected && selectedNearbyLabel && (
+                              <div className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                                Nearby: {selectedNearbyLabel}
+                              </div>
                             )}
                           </div>
-                          {isSelected && selectedNearbyLabel && (
-                            <div className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                              Nearby: {selectedNearbyLabel}
-                            </div>
-                          )}
                         </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {list.length > 10 && (
+                  <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Scroll to view more
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

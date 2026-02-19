@@ -339,7 +339,7 @@ export default function CitiBikeFinder({
         '--brand-primary': CITIBIKE_BLUE,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Citi Bike Finder" subtitle="Find nearby bike stations and availability." />
+      <WidgetHeader title="Citi Bike Finder" subtitle="Find nearby bike stations and availability." variant="impressive" layout="inline" icon={<Bike className="w-4 h-4" />} />
       <div className="flex flex-col md:flex-row md:h-[520px]">
         {/* Map - shown first on mobile */}
         <div className="min-w-0 h-[300px] md:h-auto md:flex-1 md:order-2">

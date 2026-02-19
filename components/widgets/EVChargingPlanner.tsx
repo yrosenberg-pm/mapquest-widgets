@@ -1089,6 +1089,8 @@ export default function EVChargingPlanner({
         title="EV Charging Planner"
         subtitle="Plan an EV trip with charger discovery and range checks."
         variant="impressive"
+        layout="inline"
+        icon={<BatteryCharging className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[684px]">
         {/* Left panel */}
@@ -1210,6 +1212,7 @@ export default function EVChargingPlanner({
                       value={minPower}
                       onChange={(e) => setMinPower(Number(e.target.value))}
                       className="w-full"
+                      style={{ accentColor }}
                     />
                     <div className="text-xs mt-1" style={{ color: textMuted }}>
                       {minPower} kW+
@@ -1322,7 +1325,7 @@ export default function EVChargingPlanner({
 
                   {chargeMode === 'soc' ? (
                     <div className="mt-2">
-                      <input type="range" min={5} max={100} step={1} value={socPercent} onChange={(e) => setSocPercent(Number(e.target.value))} className="w-full" />
+                      <input type="range" min={5} max={100} step={1} value={socPercent} onChange={(e) => setSocPercent(Number(e.target.value))} className="w-full" style={{ accentColor }} />
                       <div className="text-sm font-semibold mt-1" style={{ color: textMain }}>
                         {Math.round(currentSoc)}% • ~{Math.round(availableRangeMiles)} mi range
                       </div>
@@ -1351,29 +1354,43 @@ export default function EVChargingPlanner({
                   <div className="text-xs font-semibold tracking-wider uppercase mb-2" style={{ color: textMuted }}>
                     Trip
                   </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    <AddressAutocomplete
-                      value={originText}
-                      onChange={(v) => { setOriginText(v); setOrigin(null); }}
-                      onSelect={(r) => {
-                        setOriginText(r.displayString);
-                        if (r.lat && r.lng) setOrigin({ lat: r.lat, lng: r.lng });
-                      }}
-                      placeholder="Origin"
-                      darkMode={darkMode}
-                      hideIcon={false}
-                    />
-                    <AddressAutocomplete
-                      value={destText}
-                      onChange={(v) => { setDestText(v); setDest(null); }}
-                      onSelect={(r) => {
-                        setDestText(r.displayString);
-                        if (r.lat && r.lng) setDest({ lat: r.lat, lng: r.lng });
-                      }}
-                      placeholder="Destination"
-                      darkMode={darkMode}
-                      hideIcon={false}
-                    />
+                  <div className="space-y-2">
+                    <div
+                      className="rounded-xl flex items-center gap-2.5"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+                    >
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm" style={{ background: accentColor, color: 'white' }}>A</div>
+                      <AddressAutocomplete
+                        value={originText}
+                        onChange={(v) => { setOriginText(v); setOrigin(null); }}
+                        onSelect={(r) => {
+                          setOriginText(r.displayString);
+                          if (r.lat && r.lng) setOrigin({ lat: r.lat, lng: r.lng });
+                        }}
+                        placeholder="Origin"
+                        darkMode={darkMode}
+                        hideIcon
+                        className="flex-1"
+                      />
+                    </div>
+                    <div
+                      className="rounded-xl flex items-center gap-2.5"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+                    >
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm" style={{ background: accentColor, color: 'white' }}>B</div>
+                      <AddressAutocomplete
+                        value={destText}
+                        onChange={(v) => { setDestText(v); setDest(null); }}
+                        onSelect={(r) => {
+                          setDestText(r.displayString);
+                          if (r.lat && r.lng) setDest({ lat: r.lat, lng: r.lng });
+                        }}
+                        placeholder="Destination"
+                        darkMode={darkMode}
+                        hideIcon
+                        className="flex-1"
+                      />
+                    </div>
                   </div>
 
                   <div className="mt-3 flex gap-2">
@@ -1424,9 +1441,10 @@ export default function EVChargingPlanner({
                       value={arrivalReserveSoc}
                       onChange={(e) => setArrivalReserveSoc(Number(e.target.value))}
                       className="w-full mt-2"
+                      style={{ accentColor }}
                     />
                     <label className="mt-2 flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                      <input type="checkbox" checked={autoPlanToReserve} onChange={(e) => setAutoPlanToReserve(e.target.checked)} />
+                      <input type="checkbox" checked={autoPlanToReserve} onChange={(e) => setAutoPlanToReserve(e.target.checked)} style={{ accentColor }} />
                       Auto-plan stops to meet arrival reserve
                     </label>
                   </div>

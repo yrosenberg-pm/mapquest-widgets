@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Trash2, Loader2, AlertCircle, MapPin, Crosshair, Pencil, Check, X } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle, MapPin, Crosshair, Pencil, Check, X, Layers } from 'lucide-react';
 import * as turf from '@turf/turf';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import MapQuestMap from './MapQuestMap';
@@ -435,7 +435,11 @@ export default function IsolineOverlapWidget({
       overlapGeoRef.current = acc;
       const areaM2 = turf.area(acc);
       const areaSqMi = areaM2 / 2_589_988.110336; // m^2 -> sq mi
-      const c = turf.centroid(acc);
+
+      // Use pointOnFeature instead of centroid — guarantees the point is inside
+      // the overlap polygon (avoids water / outside-polygon issues). The
+      // subsequent reverse-geocode will snap it to the nearest real street.
+      const c = turf.pointOnFeature(acc);
       const center = { lat: c.geometry.coordinates[1], lng: c.geometry.coordinates[0] };
       setOverlapStats({ hasOverlap: true, areaSqMi, center });
     } catch (e) {
@@ -600,6 +604,8 @@ export default function IsolineOverlapWidget({
         title="Isochrone Overlap"
         subtitle="Compare reachability between multiple starting points."
         variant="impressive"
+        layout="inline"
+        icon={<Layers className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map */}
@@ -622,36 +628,6 @@ export default function IsolineOverlapWidget({
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <div className="flex-1 overflow-y-auto prism-scrollbar p-4">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: `${accentColor}15` }}
-                >
-                  <span style={{ color: accentColor }}><Crosshair className="w-4 h-4" /></span>
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-bold truncate" style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}>
-                    Isochrone Visualizer
-                  </h3>
-                  <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                    Find overlap between points
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={addLocation}
-                disabled={locations.length >= 5}
-                className="prism-btn prism-btn-secondary"
-                style={{ height: 36, paddingInline: 10 }}
-                title={locations.length >= 5 ? 'Max 5 locations' : 'Add a location'}
-              >
-                <Plus className="w-5 h-5" />
-                <span className="text-sm">Add</span>
-              </button>
-            </div>
-
             {error && (
               <div
                 className="mb-3 p-2.5 rounded-lg text-xs flex items-start gap-2"
@@ -744,26 +720,33 @@ export default function IsolineOverlapWidget({
                     </div>
 
                     <div className="mb-2">
-                      <AddressAutocomplete
-                        value={loc.address}
-                        onChange={(v) => {
-                          // If user edits the text, clear coords so it's obvious we need to re-resolve the location.
-                          updateLocation(loc.id, { address: v, lat: undefined, lng: undefined });
-                          clearPolygonFor(loc.id);
-                        }}
-                        onSelect={(r) => {
-                          if (typeof r.lat === 'number' && typeof r.lng === 'number') {
-                            updateLocation(loc.id, { lat: r.lat, lng: r.lng, address: r.displayString });
+                      <div
+                        className="rounded-xl flex items-center gap-2.5"
+                        style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+                      >
+                        <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: loc.color || accentColor }} />
+                        <AddressAutocomplete
+                          value={loc.address}
+                          onChange={(v) => {
+                            updateLocation(loc.id, { address: v, lat: undefined, lng: undefined });
                             clearPolygonFor(loc.id);
-                          }
-                        }}
-                        placeholder="Search an address..."
-                        darkMode={darkMode}
-                        inputBg={inputBg}
-                        textColor={textColor}
-                        mutedText={mutedText}
-                        borderColor={borderColor}
-                      />
+                          }}
+                          onSelect={(r) => {
+                            if (typeof r.lat === 'number' && typeof r.lng === 'number') {
+                              updateLocation(loc.id, { lat: r.lat, lng: r.lng, address: r.displayString });
+                              clearPolygonFor(loc.id);
+                            }
+                          }}
+                          placeholder="Search an address..."
+                          darkMode={darkMode}
+                          inputBg={inputBg}
+                          textColor={textColor}
+                          mutedText={mutedText}
+                          borderColor={borderColor}
+                          className="flex-1"
+                          hideIcon
+                        />
+                      </div>
                       <div className="mt-1 flex items-center justify-between">
                         <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                           {!hasCoords
@@ -827,6 +810,20 @@ export default function IsolineOverlapWidget({
                   </div>
                 );
               })}
+            </div>
+
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={addLocation}
+                disabled={locations.length >= 5}
+                className="prism-btn prism-btn-secondary w-full justify-center"
+                style={{ height: 38 }}
+                title={locations.length >= 5 ? 'Max 5 locations' : 'Add a location'}
+              >
+                <Plus className="w-5 h-5" />
+                <span className="text-sm">Add</span>
+              </button>
             </div>
 
             {/* Ideal meeting spot (read-only) */}

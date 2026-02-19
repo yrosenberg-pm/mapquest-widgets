@@ -128,7 +128,7 @@ export default function WidgetPage() {
       // - Desktop: cap the largest widgets so they fit cleanly in the frame.
       const isTablet = window.matchMedia?.('(min-width: 768px) and (max-width: 1024px)').matches ?? false;
       const isLargeDesktop = window.matchMedia?.('(min-width: 1025px)').matches ?? true;
-      const isBigWidget = widgetId === 'route-weather' || widgetId === 'checkout' || widgetId === 'heatmap';
+      const isBigWidget = false; // All widgets now render at 1:1 scale
       const cap = isTablet ? 0.56 : isLargeDesktop && isBigWidget ? 0.9 : 1;
       const nextScale = Math.min(cap, availableWidth / naturalWidth);
       setWidgetScale(nextScale);

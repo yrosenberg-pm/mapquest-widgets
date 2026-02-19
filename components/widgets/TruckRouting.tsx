@@ -983,7 +983,7 @@ export default function TruckRouting({
                 setVehicle(prev => ({ ...prev, [field]: newValue }));
               }
             }}
-            className="w-full px-3 py-1.5 rounded-lg text-sm font-medium tabular-nums"
+            className="w-20 px-2.5 py-1.5 rounded-lg text-sm font-medium tabular-nums"
             style={{
               background: 'var(--bg-input)',
               border: '1px solid var(--border-subtle)',
@@ -1011,6 +1011,8 @@ export default function TruckRouting({
         title="Truck Routing"
         subtitle="Plan a truck-safe route with constraints and restrictions."
         variant="impressive"
+        layout="inline"
+        icon={<Truck className="w-4 h-4" />}
       />
       {/* Wider + shorter (avoid page scroll; keep settings visible) */}
       <div className="flex flex-col md:flex-row md:h-[700px]">
@@ -1066,13 +1068,13 @@ export default function TruckRouting({
                       </div>
 
                       {/* Truck POIs layer toggle */}
-                      <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="mt-2 flex items-center justify-between gap-3" style={{ paddingRight: 35 }}>
                         <div className="min-w-0">
                           <div className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>
                             Truck POIs
                           </div>
                           <div className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
-                            Rest areas, truck stops, and service plazas along the route
+                            Rest areas and truck stops along the route
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1201,16 +1203,19 @@ export default function TruckRouting({
                     </button>
                   </div>
                 </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               {/* From Input */}
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ 
-                    background: 'var(--bg-panel)',
-                    border: '2px solid var(--border-default)',
-                    color: 'var(--text-secondary)',
-                  }}
+              <div
+                className="rounded-xl flex items-center gap-2.5"
+                style={{
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-subtle)',
+                  padding: '10px 12px',
+                }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                  style={{ background: accentColor, color: 'white' }}
                 >
                   A
                 </div>
@@ -1242,25 +1247,18 @@ export default function TruckRouting({
                 />
               </div>
 
-              {/* Connection Line */}
-              <div className="flex items-center gap-3">
-                <div className="w-8 flex justify-center">
-                  <div 
-                    className="w-0.5 h-2 rounded-full"
-                    style={{ background: 'var(--border-default)' }}
-                  />
-                </div>
-              </div>
-
               {/* To Input */}
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                  style={{ 
-                    background: `${accentColor}15`,
-                    border: `2px solid ${accentColor}`,
-                    color: accentColor,
-                  }}
+              <div
+                className="rounded-xl flex items-center gap-2.5"
+                style={{
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border-subtle)',
+                  padding: '10px 12px',
+                }}
+              >
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                  style={{ background: accentColor, color: 'white' }}
                 >
                   B
                 </div>

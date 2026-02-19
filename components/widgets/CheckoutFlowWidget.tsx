@@ -207,22 +207,21 @@ function AddressLine1Autocomplete({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="relative">
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 z-10" style={{ color: 'var(--text-muted)' }} />
+      <div
+        className="rounded-xl flex items-center gap-2.5"
+        style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+      >
+        <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Street address"
-          className="w-full pl-10 pr-10 py-2.5 rounded-xl text-sm font-medium outline-none transition-all"
-          style={{
-            background: darkMode ? '#334155' : '#F1F5F9',
-            border: '1px solid var(--border-subtle)',
-            color: 'var(--text-main)',
-          }}
+          className="flex-1 pr-6 py-0 text-sm font-medium outline-none bg-transparent"
+          style={{ color: 'var(--text-main)' }}
         />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+        <div className="flex-shrink-0">
           {loading ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--text-muted)' }} /> : null}
         </div>
       </div>
@@ -409,6 +408,8 @@ export default function CheckoutFlowWidget({
         title="Checkout Flow"
         subtitle="Address autocomplete, validation, and delivery map preview."
         variant="impressive"
+        layout="inline"
+        icon={<ShoppingBag className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[805px]">
         {/* Left: Shipping form */}

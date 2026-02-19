@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
-import { ArrowDown, ArrowUp, Loader2, Plus, RefreshCw, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, Loader2, Plus, RefreshCw, Trash2, ChevronDown, ChevronUp, Route } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
@@ -872,6 +872,8 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
         title="Custom Route"
         subtitle={effective.description || 'View a shared route with turn-by-turn details.'}
         variant="impressive"
+        layout="inline"
+        icon={<Route className="w-4 h-4" />}
       />
 
       <div className="flex-1 min-h-0 p-4">
@@ -1031,6 +1033,8 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
         title="Custom Route"
         subtitle="Add a start and end, then optional waypoints to influence the route."
         variant="impressive"
+        layout="inline"
+        icon={<Route className="w-4 h-4" />}
       />
 
       {/* Two-panel layout */}
@@ -1243,6 +1247,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                       type="checkbox"
                       checked={builder.showWaypoints}
                       onChange={(e) => dispatch({ type: 'set', key: 'showWaypoints', value: e.target.checked })}
+                      style={{ accentColor }}
                     />
                     Show waypoints on map
                   </label>
@@ -1263,29 +1268,47 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
 
             <div className="prism-panel p-3">
               <div className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Start / End</div>
-              <div className="mt-2 grid grid-cols-1 gap-2">
-                <div>
-                  <div className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>Start address</div>
+              <div className="mt-2 space-y-2">
+                <div
+                  className="rounded-xl flex items-center gap-2.5"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+                >
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                    style={{ background: accentColor, color: 'white' }}
+                  >
+                    A
+                  </div>
                   <AddressAutocomplete
                     value={startQuery}
                     onChange={setStartQuery}
                     placeholder="Start address…"
                     darkMode={isDark}
-                    className="mt-1"
+                    className="flex-1"
+                    hideIcon
                     onSelect={(a) => {
                       setStartQuery(a.displayString);
                       if (typeof a.lat === 'number' && typeof a.lng === 'number') setStartLL({ lat: a.lat, lng: a.lng });
                     }}
                   />
                 </div>
-                <div>
-                  <div className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>End address</div>
+                <div
+                  className="rounded-xl flex items-center gap-2.5"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+                >
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 shadow-sm"
+                    style={{ background: accentColor, color: 'white' }}
+                  >
+                    B
+                  </div>
                   <AddressAutocomplete
                     value={endQuery}
                     onChange={setEndQuery}
                     placeholder="End address…"
                     darkMode={isDark}
-                    className="mt-1"
+                    className="flex-1"
+                    hideIcon
                     onSelect={(a) => {
                       setEndQuery(a.displayString);
                       if (typeof a.lat === 'number' && typeof a.lng === 'number') setEndLL({ lat: a.lat, lng: a.lng });
@@ -1339,7 +1362,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                         window.setTimeout(() => setExportedGeoJson(false), 1200);
                       } catch (_) {}
                     }}
-                    className="rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm"
+                    className="rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm transition-colors hover:bg-black/5 dark:hover:bg-white/10"
                     style={{ borderColor: 'var(--border-subtle)', background: 'transparent', color: 'var(--text-main)' }}
                     aria-label="Export route as GeoJSON"
                   >
@@ -1360,7 +1383,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                         window.setTimeout(() => setCopiedWaypoints(false), 1200);
                       } catch (_) {}
                     }}
-                    className="rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm"
+                    className="rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm transition-colors hover:bg-black/5 dark:hover:bg-white/10"
                     style={{ borderColor: 'var(--border-subtle)', background: 'transparent', color: 'var(--text-main)' }}
                     aria-label="Export waypoints as CSV"
                   >
@@ -1423,21 +1446,28 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
 
               <div className="mt-3">
                 <div className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>Add waypoint</div>
-                <div className="mt-2 grid grid-cols-1 gap-2">
-                  <AddressAutocomplete
-                    value={newLabel}
-                    onChange={setNewLabel}
-                    placeholder="Search waypoint address…"
-                    darkMode={isDark}
-                    hideIcon={false}
-                    onSelect={(a) => {
-                      setNewLabel(a.displayString);
-                      if (typeof a.lat === 'number' && typeof a.lng === 'number') {
-                        dispatch({ type: 'addWaypoint', waypoint: { lat: a.lat, lng: a.lng, label: a.displayString } });
-                        setNewLabel('');
-                      }
-                    }}
-                  />
+                <div className="mt-2 space-y-2">
+                  <div
+                    className="rounded-xl flex items-center gap-2.5"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+                  >
+                    <Plus className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+                    <AddressAutocomplete
+                      value={newLabel}
+                      onChange={setNewLabel}
+                      placeholder="Search waypoint address…"
+                      darkMode={isDark}
+                      hideIcon
+                      className="flex-1"
+                      onSelect={(a) => {
+                        setNewLabel(a.displayString);
+                        if (typeof a.lat === 'number' && typeof a.lng === 'number') {
+                          dispatch({ type: 'addWaypoint', waypoint: { lat: a.lat, lng: a.lng, label: a.displayString } });
+                          setNewLabel('');
+                        }
+                      }}
+                    />
+                  </div>
                   <input
                     value={newCoord}
                     onChange={(e) => setNewCoord(e.target.value)}

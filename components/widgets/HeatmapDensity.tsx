@@ -309,6 +309,8 @@ export default function HeatmapDensity({
         title="Heatmap Density"
         subtitle="Visualize hotspots for traffic, weather, or custom data."
         variant="impressive"
+        layout="inline"
+        icon={<Flame className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[760px]">
         {/* Left panel */}
@@ -403,6 +405,7 @@ export default function HeatmapDensity({
                     value={baseRadiusMeters}
                     onChange={(e) => setBaseRadiusMeters(Number(e.target.value))}
                     className="w-full"
+                    style={{ accentColor }}
                   />
                   <div className="text-xs mt-1" style={{ color: textMuted }}>
                     {Math.round(baseRadiusMeters)} m
@@ -420,6 +423,7 @@ export default function HeatmapDensity({
                     value={intensityBoost}
                     onChange={(e) => setIntensityBoost(Number(e.target.value))}
                     className="w-full"
+                    style={{ accentColor }}
                     disabled={mode === 'custom'}
                   />
                   <div className="text-xs mt-1" style={{ color: textMuted }}>
@@ -441,6 +445,7 @@ export default function HeatmapDensity({
                     value={baseSpreadKm}
                     onChange={(e) => setBaseSpreadKm(Number(e.target.value))}
                     className="w-full"
+                    style={{ accentColor }}
                     disabled={mode === 'custom'}
                   />
                   <div className="text-xs mt-1" style={{ color: textMuted }}>
@@ -459,6 +464,7 @@ export default function HeatmapDensity({
                     value={pointsPerCluster}
                     onChange={(e) => setPointsPerCluster(Number(e.target.value))}
                     className="w-full"
+                    style={{ accentColor }}
                     disabled={mode === 'custom'}
                   />
                   <div className="text-xs mt-1" style={{ color: textMuted }}>
@@ -468,7 +474,7 @@ export default function HeatmapDensity({
               </div>
 
               <label className="mt-3 flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                <input type="checkbox" checked={autoFit} onChange={(e) => setAutoFit(e.target.checked)} />
+                <input type="checkbox" checked={autoFit} onChange={(e) => setAutoFit(e.target.checked)} style={{ accentColor }} />
                 Auto-fit to hotspots
               </label>
             </div>

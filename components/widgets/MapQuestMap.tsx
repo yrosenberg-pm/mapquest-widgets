@@ -39,6 +39,15 @@ interface MapPolygon {
   onClick?: (lat: number, lng: number) => void;
 }
 
+interface MapPolyline {
+  coords: { lat: number; lng: number }[];
+  color?: string;
+  weight?: number;
+  opacity?: number;
+  dashed?: boolean;
+  onClick?: (lat: number, lng: number) => void;
+}
+
 interface TransitSegment {
   type: string; // pedestrian, subway, bus, train, etc.
   coords: { lat: number; lng: number }[];
@@ -64,6 +73,7 @@ interface MapQuestMapProps {
   clusterRadiusPx?: number;
   circles?: MapCircle[];
   polygons?: MapPolygon[];
+  polylines?: MapPolyline[];
   height?: string;
   showRoute?: boolean;
   routeStart?: { lat: number; lng: number };
@@ -114,6 +124,7 @@ export default function MapQuestMap({
   clusterRadiusPx = 56,
   circles = [],
   polygons = [],
+  polylines = [],
   height = '400px',
   showRoute = false,
   routeStart,
@@ -146,6 +157,7 @@ export default function MapQuestMap({
   const routeLayerRef = useRef<any>(null);
   const circlesLayerRef = useRef<any>(null);
   const polygonsLayerRef = useRef<any>(null);
+  const polylinesLayerRef = useRef<any>(null);
   const trafficLayerRef = useRef<any>(null);
   const highlightLayerRef = useRef<any>(null);
   const driverLayerRef = useRef<any>(null);
@@ -471,6 +483,7 @@ export default function MapQuestMap({
       routeLayerRef.current = L.layerGroup().addTo(map);
       circlesLayerRef.current = L.layerGroup().addTo(map);
       polygonsLayerRef.current = L.layerGroup().addTo(map);
+      polylinesLayerRef.current = L.layerGroup().addTo(map);
       highlightLayerRef.current = L.layerGroup().addTo(map);
       driverLayerRef.current = L.layerGroup().addTo(map);
 
@@ -959,6 +972,34 @@ export default function MapQuestMap({
     }
   }, [polygons, accentColor, mapReady]);
 
+  // Update polylines (generic overlay lines: closures, highlights, etc.)
+  useEffect(() => {
+    if (!polylinesLayerRef.current || !mapReady) return;
+    const L = window.L;
+    polylinesLayerRef.current.clearLayers();
+
+    for (const pl of polylines) {
+      if (!pl?.coords || pl.coords.length < 2) continue;
+      const latLngs = pl.coords.map((c) => [c.lat, c.lng] as [number, number]);
+      const line = L.polyline(latLngs, {
+        color: pl.color || '#F97316',
+        weight: pl.weight ?? 6,
+        opacity: pl.opacity ?? 0.9,
+        lineCap: 'round',
+        lineJoin: 'round',
+        dashArray: pl.dashed ? '10, 10' : undefined,
+      }).addTo(polylinesLayerRef.current);
+
+      if (pl.onClick) {
+        line.on('click', (e: any) => {
+          const ll = e?.latlng;
+          if (!ll) return;
+          pl.onClick?.(ll.lat, ll.lng);
+        });
+      }
+    }
+  }, [polylines, mapReady]);
+
   // Traffic incidents layer ref
   const trafficIncidentsRef = useRef<any>(null);
 
@@ -1307,11 +1348,12 @@ export default function MapQuestMap({
     
     // Don't run if we have transit segments - that's handled by the other useEffect
     if (transitSegments && transitSegments.length > 0) return;
+    // Only handle the "fetch directions" route when start/end are provided.
+    // Other route rendering modes (e.g., pre-calculated `routePolyline`) are handled by the next useEffect.
+    if (!showRoute || !routeStart || !routeEnd) return;
     
     const L = window.L;
     routeLayerRef.current.clearLayers();
-
-    if (!showRoute || !routeStart || !routeEnd) return;
 
     const fetchRoute = async () => {
       try {

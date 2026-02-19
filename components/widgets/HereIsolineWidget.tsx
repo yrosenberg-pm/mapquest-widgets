@@ -327,6 +327,8 @@ export default function HereIsolineWidget({
         title="Isochrone"
         subtitle="Generate travel-time polygons from a starting location."
         variant="impressive"
+        layout="inline"
+        icon={<Clock className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[560px]">
         {/* Map - shown first on mobile */}
@@ -348,27 +350,6 @@ export default function HereIsolineWidget({
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <div className="flex-1 overflow-y-auto prism-scrollbar p-4">
-            {/* Header */}
-            <div className="flex items-center gap-2 mb-3">
-              <div 
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: `${accentColor}15` }}
-              >
-                <span style={{ color: accentColor }}><MapPin className="w-4 h-4" /></span>
-              </div>
-              <div>
-                <h3 
-                  className="font-bold"
-                  style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
-                >
-                  Reachable Area
-                </h3>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Travel within specified time
-                </p>
-              </div>
-            </div>
-
             {/* Address Input */}
             <div className="mb-3">
               <label 
@@ -377,27 +358,34 @@ export default function HereIsolineWidget({
               >
                 Starting Location
               </label>
-              <AddressAutocomplete
-                value={address}
-                onChange={(v) => {
-                  setAddress(v);
-                  // Don't keep showing the previous marker/polygon while user is typing a new location.
-                  setLocation(null);
-                  setIsoline(null);
-                  setError(null);
-                }}
-                onSelect={(result) => {
-                  if (result.lat && result.lng) {
-                    setLocation({ lat: result.lat, lng: result.lng });
-                  }
-                }}
-                placeholder="Enter an address..."
-                darkMode={darkMode}
-                inputBg={inputBg}
-                textColor={textColor}
-                mutedText={mutedText}
-                borderColor={borderColor}
-              />
+              <div
+                className="rounded-xl flex items-center gap-2.5"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+              >
+                <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+                <AddressAutocomplete
+                  value={address}
+                  onChange={(v) => {
+                    setAddress(v);
+                    setLocation(null);
+                    setIsoline(null);
+                    setError(null);
+                  }}
+                  onSelect={(result) => {
+                    if (result.lat && result.lng) {
+                      setLocation({ lat: result.lat, lng: result.lng });
+                    }
+                  }}
+                  placeholder="Enter an address..."
+                  darkMode={darkMode}
+                  inputBg={inputBg}
+                  textColor={textColor}
+                  mutedText={mutedText}
+                  borderColor={borderColor}
+                  className="flex-1"
+                  hideIcon
+                />
+              </div>
             </div>
 
             {/* Transport Mode */}

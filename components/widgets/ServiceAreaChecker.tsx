@@ -183,7 +183,7 @@ export default function ServiceAreaChecker({
 
   return (
     <div 
-      className="prism-widget w-full md:w-[700px]"
+      className="prism-widget w-full md:w-[900px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
@@ -194,10 +194,12 @@ export default function ServiceAreaChecker({
         title="Service Area Checker"
         subtitle="Check delivery availability by address or map click."
         variant="impressive"
+        layout="inline"
+        icon={<Navigation className="w-4 h-4" />}
       />
 
       {/* Content - Side by Side Layout */}
-      <div className="flex flex-col md:flex-row" style={{ minHeight: '400px' }}>
+      <div className="flex flex-col md:flex-row" style={{ minHeight: '520px' }}>
         {/* Map - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
@@ -224,25 +226,32 @@ export default function ServiceAreaChecker({
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           <form onSubmit={handleSubmit} className="space-y-2">
-            <AddressAutocomplete
-              value={address}
-              onChange={(v) => {
-                setAddress(v);
-                // Clear previous marker/result until a new selection/check happens.
-                setResult(null);
-              }}
-              onSelect={(result) => {
-                if (result.lat && result.lng) {
-                  checkServiceArea(result.displayString, result.lat, result.lng);
-                }
-              }}
-              placeholder="Enter address or zip code"
-              darkMode={darkMode}
-              inputBg={inputBg}
-              textColor={textColor}
-              mutedText={mutedText}
-              borderColor={borderColor}
-            />
+            <div
+              className="rounded-xl flex items-center gap-2.5"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+            >
+              <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+              <AddressAutocomplete
+                value={address}
+                onChange={(v) => {
+                  setAddress(v);
+                  setResult(null);
+                }}
+                onSelect={(result) => {
+                  if (result.lat && result.lng) {
+                    checkServiceArea(result.displayString, result.lat, result.lng);
+                  }
+                }}
+                placeholder="Enter address or zip code"
+                darkMode={darkMode}
+                inputBg={inputBg}
+                textColor={textColor}
+                mutedText={mutedText}
+                borderColor={borderColor}
+                className="flex-1"
+                hideIcon
+              />
+            </div>
 
             <button
               type="submit"

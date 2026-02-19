@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -51,27 +51,40 @@ type WidgetId =
   | 'traffic'
   | 'custom-route';
 
-const WIDGETS = [
-  { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', isCustom: true },
-  { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', category: 'Quick Win' },
-  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', category: 'Quick Win' },
-  { id: 'citibike' as WidgetId, name: 'Citi Bike Finder', description: 'Find available bikes and docking stations', category: 'Quick Win' },
-  { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', category: 'Quick Win' },
-  { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', category: 'Quick Win' },
-  { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', category: 'Quick Win' },
-  { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents + static map markers', category: 'Quick Win' },
-  { id: 'custom-route' as WidgetId, name: 'Custom Route', description: 'Build & embed forced waypoint routes (static map)', category: 'Quick Win' },
-  { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', category: 'Bigger Bet' },
-  { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', category: 'Bigger Bet' },
-  { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', category: 'Bigger Bet' },
-  { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', category: 'Bigger Bet' },
-  { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', category: 'Bigger Bet' },
-  { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', category: 'Bigger Bet' },
-  { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', category: 'Bigger Bet' },
-  { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', category: 'Quick Win' },
-  { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', category: 'Bigger Bet' },
-  { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', category: 'Bigger Bet' },
+const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
+
+type MenuSection = 'routing' | 'other' | 'branded';
+
+const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuSection; isCustom?: boolean; menuIcon?: string }[] = [
+  // — Routing & navigation ————————————————————————————————————
+  { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', section: 'routing' },
+  { id: 'custom-route' as WidgetId, name: 'Custom Route', description: 'Build & embed forced waypoint routes', section: 'routing' },
+  { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', section: 'routing' },
+  { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', section: 'routing' },
+  { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing' },
+  { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', section: 'routing' },
+  { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing' },
+  { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing' },
+  // — Other widgets ———————————————————————————————————————————
+  { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', section: 'other' },
+  { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', section: 'other' },
+  { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other' },
+  { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', section: 'other' },
+  { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', section: 'other' },
+  { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', section: 'other' },
+  { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', section: 'other' },
+  // — Branded / partner demos ————————————————————————————————
+  { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
+  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded' },
+  { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', section: 'branded' },
+  { id: 'citibike' as WidgetId, name: 'Citi Bike Finder', description: 'Find available bikes and docking stations', section: 'branded' },
 ];
+
+const SECTION_LABELS: Record<MenuSection, string> = {
+  routing: 'Routing & Navigation',
+  other: 'Tools & Visualizations',
+  branded: 'Branded Demos',
+};
 
 const ACCENT_COLORS = [
   { name: 'Blue', value: '#2563eb' },
@@ -113,6 +126,7 @@ function HomeContent() {
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<MenuSection, boolean>>({ routing: false, other: false, branded: false });
 
   // iPad/tablet-friendly auto-scaling for widgets so they fit the available width.
   const widgetViewportRef = useRef<HTMLDivElement | null>(null);
@@ -204,7 +218,7 @@ function HomeContent() {
       // - Desktop: only cap the *largest* widgets so they always fit the frame, and don't grow when the menu is collapsed.
       const isTablet = window.matchMedia?.('(min-width: 768px) and (max-width: 1024px)').matches ?? false;
       const isLargeDesktop = window.matchMedia?.('(min-width: 1025px)').matches ?? true;
-      const isBigWidget = activeWidget === 'route-weather' || activeWidget === 'checkout' || activeWidget === 'heatmap';
+      const isBigWidget = false; // All widgets now render at 1:1 scale
       const cap = isTablet ? 0.56 : isLargeDesktop && isBigWidget ? 0.9 : 1;
       const nextScale = Math.min(cap, availableWidth / naturalWidth);
       setWidgetScale(nextScale);
@@ -504,9 +518,7 @@ function HomeContent() {
         >
           <div className="h-14 px-3 flex items-center justify-between border-b border-gray-200">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}12` }}>
-                <span className="text-sm font-bold" style={{ color: accentColor }}>MQ</span>
-              </div>
+              <img src="/brand/mq-directions-arrow.svg" alt="MapQuest" className="w-9 h-9 flex-shrink-0" />
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-gray-900 truncate">Widgets</div>
                 <div className="text-[11px] text-gray-500 truncate">Pick a widget</div>
@@ -524,31 +536,59 @@ function HomeContent() {
           </div>
 
           <nav className="flex-1 min-h-0 overflow-y-auto p-2 prism-scrollbar">
-            {WIDGETS.map((w) => {
-              const isActive = activeWidget === w.id;
-              const href = `/?widget=${w.id}`;
+            {(['routing', 'other', 'branded'] as MenuSection[]).map((section) => {
+              const sectionWidgets = WIDGETS.filter((w) => w.section === section);
+              if (sectionWidgets.length === 0) return null;
+              const isCollapsed = collapsedSections[section];
+              const hasActive = sectionWidgets.some((w) => w.id === activeWidget);
               return (
-                <Link
-                  key={w.id}
-                  href={href}
-                  onClick={() => handleWidgetSelect(w.id)}
-                  className={[
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
-                    isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
-                  ].join(' ')}
-                >
-                  <div
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: isActive ? (w.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
-                      {w.name}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate">{w.description}</div>
-                  </div>
-                  {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-                </Link>
+                <div key={section}>
+                  <button
+                    onClick={() => setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }))}
+                    className="w-full mx-1 mt-3 mb-1 px-2 flex items-center gap-2 group cursor-pointer"
+                  >
+                    <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 group-hover:text-gray-600 transition-colors">
+                      {SECTION_LABELS[section]}
+                    </span>
+                    <div className="flex-1 h-px bg-gray-200" />
+                    {isCollapsed && hasActive && (
+                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: accentColor }} />
+                    )}
+                  </button>
+                  {!isCollapsed && sectionWidgets.map((w) => {
+                    const isActive = activeWidget === w.id;
+                    const href = `/?widget=${w.id}`;
+                    const isBranded = section === 'branded';
+                    return (
+                      <Link
+                        key={w.id}
+                        href={href}
+                        onClick={() => handleWidgetSelect(w.id)}
+                        className={[
+                          'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
+                          isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
+                        ].join(' ')}
+                      >
+                        {w.menuIcon ? (
+                          <img src={w.menuIcon} alt="" className="w-5 h-5 flex-shrink-0 object-contain" />
+                        ) : (
+                          <div
+                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: isActive ? (isBranded ? '#f97316' : accentColor) : '#d1d5db' }}
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
+                            {w.name}
+                          </div>
+                          <div className="text-xs text-gray-500 truncate">{w.description}</div>
+                        </div>
+                        {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+                      </Link>
+                    );
+                  })}
+                </div>
               );
             })}
           </nav>
@@ -570,29 +610,57 @@ function HomeContent() {
           </button>
         </div>
         <nav className="h-[calc(100%-56px)] overflow-y-auto p-2 prism-scrollbar">
-          {WIDGETS.map((w) => {
-            const isActive = activeWidget === w.id;
-            const href = `/?widget=${w.id}`;
+          {(['routing', 'other', 'branded'] as MenuSection[]).map((section) => {
+            const sectionWidgets = WIDGETS.filter((w) => w.section === section);
+            if (sectionWidgets.length === 0) return null;
+            const isCollapsed = collapsedSections[section];
+            const hasActive = sectionWidgets.some((w) => w.id === activeWidget);
             return (
-              <Link
-                key={w.id}
-                href={href}
-                onClick={() => handleWidgetSelect(w.id)}
-                className={[
-                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
-                  isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
-                ].join(' ')}
-              >
-                <div
-                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: isActive ? (w.isCustom ? '#f97316' : accentColor) : '#d1d5db' }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>{w.name}</div>
-                  <div className="text-xs text-gray-500 truncate">{w.description}</div>
-                </div>
-                {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-              </Link>
+              <div key={section}>
+                <button
+                  onClick={() => setCollapsedSections((prev) => ({ ...prev, [section]: !prev[section] }))}
+                  className="w-full mx-1 mt-3 mb-1 px-2 flex items-center gap-2 group cursor-pointer"
+                >
+                  <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 group-hover:text-gray-600 transition-colors">
+                    {SECTION_LABELS[section]}
+                  </span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                  {isCollapsed && hasActive && (
+                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: accentColor }} />
+                  )}
+                </button>
+                {!isCollapsed && sectionWidgets.map((w) => {
+                  const isActive = activeWidget === w.id;
+                  const href = `/?widget=${w.id}`;
+                  const isBranded = section === 'branded';
+                  return (
+                    <Link
+                      key={w.id}
+                      href={href}
+                      onClick={() => handleWidgetSelect(w.id)}
+                      className={[
+                        'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all',
+                        isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
+                      ].join(' ')}
+                    >
+                      {w.menuIcon ? (
+                        <img src={w.menuIcon} alt="" className="w-5 h-5 flex-shrink-0 object-contain" />
+                      ) : (
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: isActive ? (isBranded ? '#f97316' : accentColor) : '#d1d5db' }}
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>{w.name}</div>
+                        <div className="text-xs text-gray-500 truncate">{w.description}</div>
+                      </div>
+                      {isActive && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+                    </Link>
+                  );
+                })}
+              </div>
             );
           })}
         </nav>
