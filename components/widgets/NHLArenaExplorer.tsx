@@ -45,9 +45,7 @@ const getLogoUrl = (abbrev: string, darkMode: boolean) =>
   `https://assets.nhle.com/logos/nhl/svg/${abbrev}_${darkMode ? 'dark' : 'light'}.svg`;
 
 const NHLShield = ({ className = "w-8 h-8" }: { className?: string }) => (
-  <div className={`${className} bg-black rounded flex items-center justify-center`}>
-    <span className="text-orange-500 font-black text-xs">NHL</span>
-  </div>
+  <img src="/brand/nhl-shield.svg" alt="NHL" className={`${className} object-contain`} />
 );
 
 interface NHLArenaExplorerProps {
@@ -1145,12 +1143,7 @@ export default function NHLArenaExplorer({
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <div 
-                  className="w-20 h-20 rounded-2xl mx-auto mb-3 flex items-center justify-center p-3"
-                  style={{ background: darkMode ? 'white' : 'var(--text-main)' }}
-                >
-                  <NHLShield className="w-14 h-14" />
-                </div>
+                <NHLShield className="w-20 h-20 mx-auto mb-3" />
                 <p 
                   className="font-semibold text-base mb-1"
                   style={{ color: 'var(--text-main)' }}

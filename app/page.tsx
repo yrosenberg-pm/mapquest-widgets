@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, Navigation, Route, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -55,29 +55,29 @@ const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instaca
 
 type MenuSection = 'routing' | 'other' | 'branded';
 
-const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuSection; isCustom?: boolean; menuIcon?: string }[] = [
+const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuSection; isCustom?: boolean; menuIcon?: string; menuLucide?: LucideIcon }[] = [
   // — Routing & navigation ————————————————————————————————————
-  { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', section: 'routing' },
-  { id: 'custom-route' as WidgetId, name: 'Custom Route', description: 'Build & embed forced waypoint routes', section: 'routing' },
-  { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', section: 'routing' },
-  { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', section: 'routing' },
-  { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing' },
-  { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', section: 'routing' },
-  { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing' },
-  { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing' },
+  { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', section: 'routing', menuLucide: Navigation },
+  { id: 'custom-route' as WidgetId, name: 'Custom Route', description: 'Build & embed forced waypoint routes', section: 'routing', menuLucide: Route },
+  { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', section: 'routing', menuLucide: Route },
+  { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', section: 'routing', menuLucide: Truck },
+  { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing', menuLucide: AlertTriangle },
+  { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', section: 'routing', menuLucide: CloudSun },
+  { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
+  { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
-  { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', section: 'other' },
-  { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', section: 'other' },
-  { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other' },
-  { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', section: 'other' },
-  { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', section: 'other' },
-  { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', section: 'other' },
-  { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', section: 'other' },
+  { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', section: 'other', menuLucide: MapPin },
+  { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', section: 'other', menuLucide: Navigation },
+  { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
+  { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', section: 'other', menuLucide: Package },
+  { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', section: 'other', menuLucide: ShoppingBag },
+  { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', section: 'other', menuLucide: Flame },
+  { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', section: 'other', menuLucide: BatteryCharging },
   // — Branded / partner demos ————————————————————————————————
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
-  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded' },
-  { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', section: 'branded' },
-  { id: 'citibike' as WidgetId, name: 'Citi Bike Finder', description: 'Find available bikes and docking stations', section: 'branded' },
+  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuIcon: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png' },
+  { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', section: 'branded', menuIcon: '/brand/instacart-carrot.svg' },
+  { id: 'citibike' as WidgetId, name: 'Citi Bike Finder', description: 'Find available bikes and docking stations', section: 'branded', menuIcon: '/brand/citibike-logo.svg' },
 ];
 
 const SECTION_LABELS: Record<MenuSection, string> = {
@@ -572,6 +572,11 @@ function HomeContent() {
                       >
                         {w.menuIcon ? (
                           <img src={w.menuIcon} alt="" className="w-5 h-5 flex-shrink-0 object-contain" />
+                        ) : w.menuLucide ? (
+                          <w.menuLucide
+                            className="w-4 h-4 flex-shrink-0"
+                            style={{ color: isActive ? accentColor : '#9ca3af' }}
+                          />
                         ) : (
                           <div
                             className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -646,6 +651,11 @@ function HomeContent() {
                     >
                       {w.menuIcon ? (
                         <img src={w.menuIcon} alt="" className="w-5 h-5 flex-shrink-0 object-contain" />
+                      ) : w.menuLucide ? (
+                        <w.menuLucide
+                          className="w-4 h-4 flex-shrink-0"
+                          style={{ color: isActive ? accentColor : '#9ca3af' }}
+                        />
                       ) : (
                         <div
                           className="w-2.5 h-2.5 rounded-full flex-shrink-0"
