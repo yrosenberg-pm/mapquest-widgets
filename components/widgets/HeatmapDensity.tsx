@@ -473,10 +473,27 @@ export default function HeatmapDensity({
                 </div>
               </div>
 
-              <label className="mt-3 flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                <input type="checkbox" checked={autoFit} onChange={(e) => setAutoFit(e.target.checked)} style={{ accentColor }} />
-                Auto-fit to hotspots
-              </label>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                  Auto-fit to hotspots
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={autoFit}
+                  onClick={() => setAutoFit((v) => !v)}
+                  className="relative inline-flex h-5 w-9 items-center rounded-full border transition-colors"
+                  style={{
+                    borderColor: 'var(--border-subtle)',
+                    background: autoFit ? accentColor : 'var(--bg-input)',
+                  }}
+                >
+                  <span
+                    className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform"
+                    style={{ transform: autoFit ? 'translateX(17px)' : 'translateX(2px)' }}
+                  />
+                </button>
+              </div>
             </div>
 
             {mode === 'custom' && (

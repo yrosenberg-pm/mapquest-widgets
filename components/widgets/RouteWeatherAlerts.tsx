@@ -1488,7 +1488,7 @@ export default function RouteWeatherAlerts({
                               Feels {toNumber(obs.comfort) ?? '--'}°F
                             </span>
                           </div>
-                          <div className="text-sm font-medium mt-1" style={{ color: 'var(--text-secondary)' }}>
+                          <div className="text-[11px] font-medium mt-1" style={{ color: 'var(--text-secondary)' }}>
                             {obs.skyDescription || '—'}
                           </div>
                         </div>
@@ -1500,29 +1500,29 @@ export default function RouteWeatherAlerts({
                       {/* Compact metrics row */}
                       <div className="grid grid-cols-3 gap-2">
                         <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
-                          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
                             <Droplets className="w-4 h-4" />
                             Humidity
                           </div>
-                          <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
+                          <div className="text-[11px] font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
                             {toNumber(obs.humidity) ?? '--'}%
                           </div>
                         </div>
                         <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
-                          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
                             <Wind className="w-4 h-4" />
                             Wind
                           </div>
-                          <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
+                          <div className="text-[11px] font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
                             {toNumber(obs.windSpeed) ?? '--'} mph
                           </div>
                         </div>
                         <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
-                          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          <div className="flex items-center gap-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
                             <Eye className="w-4 h-4" />
                             Visibility
                           </div>
-                          <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
+                          <div className="text-[11px] font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
                             {toNumber(obs.visibility) ?? '--'} mi
                           </div>
                         </div>
@@ -1621,7 +1621,7 @@ export default function RouteWeatherAlerts({
                               <WeatherIcon desc={h.description || ''} />
                             </div>
                           </div>
-                          <div className="text-sm font-bold mt-1" style={{ color: 'var(--text-main)' }}>
+                          <div className="text-[11px] font-bold mt-1" style={{ color: 'var(--text-main)' }}>
                             {formatTempNoDecimals(h.temperature)}°F
                           </div>
                           <div className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
@@ -1710,10 +1710,10 @@ export default function RouteWeatherAlerts({
                                 style={{ background: s.bg, border: `1px solid ${s.border}` }}
                               >
                                 <div className="min-w-0">
-                                  <div className="text-xs font-semibold truncate" style={{ color: s.text }}>
+                                  <div className="text-[11px] font-semibold truncate" style={{ color: s.text }}>
                                     {p.milesAt} mi · {p.desc}
                                   </div>
-                                  <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>
+                                  <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>
                                     {p.tempF != null ? `${Math.round(p.tempF)}°F` : '--'}
                                     {p.windMph != null ? ` · ${Math.round(p.windMph)} mph wind` : ''}
                                     {p.precipProb != null ? ` · ${Math.round(p.precipProb)}% precip` : ''}
@@ -1792,7 +1792,7 @@ export default function RouteWeatherAlerts({
                                 <div className="flex items-start justify-between gap-3">
                                   <div>
                                     <div
-                                      className="text-sm font-semibold"
+                                      className="text-[11px] font-semibold"
                                       style={{
                                         color: s.text,
                                         display: '-webkit-box',
@@ -1804,7 +1804,7 @@ export default function RouteWeatherAlerts({
                                       {a.title}
                                     </div>
                                     <div
-                                      className="text-xs mt-1"
+                                      className="text-[10px] mt-1"
                                       style={{
                                         color: 'var(--text-secondary)',
                                         whiteSpace: 'nowrap',

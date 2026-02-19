@@ -1443,10 +1443,27 @@ export default function EVChargingPlanner({
                       className="w-full mt-2"
                       style={{ accentColor }}
                     />
-                    <label className="mt-2 flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                      <input type="checkbox" checked={autoPlanToReserve} onChange={(e) => setAutoPlanToReserve(e.target.checked)} style={{ accentColor }} />
-                      Auto-plan stops to meet arrival reserve
-                    </label>
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                        Auto-plan stops to meet arrival reserve
+                      </span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={autoPlanToReserve}
+                        onClick={() => setAutoPlanToReserve((v) => !v)}
+                        className="relative inline-flex h-5 w-9 items-center rounded-full border transition-colors"
+                        style={{
+                          borderColor: 'var(--border-subtle)',
+                          background: autoPlanToReserve ? accentColor : 'var(--bg-input)',
+                        }}
+                      >
+                        <span
+                          className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform"
+                          style={{ transform: autoPlanToReserve ? 'translateX(17px)' : 'translateX(2px)' }}
+                        />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Removed the "Charging required" banner — the plan summary below is the source of truth */}

@@ -1242,15 +1242,27 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                       />
                     </div>
                   </div>
-                  <label className="mt-1 flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                    <input
-                      type="checkbox"
-                      checked={builder.showWaypoints}
-                      onChange={(e) => dispatch({ type: 'set', key: 'showWaypoints', value: e.target.checked })}
-                      style={{ accentColor }}
-                    />
-                    Show waypoints on map
-                  </label>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                      Show waypoints on map
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={builder.showWaypoints}
+                      onClick={() => dispatch({ type: 'set', key: 'showWaypoints', value: !builder.showWaypoints })}
+                      className="relative inline-flex h-5 w-9 items-center rounded-full border transition-colors"
+                      style={{
+                        borderColor: 'var(--border-subtle)',
+                        background: builder.showWaypoints ? accentColor : 'var(--bg-input)',
+                      }}
+                    >
+                      <span
+                        className="inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform"
+                        style={{ transform: builder.showWaypoints ? 'translateX(17px)' : 'translateX(2px)' }}
+                      />
+                    </button>
+                  </div>
                   <div>
                     <div className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>Line color</div>
                     <input
