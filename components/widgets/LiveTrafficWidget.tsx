@@ -984,12 +984,6 @@ export default function LiveTrafficWidget({
               zoomToLocation={zoomToLocation}
               fitBounds={mode === 'area' ? areaFitBounds : undefined}
               routePolyline={routeState.status === 'ready' ? routeState.polyline : undefined}
-              // Route overlay: congestion-colored segments (blue=clear → yellow/orange/red=congested)
-              routeSegments={
-                routeState.status === 'ready'
-                  ? routeState.segments.map((s) => ({ coords: s.coords, color: s.color, weight: 7, opacity: 0.95 }))
-                  : undefined
-              }
               showRoute={routeState.status === 'ready'}
             />
           </div>

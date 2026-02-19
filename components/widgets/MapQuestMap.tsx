@@ -478,6 +478,13 @@ export default function MapQuestMap({
         mapDiv.classList.add('dark-map');
       }
 
+      // Create a custom pane for traffic flow tiles so they render ABOVE route
+      // polylines (overlayPane z=400) but below markers (markerPane z=600).
+      // This lets the smooth, native MapQuest traffic flow coloring overlay the
+      // route line instead of being hidden underneath it.
+      map.createPane('trafficPane');
+      map.getPane('trafficPane').style.zIndex = '450';
+
       mapRef.current = map;
       markersLayerRef.current = L.layerGroup().addTo(map);
       routeLayerRef.current = L.layerGroup().addTo(map);
@@ -1020,13 +1027,15 @@ export default function MapQuestMap({
     }
 
     if (showTraffic && apiKey) {
-      // Add MapQuest traffic flow layer (shows road colors based on congestion)
+      // Add MapQuest traffic flow layer to the custom trafficPane so it renders
+      // ABOVE route polylines.  This gives a smooth, continuous traffic overlay
+      // on the route line without needing per-maneuver custom coloring.
       const trafficFlowLayer = L.tileLayer(
         `https://api.mapquest.com/traffic/v2/flow/tile/{z}/{x}/{y}.png?key=${apiKey}`,
         {
           maxZoom: 20,
-          opacity: 0.8,
-          zIndex: 400,
+          opacity: 0.75,
+          pane: 'trafficPane',
         }
       );
       trafficFlowLayer.addTo(map);
@@ -1038,7 +1047,7 @@ export default function MapQuestMap({
         {
           maxZoom: 20,
           opacity: 0.9,
-          zIndex: 450,
+          pane: 'trafficPane',
         }
       );
       trafficIncidentsLayer.addTo(map);
@@ -1566,23 +1575,57 @@ export default function MapQuestMap({
 
     const latLngs = routePolyline.map(p => [p.lat, p.lng] as [number, number]);
 
-    // Shadow
-    L.polyline(latLngs, {
-      color: '#000000',
-      weight: 8,
-      opacity: 0.1,
-      lineCap: 'round',
-      lineJoin: 'round',
-    }).addTo(routeLayerRef.current);
+    if (showTraffic) {
+      // When the MapQuest traffic flow tile layer is active it renders ABOVE the
+      // route polyline (via the custom trafficPane).  Draw the route as a wide,
+      // visible "casing" so the path is clearly identifiable under the
+      // semi-transparent traffic tiles.
+      // White outer glow — makes the route stand out from surrounding roads
+      L.polyline(latLngs, {
+        color: '#ffffff',
+        weight: 12,
+        opacity: 0.85,
+        lineCap: 'round',
+        lineJoin: 'round',
+        smoothFactor: 1,
+      }).addTo(routeLayerRef.current);
+      // Core route line — blue, slightly transparent so traffic colours blend
+      L.polyline(latLngs, {
+        color: routeColor || DEFAULT_ROUTE_BLUE,
+        weight: 6,
+        opacity: 0.55,
+        lineCap: 'round',
+        lineJoin: 'round',
+        smoothFactor: 1,
+      }).addTo(routeLayerRef.current);
+    } else {
+      // Shadow
+      L.polyline(latLngs, {
+        color: '#000000',
+        weight: 8,
+        opacity: 0.1,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(routeLayerRef.current);
+    }
 
-    // Main route line
-    const routeLine = L.polyline(latLngs, {
-      color: routeColor || DEFAULT_ROUTE_BLUE,
-      weight: 5,
-      opacity: 0.9,
-      lineCap: 'round',
-      lineJoin: 'round',
-    }).addTo(routeLayerRef.current);
+    // Main route line (when traffic overlay is off, this is the primary visual;
+    // when it's on, the traffic tiles cover it so we already drew the casing above).
+    const routeLine = showTraffic
+      ? L.polyline(latLngs, {
+          color: routeColor || DEFAULT_ROUTE_BLUE,
+          weight: 4,
+          opacity: 0,     // invisible – needed only for click/drag hit detection
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routeLayerRef.current)
+      : L.polyline(latLngs, {
+          color: routeColor || DEFAULT_ROUTE_BLUE,
+          weight: 5,
+          opacity: 0.9,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routeLayerRef.current);
 
     // Clickable hit area so callers can add waypoints by clicking the route line.
     if (onRouteLineClick || onRouteLineDrag) {
@@ -1678,7 +1721,7 @@ export default function MapQuestMap({
     if (mapRef.current && latLngs.length > 1) {
       mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
     }
-  }, [routePolyline, transitSegments, routeColor, accentColor, showRoute, routeStart, routeEnd, mapReady, onRouteLineClick, onRouteLineDrag]);
+  }, [routePolyline, transitSegments, routeColor, accentColor, showRoute, showTraffic, routeStart, routeEnd, mapReady, onRouteLineClick, onRouteLineDrag]);
 
   return (
     <div
