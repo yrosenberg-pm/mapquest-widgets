@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2, AlertTriangle } from 'lucide-react';
+import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2 } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -240,6 +240,16 @@ function samplePointsForElevation(points: Array<{ lat: number; lng: number }>, m
   return out;
 }
 
+function stablePoiKey(item: any) {
+  const id = item?.id || item?.place_id || item?.placeId;
+  if (typeof id === 'string' && id.trim()) return `id:${id.trim()}`;
+  const lat = item?.position?.lat ?? item?.lat;
+  const lng = item?.position?.lng ?? item?.lng;
+  const title = item?.title || item?.name || '';
+  if (typeof lat === 'number' && typeof lng === 'number') return `ll:${lat.toFixed(6)},${lng.toFixed(6)}|${String(title).trim()}`;
+  return `raw:${String(title).trim()}`;
+}
+
 async function getMaxElevationFeetForPolyline(polyline: Array<{ lat: number; lng: number }>) {
   if (!polyline.length) return null;
   const sampled = samplePointsForElevation(polyline, 100);
@@ -312,6 +322,10 @@ export default function TruckRouting({
   const [showDepartureOptions, setShowDepartureOptions] = useState(false);
   const [useHereRouting, setUseHereRouting] = useState(true); // Default to provider routing for better truck restrictions support
   const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | undefined>(undefined);
+  const [showTruckPois, setShowTruckPois] = useState(true);
+  const [truckPois, setTruckPois] = useState<Array<{ lat: number; lng: number; title: string }>>([]);
+  const [truckPoisLoading, setTruckPoisLoading] = useState(false);
+  const [truckPoisError, setTruckPoisError] = useState<string | null>(null);
   const [demoMode, setDemoMode] = useState(false);
   const [demoScenario, setDemoScenario] = useState<'durham' | 'donner' | null>(null);
   const [maxElevationFt, setMaxElevationFt] = useState<number | null>(
@@ -484,7 +498,9 @@ export default function TruckRouting({
 
       const withElevation = withMax.filter((x) => typeof x.maxFt === 'number' && Number.isFinite(x.maxFt));
       if (withElevation.length === 0) {
-        note = 'Elevation limit is set, but elevation data is unavailable for this route.';
+        // If we can't measure elevation at all, don't show a warning label.
+        // (Users still have the ceiling configured, but we avoid noisy/low-signal UI.)
+        note = null;
       } else {
         const ok = withElevation.find((x) => (x.maxFt as number) <= (elevationCeilingFt as number));
         if (ok) {
@@ -773,9 +789,33 @@ export default function TruckRouting({
 
   const mapCenter = fromCoords || toCoords || { lat: 39.8283, lng: -98.5795 };
   
-  const markers: Array<{ lat: number; lng: number; label: string; color: string }> = [];
-  if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: '#64748B' });
-  if (toCoords) markers.push({ ...toCoords, label: 'B', color: '#64748B' });
+  const markers: Array<{
+    lat: number;
+    lng: number;
+    label?: string;
+    color?: string;
+    type?: 'home' | 'poi' | 'default';
+    iconUrl?: string;
+    iconSize?: [number, number];
+    iconCircular?: boolean;
+    clusterable?: boolean;
+  }> = [];
+  if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: '#64748B', clusterable: false });
+  if (toCoords) markers.push({ ...toCoords, label: 'B', color: '#64748B', clusterable: false });
+
+  if (showTruckPois && truckPois.length) {
+    const truckPoiIconUrl = darkMode ? '/brand/truck-poi-dark.svg' : '/brand/truck-poi-light.svg';
+    for (const p of truckPois) {
+      markers.push({
+        lat: p.lat,
+        lng: p.lng,
+        label: p.title,
+        iconUrl: truckPoiIconUrl,
+        iconSize: [34, 34],
+        iconCircular: false,
+      });
+    }
+  }
 
   // Track if we've calculated a route before
   const hasCalculatedRef = useRef(false);
@@ -832,6 +872,84 @@ export default function TruckRouting({
     }
   }, [route]);
 
+  // Truck POIs "layer": fetch truck-friendly POIs along the generated route and render as POI markers.
+  useEffect(() => {
+    if (!showTruckPois) {
+      setTruckPois([]);
+      setTruckPoisError(null);
+      return;
+    }
+    if (!routePolyline || routePolyline.length < 2) {
+      setTruckPois([]);
+      setTruckPoisError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      setTruckPoisLoading(true);
+      setTruckPoisError(null);
+      try {
+        // Sample a handful of points along the route to query POIs without spamming requests.
+        const sampled = samplePointsForElevation(routePolyline, 5);
+        const seen = new Set<string>();
+        const out: Array<{ lat: number; lng: number; title: string }> = [];
+
+        // Use a small set of focused queries to get better coverage without too many requests.
+        const queries = ['truck stop', 'rest area'];
+        // ~20km radius around each sample point.
+        const r = 20000;
+        let firstErr: string | null = null;
+
+        for (const pt of sampled) {
+          for (const q of queries) {
+            const params = new URLSearchParams({
+              endpoint: 'discover',
+              q,
+              in: `circle:${pt.lat},${pt.lng};r=${r}`,
+              limit: '30',
+              lang: 'en-US',
+            });
+            const resp = await fetch(`/api/here?${params.toString()}`);
+            if (!resp.ok) {
+              if (!firstErr) {
+                const text = await resp.text().catch(() => '');
+                firstErr = text || `HERE Discover error (${resp.status})`;
+              }
+              continue;
+            }
+            const data = await resp.json();
+            const items = Array.isArray((data as any)?.items) ? (data as any).items : [];
+
+            for (const item of items) {
+              const lat = item?.position?.lat;
+              const lng = item?.position?.lng;
+              const title = String(item?.title || item?.name || '').trim();
+              if (!Number.isFinite(lat) || !Number.isFinite(lng) || !title) continue;
+              const key = stablePoiKey(item);
+              if (seen.has(key)) continue;
+              seen.add(key);
+              out.push({ lat, lng, title });
+            }
+          }
+        }
+
+        if (!cancelled) setTruckPois(out.slice(0, 120));
+        if (!cancelled) setTruckPoisError(firstErr);
+      } catch (_) {
+        if (!cancelled) setTruckPois([]);
+        if (!cancelled) setTruckPoisError('Truck POI lookup failed.');
+      } finally {
+        if (!cancelled) setTruckPoisLoading(false);
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [showTruckPois, routePolyline]);
+
   // Vehicle input component
   const VehicleInput = ({ 
     label, 
@@ -872,7 +990,7 @@ export default function TruckRouting({
               color: 'var(--text-main)',
             }}
           />
-          <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '24px' }}>
+          <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
             {unit}
           </span>
         </div>
@@ -882,14 +1000,18 @@ export default function TruckRouting({
 
   return (
     <div 
-      className="prism-widget w-full md:w-[1120px]"
+      className="prism-widget w-full md:w-[1240px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Truck Routing" subtitle="Plan a truck-safe route with constraints and restrictions." />
+      <WidgetHeader
+        title="Truck Routing"
+        subtitle="Plan a truck-safe route with constraints and restrictions."
+        variant="impressive"
+      />
       {/* Wider + shorter (avoid page scroll; keep settings visible) */}
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map - shown first on mobile */}
@@ -902,6 +1024,8 @@ export default function TruckRouting({
             accentColor={accentColor}
             height="100%"
             markers={markers}
+            clusterMarkers={showTruckPois && truckPois.length > 0}
+            clusterRadiusPx={56}
             showRoute={!!(fromCoords && toCoords)}
             routeStart={fromCoords || undefined}
             routeEnd={toCoords || undefined}
@@ -911,44 +1035,15 @@ export default function TruckRouting({
         </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-[440px] flex flex-col border-t md:border-t-0 md:border-r md:order-1"
+          className="w-full md:w-[500px] flex flex-col border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
-          {/* Header */}
-          <div 
-            className="p-3 flex-shrink-0"
-            style={{ 
-              borderBottom: '1px solid var(--border-subtle)',
-              background: 'var(--bg-panel)',
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div 
-                className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{ background: `${accentColor}15` }}
-              >
-                <span style={{ color: accentColor }}><Truck className="w-5 h-5" /></span>
-              </div>
-              <div>
-                <h3 
-                  className="font-bold text-lg"
-                  style={{ color: 'var(--text-main)', letterSpacing: '-0.02em' }}
-                >
-                  Truck Safe Routing
-                </h3>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Commercial vehicle route planning
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* Body: fixed controls + scrollable results + fixed CTA footer */}
           <div className="flex-1 min-h-0 flex flex-col">
             {/* Controls (fixed) */}
             <div className="p-3 space-y-2 flex-shrink-0" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
           {/* Vehicle Profile Section */}
-              <div className="rounded-2xl" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
                 <div className="px-4 py-3">
                   <CollapsibleSection
                     title="Vehicle Profile"
@@ -957,36 +1052,66 @@ export default function TruckRouting({
                     defaultOpen={true}
                     onOpenChange={setShowVehicleSettings}
                   >
-                    <div className="pt-3 max-h-[200px] overflow-y-auto prism-scrollbar">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="text-[11px] font-medium leading-snug" style={{ color: 'var(--text-secondary)' }}>
-                          <div>
-                            {vehicle.height} ft H × {vehicle.width} ft W × {vehicle.length} ft L
-                          </div>
-                          <div>
-                            {vehicle.weight} tons · {vehicle.axleCount} axles
-                          </div>
-                        </div>
-                      </div>
+                    <div className="pt-3 max-h-[280px] overflow-y-auto overflow-x-hidden prism-scrollbar">
 
-                      {/* Vehicle Inputs */}
+                      {/* Vehicle Inputs (ordered for fast editing) */}
                       <div className="grid grid-cols-2 gap-2">
                         <VehicleInput label="Height" value={vehicle.height} unit="ft" field="height" step={0.5} />
-                        <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
-                        <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
                         <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
+                        <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
+                        <VehicleInput label="Axles" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
                         <div className="col-span-2">
-                          <VehicleInput label="Axle Count" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
+                          <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
                         </div>
                       </div>
 
-                      {/* Compact warning */}
-                      <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-xl" style={{ background: 'var(--color-warning-bg)' }}>
-                        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
-                        <p className="text-xs" style={{ color: 'var(--color-warning)' }}>
-                          Avoids low bridges and restricted roads using your vehicle profile.
-                        </p>
+                      {/* Truck POIs layer toggle */}
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>
+                            Truck POIs
+                          </div>
+                          <div className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
+                            Rest areas, truck stops, and service plazas along the route
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {truckPoisLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
+                          ) : (
+                            <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                              {truckPois.length || 0}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={showTruckPois}
+                            onClick={() => setShowTruckPois((v) => !v)}
+                            disabled={!routePolyline || routePolyline.length < 2}
+                            className="relative inline-flex h-6 w-11 items-center rounded-full border transition-colors"
+                            style={{
+                              borderColor: 'var(--border-subtle)',
+                              background: showTruckPois ? 'var(--brand-primary)' : 'var(--bg-input)',
+                              opacity: routePolyline && routePolyline.length > 1 ? 1 : 0.55,
+                            }}
+                            aria-label="Toggle truck POIs layer"
+                          >
+                            <span
+                              className="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform"
+                              style={{
+                                transform: showTruckPois ? 'translateX(22px)' : 'translateX(2px)',
+                              }}
+                            />
+                          </button>
+                        </div>
                       </div>
+
+                      {showTruckPois && routePolyline && routePolyline.length > 1 && truckPoisError && truckPois.length === 0 ? (
+                        <div className="mt-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                          Truck POIs unavailable. {truckPoisError}
+                        </div>
+                      ) : null}
 
                       {/* Elevation constraint */}
                       <div className="mt-2">

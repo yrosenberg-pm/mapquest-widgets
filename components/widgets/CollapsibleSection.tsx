@@ -36,12 +36,19 @@ export default function CollapsibleSection({
 
   return (
     <div>
-      <button
-        type="button"
+      <div
         className="w-full flex items-center justify-between gap-3 rounded-lg px-2 py-2 -mx-2 -my-2 transition-colors"
         onClick={() => setOpen(!open)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(!open);
+          }
+        }}
         aria-expanded={open}
         aria-controls={contentId}
+        role="button"
+        tabIndex={0}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         style={{
@@ -74,7 +81,7 @@ export default function CollapsibleSection({
             {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </span>
         </div>
-      </button>
+      </div>
 
       <div id={contentId} hidden={!open}>
         {children}

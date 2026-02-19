@@ -99,6 +99,9 @@ declare global {
   }
 }
 
+// Route lines should always be the MapQuest "sharp blue" regardless of widget accent color.
+const DEFAULT_ROUTE_BLUE = '#3B82F6';
+
 export default function MapQuestMap({
   apiKey,
   center,
@@ -204,12 +207,10 @@ export default function MapQuestMap({
 
   // Inject modern styles
   useEffect(() => {
+    // In dev (Fast Refresh), MapQuestMap may not remount, so we need to *update* the style tag
+    // rather than bailing early when it already exists. This also guarantees tooltip tweaks apply.
     const styleId = 'mapquest-modern-styles-v3';
-    if (document.getElementById(styleId)) return;
-
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
+    const css = `
       /* Fix tile gaps - make tiles slightly overlap */
       .leaflet-tile {
         margin: -0.5px !important;
@@ -313,7 +314,14 @@ export default function MapQuestMap({
         transition: transform 0.15s ease !important;
       }
       .modern-marker:hover {
-        transform: scale(1.05);
+        transform: scale(1.1);
+      }
+      /* Make custom-icon markers easier to see (includes condition icons, POI icons, clusters, etc.) */
+      .modern-marker img {
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+      }
+      .modern-marker:hover img {
+        filter: drop-shadow(0 5px 10px rgba(0,0,0,0.35));
       }
       /* Only add shadow to non-custom-icon markers */
       .modern-marker-with-shadow {
@@ -362,13 +370,16 @@ export default function MapQuestMap({
         background: rgba(15, 23, 42, 0.95) !important;
         color: #fff !important;
         border: none !important;
-        border-radius: 6px !important;
-        padding: 6px 10px !important;
-        font-size: 12px !important;
+        border-radius: 10px !important;
+        padding: 9px 12px !important;
+        font-size: 13px !important;
         font-weight: 500 !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+        /* Prefer a wide, single-line tooltip (easier to scan than a tall bubble) */
         white-space: nowrap !important;
-        max-width: 200px !important;
+        line-height: 1.25 !important;
+        min-width: 320px !important;
+        max-width: 720px !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
       }
@@ -388,8 +399,15 @@ export default function MapQuestMap({
         border-right-color: rgba(15, 23, 42, 0.95) !important;
       }
     `;
-    document.head.appendChild(style);
-  }, []);
+
+    let style = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = styleId;
+      document.head.appendChild(style);
+    }
+    if (style.textContent !== css) style.textContent = css;
+  });
 
   // Initialize map with MapQuest SDK - only run once on mount
   useEffect(() => {
@@ -1322,7 +1340,7 @@ export default function MapQuestMap({
 
           // When a segment is highlighted, make the full route gray
           const isSegmentHighlighted = highlightedSegment !== null;
-          const mainRouteColor = isSegmentHighlighted ? '#9CA3AF' : (routeColor || accentColor);
+          const mainRouteColor = isSegmentHighlighted ? '#9CA3AF' : (routeColor || DEFAULT_ROUTE_BLUE);
           const mainRouteOpacity = isSegmentHighlighted ? 0.5 : 0.9;
 
           // Shadow
@@ -1392,7 +1410,7 @@ export default function MapQuestMap({
         allLatLngs.push(...latLngs);
         
         const segmentType = segment.type.toLowerCase();
-        const color = segmentColors[segmentType] || routeColor || accentColor;
+        const color = segmentColors[segmentType] || routeColor || DEFAULT_ROUTE_BLUE;
         
         // Determine if this segment should be dotted (walking or subway)
         const isDotted = segmentType === 'pedestrian' || segmentType === 'subway';
@@ -1517,7 +1535,7 @@ export default function MapQuestMap({
 
     // Main route line
     const routeLine = L.polyline(latLngs, {
-      color: routeColor || accentColor,
+      color: routeColor || DEFAULT_ROUTE_BLUE,
       weight: 5,
       opacity: 0.9,
       lineCap: 'round',

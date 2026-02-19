@@ -596,7 +596,11 @@ export default function IsolineOverlapWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Isochrone Overlap" subtitle="Compare reachability between multiple starting points." />
+      <WidgetHeader
+        title="Isochrone Overlap"
+        subtitle="Compare reachability between multiple starting points."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map */}
         <div className="h-[320px] md:h-auto md:flex-1 md:order-2">

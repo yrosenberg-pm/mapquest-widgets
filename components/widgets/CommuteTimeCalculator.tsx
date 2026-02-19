@@ -253,7 +253,11 @@ export default function CommuteTimeCalculator({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Commute Time" subtitle="Compare travel time between two locations." />
+      <WidgetHeader
+        title="Commute Time"
+        subtitle="Compare travel time between two locations."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[600px]">
         {/* Map - shown first on mobile */}
         <div className="h-[300px] md:h-auto md:flex-1 md:order-2">

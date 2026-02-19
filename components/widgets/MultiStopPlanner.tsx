@@ -796,7 +796,11 @@ export default function MultiStopPlanner({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Multi-Stop Planner" subtitle="Build, optimize, and share multi-stop routes." />
+      <WidgetHeader
+        title="Multi-Stop Planner"
+        subtitle="Build, optimize, and share multi-stop routes."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[715px]">
         {/* Map - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">

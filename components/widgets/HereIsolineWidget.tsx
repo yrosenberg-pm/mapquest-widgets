@@ -323,7 +323,11 @@ export default function HereIsolineWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Isochrone" subtitle="Generate travel-time polygons from a starting location." />
+      <WidgetHeader
+        title="Isochrone"
+        subtitle="Generate travel-time polygons from a starting location."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[560px]">
         {/* Map - shown first on mobile */}
         <div className="h-[300px] md:h-auto md:flex-1 md:order-2">

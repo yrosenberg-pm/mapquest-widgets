@@ -426,7 +426,11 @@ export default function NeighborhoodScore({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Neighborhood Score" subtitle="Score an area based on nearby amenities." />
+      <WidgetHeader
+        title="Neighborhood Score"
+        subtitle="Score an area based on nearby amenities."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[600px]">
         {/* Map - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">

@@ -168,7 +168,11 @@ export default function DeliveryETA({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Delivery ETA" subtitle="Estimate delivery status and arrival time to an address." />
+      <WidgetHeader
+        title="Delivery ETA"
+        subtitle="Estimate delivery status and arrival time to an address."
+        variant="impressive"
+      />
       {/* Header */}
       <div 
         className="px-4 py-3 flex items-center justify-between"
@@ -286,7 +290,6 @@ export default function DeliveryETA({
               showRoute={!!(status.currentLocation && status.destinationLocation && status.status !== 'delivered')}
               routeStart={status.currentLocation || undefined}
               routeEnd={status.destinationLocation || undefined}
-              routeColor={accentColor}
             />
           </div>
         </>

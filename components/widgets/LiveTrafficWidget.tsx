@@ -870,6 +870,7 @@ export default function LiveTrafficWidget({
     >
       <WidgetHeader
         title="Live Traffic"
+        variant="impressive"
         subtitle={
           lastUpdated
             ? `${

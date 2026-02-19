@@ -406,7 +406,6 @@ export default function InstacartDeliveryETA({
               showRoute={!!(status.currentLocation && status.destinationLocation && status.status !== 'delivered')}
               routeStart={status.currentLocation || undefined}
               routeEnd={status.destinationLocation || undefined}
-              routeColor={INSTACART_GREEN}
               showZoomControls={false}
             />
           </div>

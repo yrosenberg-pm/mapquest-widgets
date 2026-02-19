@@ -1085,7 +1085,11 @@ export default function EVChargingPlanner({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="EV Charging Planner" subtitle="Plan an EV trip with charger discovery and range checks." />
+      <WidgetHeader
+        title="EV Charging Planner"
+        subtitle="Plan an EV trip with charger discovery and range checks."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[684px]">
         {/* Left panel */}
         <div className="w-full md:w-[400px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: border }}>

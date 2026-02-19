@@ -190,7 +190,11 @@ export default function DirectionsEmbed({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Directions" subtitle="Get a route, ETA, and turn-by-turn directions." />
+      <WidgetHeader
+        title="Directions"
+        subtitle="Get a route, ETA, and turn-by-turn directions."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map - shown first on mobile */}
         <div className="h-[300px] md:h-auto md:flex-1 md:order-2">

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
 import WidgetHeader from './WidgetHeader';
+import CollapsibleSection from './CollapsibleSection';
 
 type Severity = 'warning' | 'watch' | 'advisory';
 
@@ -78,6 +79,19 @@ type ForecastHour = {
   precipitationProbability?: string | number;
 };
 
+type RouteConditionKind = 'clear' | 'rain' | 'snow' | 'ice' | 'fog' | 'wind' | 'unknown';
+
+type RouteConditionPoint = {
+  lat: number;
+  lng: number;
+  milesAt: number; // miles from start
+  desc: string;
+  tempF: number | null;
+  precipProb: number | null; // 0..100 (if available)
+  windMph: number | null;
+  kind: RouteConditionKind;
+};
+
 type AlertItem = {
   type?: string;
   description?: string;
@@ -117,6 +131,25 @@ function severityStyles(sev: Severity) {
     default:
       return { bg: '#3b82f615', border: '#3b82f640', text: '#3b82f6' };
   }
+}
+
+function alertMarkerIconUri(sev: Severity) {
+  // Map alert markers are intentionally a single color for quick scanning.
+  // (Left panel still shows severity-specific colors.)
+  const fill = '#F97316'; // orange
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="21" fill="${fill}" stroke="white" stroke-width="3.5"/>
+      <g transform="translate(24 24)">
+        <g fill="none" stroke="white" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M0 -13.5 L13.5 10.5 H-13.5 Z" />
+          <line x1="0" y1="-5" x2="0" y2="3.5" />
+          <circle cx="0" cy="7.5" r="1.2" fill="white" stroke="none" />
+        </g>
+      </g>
+    </svg>
+  `.trim();
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 function formatMiles(n: number) {
@@ -472,6 +505,144 @@ function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: nu
   return R * c;
 }
 
+function classifyRouteCondition(opts: {
+  desc: string;
+  tempF: number | null;
+  precipProb: number | null;
+  windMph: number | null;
+}): RouteConditionKind {
+  const d = (opts.desc || '').toLowerCase();
+  const temp = typeof opts.tempF === 'number' ? opts.tempF : null;
+  const p = typeof opts.precipProb === 'number' ? opts.precipProb : null;
+  const wind = typeof opts.windMph === 'number' ? opts.windMph : null;
+
+  const precipLikely = p != null ? p >= 35 : d.includes('rain') || d.includes('snow') || d.includes('sleet');
+  const isFreezing = temp != null ? temp <= 32 : false;
+
+  if (d.includes('blizzard') || d.includes('snow') || d.includes('flurr') || d.includes('sleet') || d.includes('hail')) {
+    return 'snow';
+  }
+  if ((d.includes('freez') || d.includes('ice')) || (precipLikely && isFreezing)) {
+    return 'ice';
+  }
+  if (d.includes('fog') || d.includes('mist') || d.includes('smoke') || d.includes('haze')) {
+    return 'fog';
+  }
+  if (d.includes('rain') || d.includes('shower') || d.includes('drizzle') || (precipLikely && !isFreezing)) {
+    return 'rain';
+  }
+  if (wind != null && wind >= 25) return 'wind';
+  if (d.includes('clear') || d.includes('sun') || d.includes('cloud')) return 'clear';
+  return 'unknown';
+}
+
+function conditionStyles(kind: RouteConditionKind) {
+  switch (kind) {
+    case 'snow':
+      return { bg: '#8B5CF615', border: '#8B5CF640', text: '#8B5CF6', fill: '#8B5CF6' };
+    case 'ice':
+      return { bg: '#06B6D415', border: '#06B6D440', text: '#06B6D4', fill: '#06B6D4' };
+    case 'rain':
+      return { bg: '#3B82F615', border: '#3B82F640', text: '#3B82F6', fill: '#3B82F6' };
+    case 'fog':
+      return { bg: '#64748B15', border: '#64748B40', text: '#64748B', fill: '#64748B' };
+    case 'wind':
+      return { bg: '#F59E0B15', border: '#F59E0B40', text: '#F59E0B', fill: '#F59E0B' };
+    case 'clear':
+      return { bg: '#10B98115', border: '#10B98140', text: '#10B981', fill: '#10B981' };
+    case 'unknown':
+    default:
+      return { bg: '#94A3B815', border: '#94A3B840', text: '#94A3B8', fill: '#94A3B8' };
+  }
+}
+
+function conditionGlyph(kind: RouteConditionKind) {
+  switch (kind) {
+    case 'snow':
+      return '❄';
+    case 'ice':
+      return '🧊';
+    case 'rain':
+      return '💧';
+    case 'fog':
+      return '≋';
+    case 'wind':
+      return '〰';
+    case 'clear':
+      return '☀';
+    case 'unknown':
+    default:
+      return '•';
+  }
+}
+
+function conditionInnerIconSvg(kind: RouteConditionKind) {
+  // Simple Lucide-style icons (stroke-only) to match the left panel visual language.
+  // ViewBox: 0 0 24 24
+  switch (kind) {
+    case 'rain':
+      return `
+        <path d="M17.5 19H7a4 4 0 1 1 0-8 5 5 0 0 1 9.7-1.6A4.5 4.5 0 0 1 17.5 19z"/>
+        <line x1="9" y1="21" x2="9" y2="23"/>
+        <line x1="13" y1="21" x2="13" y2="23"/>
+        <line x1="17" y1="21" x2="17" y2="23"/>
+      `;
+    case 'snow':
+    case 'ice':
+      return `
+        <path d="M17.5 19H7a4 4 0 1 1 0-8 5 5 0 0 1 9.7-1.6A4.5 4.5 0 0 1 17.5 19z"/>
+        <circle cx="9" cy="22" r="0.9"/>
+        <circle cx="13" cy="22" r="0.9"/>
+        <circle cx="17" cy="22" r="0.9"/>
+      `;
+    case 'fog':
+      return `
+        <path d="M17.5 19H7a4 4 0 1 1 0-8 5 5 0 0 1 9.7-1.6A4.5 4.5 0 0 1 17.5 19z"/>
+        <line x1="6.5" y1="21" x2="18.5" y2="21"/>
+        <line x1="8" y1="23" x2="17" y2="23"/>
+      `;
+    case 'wind':
+      return `
+        <path d="M3 12h10a3 3 0 1 0-3-3"/>
+        <path d="M3 18h14a3 3 0 1 1-3 3"/>
+      `;
+    case 'clear':
+      return `
+        <circle cx="12" cy="12" r="4"/>
+        <line x1="12" y1="2" x2="12" y2="5"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="5" y2="12"/>
+        <line x1="19" y1="12" x2="22" y2="12"/>
+        <line x1="4.2" y1="4.2" x2="6.4" y2="6.4"/>
+        <line x1="17.6" y1="17.6" x2="19.8" y2="19.8"/>
+        <line x1="17.6" y1="6.4" x2="19.8" y2="4.2"/>
+        <line x1="4.2" y1="19.8" x2="6.4" y2="17.6"/>
+      `;
+    case 'unknown':
+    default:
+      // Cloud
+      return `
+        <path d="M17.5 19H7a4 4 0 1 1 0-8 5 5 0 0 1 9.7-1.6A4.5 4.5 0 0 1 17.5 19z"/>
+      `;
+  }
+}
+
+function conditionMarkerIconUri(kind: RouteConditionKind) {
+  const s = conditionStyles(kind);
+  const inner = conditionInnerIconSvg(kind);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <circle cx="24" cy="24" r="21" fill="${s.fill}" stroke="white" stroke-width="3.5"/>
+      <g transform="translate(12 12)">
+        <g fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          ${inner}
+        </g>
+      </g>
+    </svg>
+  `.trim();
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 // HERE Flexible Polyline decoder (2D only)
 function decodeHerePolyline(encoded: string): { lat: number; lng: number }[] {
   const DECODING_TABLE = [
@@ -770,6 +941,8 @@ export default function RouteWeatherAlerts({
 
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
+  const [loadingConditions, setLoadingConditions] = useState(false);
+  const [routeConditions, setRouteConditions] = useState<RouteConditionPoint[]>([]);
   const [runError, setRunError] = useState<string | null>(null);
   const [closeToken, setCloseToken] = useState(0);
 
@@ -783,21 +956,49 @@ export default function RouteWeatherAlerts({
     const m: any[] = [];
     if (start) m.push({ lat: start.lat, lng: start.lng, label: `Start: ${start.label}`, color: '#64748B', type: 'default' });
     if (dest) m.push({ lat: dest.lat, lng: dest.lng, label: `Destination: ${dest.label}`, color: accentColor, type: 'default' });
-    return m;
-  }, [start, dest, accentColor]);
+    if (routeConditions.length > 0) {
+      for (const p of routeConditions) {
+        const s = conditionStyles(p.kind);
+        m.push({
+          lat: p.lat,
+          lng: p.lng,
+          label: `${p.milesAt} mi · ${p.desc}${p.tempF != null ? ` · ${Math.round(p.tempF)}°F` : ''}${
+            p.windMph != null ? ` · ${Math.round(p.windMph)} mph wind` : ''
+          }${p.precipProb != null ? ` · ${Math.round(p.precipProb)}% precip` : ''}`,
+          iconUrl: conditionMarkerIconUri(p.kind),
+          iconCircular: false,
+          iconSize: [38, 38],
+          zIndexOffset: 450,
+          color: s.fill,
+          type: 'default',
+          clusterable: false,
+        });
+      }
+    }
+    if (alerts.length > 0) {
+      for (const a of alerts) {
+        const milesFromDest =
+          routeMiles != null && a.milesAt != null ? Math.max(0, routeMiles - a.milesAt) : null;
+        const detailParts: string[] = [];
+        if (milesFromDest != null) detailParts.push(`${formatMiles(milesFromDest)} mi from destination`);
+        if (a.timeWindow) detailParts.push(a.timeWindow);
+        const detail = detailParts.length ? ` · ${detailParts.join(' · ')}` : '';
 
-  const alertCircles = useMemo(() => {
-    return alerts.map(a => {
-      const s = severityStyles(a.severity);
-      return {
-        lat: a.lat,
-        lng: a.lng,
-        radius: 12000, // meters-ish visual on mapquest/leaflet circle (Leaflet uses meters)
-        color: s.text,
-        fillOpacity: 0.18,
-      };
-    });
-  }, [alerts]);
+        m.push({
+          lat: a.lat,
+          lng: a.lng,
+          label: `${a.title}${detail}`,
+          iconUrl: alertMarkerIconUri(a.severity),
+          iconCircular: false,
+          iconSize: [38, 38],
+          zIndexOffset: 520,
+          type: 'default',
+          clusterable: false,
+        });
+      }
+    }
+    return m;
+  }, [start, dest, accentColor, routeConditions, alerts, routeMiles]);
 
   const geocodeOne = async (q: string): Promise<PlaceSelection | null> => {
     const query = q.trim();
@@ -818,12 +1019,14 @@ export default function RouteWeatherAlerts({
     setForecastDays([]);
     setForecastHours([]);
     setAlerts([]);
+    setRouteConditions([]);
     setRoutePolyline(null);
     setRouteMiles(null);
 
     setLoadingWeather(true);
     setLoadingRoute(true);
     setLoadingAlerts(true);
+    setLoadingConditions(true);
 
     try {
       // Ensure we have coordinates (either selected from autosuggest, or geocoded from text)
@@ -981,9 +1184,19 @@ export default function RouteWeatherAlerts({
       setRouteMiles(miles);
       setLoadingRoute(false);
 
-      // Sample points & fetch alerts
-      const sampleEveryMiles = 50;
-      const samples: Array<{ lat: number; lng: number; milesAt: number }> = [];
+      // Sample points & fetch conditions/alerts.
+      // Tahoe → Reno is ~60mi; sample more densely for shorter routes.
+      const estMiles = miles ?? undefined;
+      const sampleEveryMiles =
+        typeof estMiles === 'number'
+          ? estMiles <= 80
+            ? 10
+            : estMiles <= 250
+              ? 25
+              : 50
+          : 25;
+
+      const samples: Array<{ lat: number; lng: number; milesAt: number }> = [{ lat: s.lat, lng: s.lng, milesAt: 0 }];
       let acc = 0;
       let nextTarget = sampleEveryMiles;
       for (let i = 1; i < coords.length; i++) {
@@ -992,10 +1205,43 @@ export default function RouteWeatherAlerts({
         if (acc >= nextTarget) {
           samples.push({ lat: coords[i].lat, lng: coords[i].lng, milesAt: Math.round(acc) });
           nextTarget += sampleEveryMiles;
-          if (samples.length >= 12) break;
+          if (samples.length >= 10) break;
         }
       }
       samples.push({ lat: d.lat, lng: d.lng, milesAt: miles ? Math.round(miles) : Math.round(acc) });
+
+      // Along-route "road condition" proxy from weather observations at varying distances.
+      try {
+        const obsResults = await Promise.all(
+          samples.map(async (sp) => {
+            const oRes = await fetch(`/api/here?endpoint=weather&product=observation&latitude=${sp.lat}&longitude=${sp.lng}`);
+            const o = await oRes.json();
+            const obsItem =
+              o?.observations?.location?.[0]?.observation?.[0] || o?.observations?.location?.observation?.[0] || null;
+            const desc = String(obsItem?.skyDescription || obsItem?.description || '').trim() || '—';
+            const tempF = toNumber(obsItem?.temperature);
+            const windMph = toNumber(obsItem?.windSpeed);
+            const precipProb = toNumber(obsItem?.precipitationProbability);
+            const kind = classifyRouteCondition({ desc, tempF, precipProb, windMph });
+            const pt: RouteConditionPoint = {
+              lat: sp.lat,
+              lng: sp.lng,
+              milesAt: sp.milesAt,
+              desc,
+              tempF,
+              precipProb,
+              windMph,
+              kind,
+            };
+            return pt;
+          })
+        );
+        setRouteConditions(obsResults);
+      } catch {
+        setRouteConditions([]);
+      } finally {
+        setLoadingConditions(false);
+      }
 
       const found: RouteAlert[] = [];
       const seen = new Set<string>();
@@ -1031,22 +1277,27 @@ export default function RouteWeatherAlerts({
       setLoadingWeather(false);
       setLoadingRoute(false);
       setLoadingAlerts(false);
+      setLoadingConditions(false);
     }
   };
 
   return (
     <div
-      className="prism-widget w-full md:w-[1260px]"
+      className="prism-widget w-full md:w-[1340px]"
       data-theme={darkMode ? 'dark' : 'light'}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Route Weather Alerts" subtitle="See forecast and active alerts along a route." />
+      <WidgetHeader
+        title="Route Weather Alerts"
+        subtitle="See forecast and active alerts along a route."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[870px]">
         {/* Left panel */}
-        <div className="w-full md:w-[630px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="w-full md:w-[600px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <div className="flex items-center justify-between">
               <div>
@@ -1114,8 +1365,8 @@ export default function RouteWeatherAlerts({
             </button>
           </div>
 
-          {/* Keep content visible without internal scroll by compacting sections */}
-          <div className="flex-1 min-h-0 overflow-hidden p-4 space-y-3">
+          {/* Results */}
+          <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar p-4 space-y-3">
             {runError && (
               <div className="p-3 rounded-xl text-sm" style={{ background: 'var(--color-error-bg)', color: 'var(--color-error)', border: '1px solid var(--border-subtle)' }}>
                 {runError}
@@ -1123,260 +1374,397 @@ export default function RouteWeatherAlerts({
             )}
             {/* Destination Weather */}
             <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
-                  Destination Weather
-                </div>
-                {dest ? (
-                  <div className="text-xs truncate max-w-[220px]" style={{ color: 'var(--text-muted)' }} title={dest.label}>
-                    {dest.label}
-                  </div>
-                ) : null}
-              </div>
+              <CollapsibleSection
+                title="Destination Weather"
+                summary={dest ? dest.label : 'Enter a destination to see weather.'}
+                defaultOpen={false}
+              >
+                <div className="mt-3">
+                  {!dest ? (
+                    <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Enter a destination to see weather.
+                    </div>
+                  ) : loadingWeather ? (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading weather…
+                    </div>
+                  ) : obs ? (
+                    <div className="space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-main)' }}>
+                              {toNumber(obs.temperature) ?? '--'}°F
+                            </span>
+                            <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+                              Feels {toNumber(obs.comfort) ?? '--'}°F
+                            </span>
+                          </div>
+                          <div className="text-sm font-medium mt-1" style={{ color: 'var(--text-secondary)' }}>
+                            {obs.skyDescription || '—'}
+                          </div>
+                        </div>
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}12`, color: accentColor }}>
+                          <WeatherIcon desc={obs.skyDescription || ''} />
+                        </div>
+                      </div>
 
-              {!dest ? (
-                <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  Enter a destination to see weather.
+                      {/* Compact metrics row */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                            <Droplets className="w-4 h-4" />
+                            Humidity
+                          </div>
+                          <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
+                            {toNumber(obs.humidity) ?? '--'}%
+                          </div>
+                        </div>
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                            <Wind className="w-4 h-4" />
+                            Wind
+                          </div>
+                          <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
+                            {toNumber(obs.windSpeed) ?? '--'} mph
+                          </div>
+                        </div>
+                        <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
+                          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                            <Eye className="w-4 h-4" />
+                            Visibility
+                          </div>
+                          <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
+                            {toNumber(obs.visibility) ?? '--'} mi
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Weather data unavailable.
+                    </div>
+                  )}
                 </div>
-              ) : loadingWeather ? (
-                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading weather…
-                </div>
-              ) : obs ? (
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-main)' }}>
-                          {toNumber(obs.temperature) ?? '--'}°F
-                        </span>
-                        <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-                          Feels {toNumber(obs.comfort) ?? '--'}°F
-                        </span>
-                      </div>
-                      <div className="text-sm font-medium mt-1" style={{ color: 'var(--text-secondary)' }}>
-                        {obs.skyDescription || '—'}
-                      </div>
-                    </div>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${accentColor}12`, color: accentColor }}>
-                      <WeatherIcon desc={obs.skyDescription || ''} />
-                    </div>
-                  </div>
-
-                  {/* Compact metrics row */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                        <Droplets className="w-4 h-4" />
-                        Humidity
-                      </div>
-                      <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
-                        {toNumber(obs.humidity) ?? '--'}%
-                      </div>
-                    </div>
-                    <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                        <Wind className="w-4 h-4" />
-                        Wind
-                      </div>
-                      <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
-                        {toNumber(obs.windSpeed) ?? '--'} mph
-                      </div>
-                    </div>
-                    <div className="rounded-xl p-3" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                        <Eye className="w-4 h-4" />
-                        Visibility
-                      </div>
-                      <div className="text-sm font-semibold mt-1" style={{ color: 'var(--text-main)' }}>
-                        {toNumber(obs.visibility) ?? '--'} mi
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  Weather data unavailable.
-                </div>
-              )}
+              </CollapsibleSection>
             </div>
 
             {/* Forecast */}
             <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
-                  Forecast
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setForecastMode('daily')}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                    style={{
-                      background: forecastMode === 'daily' ? `${accentColor}15` : 'var(--bg-panel)',
-                      border: `1px solid ${forecastMode === 'daily' ? `${accentColor}35` : 'var(--border-subtle)'}`,
-                      color: forecastMode === 'daily' ? accentColor : 'var(--text-muted)',
-                    }}
-                  >
-                    Daily
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForecastMode('hourly')}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold"
-                    style={{
-                      background: forecastMode === 'hourly' ? `${accentColor}15` : 'var(--bg-panel)',
-                      border: `1px solid ${forecastMode === 'hourly' ? `${accentColor}35` : 'var(--border-subtle)'}`,
-                      color: forecastMode === 'hourly' ? accentColor : 'var(--text-muted)',
-                    }}
-                  >
-                    Hourly
-                  </button>
-                </div>
-              </div>
-
-              {forecastMode === 'daily' ? (
-                <div className="grid grid-cols-7 gap-1.5">
-                  {forecastDays.slice(0, 7).map((d, i) => (
-                    <div key={i} className="rounded-xl p-2 text-center" style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}>
-                      <div className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
-                        {d.dayOfMonth || (d.dayOfWeek || '').slice(0, 3) || '—'}
-                      </div>
-                      <div className="mt-0.5 flex items-center justify-center" style={{ color: accentColor }}>
-                        <div className="scale-90">
-                          <WeatherIcon desc={d.description || ''} />
-                        </div>
-                      </div>
-                      <div className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-main)' }}>
-                        {formatTempNoDecimals(d.highTemperature)}/{formatTempNoDecimals(d.lowTemperature)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex gap-2 overflow-x-auto prism-scrollbar pb-1">
-                  {forecastHours.slice(0, 24).map((h, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl p-3 flex-shrink-0"
-                      style={{ width: 150, background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
+              <CollapsibleSection
+                title="Forecast"
+                summary={dest ? `Destination forecast · ${forecastMode === 'daily' ? 'Daily' : 'Hourly'}` : 'Enter a destination to see forecast.'}
+                defaultOpen={false}
+                rightHint={
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setForecastMode('daily');
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{
+                        background: forecastMode === 'daily' ? `${accentColor}15` : 'var(--bg-panel)',
+                        border: `1px solid ${forecastMode === 'daily' ? `${accentColor}35` : 'var(--border-subtle)'}`,
+                        color: forecastMode === 'daily' ? accentColor : 'var(--text-muted)',
+                      }}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-muted)' }} title={h.localTime || ''}>
-                          {h.localTime || '—'}
+                      Daily
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setForecastMode('hourly');
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{
+                        background: forecastMode === 'hourly' ? `${accentColor}15` : 'var(--bg-panel)',
+                        border: `1px solid ${forecastMode === 'hourly' ? `${accentColor}35` : 'var(--border-subtle)'}`,
+                        color: forecastMode === 'hourly' ? accentColor : 'var(--text-muted)',
+                      }}
+                    >
+                      Hourly
+                    </button>
+                  </div>
+                }
+              >
+                <div className="mt-3">
+                  {forecastMode === 'daily' ? (
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {forecastDays.slice(0, 7).map((d, i) => (
+                        <div
+                          key={i}
+                          className="rounded-xl p-2 text-center"
+                          style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
+                        >
+                          <div className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                            {d.dayOfMonth || (d.dayOfWeek || '').slice(0, 3) || '—'}
+                          </div>
+                          <div className="mt-0.5 flex items-center justify-center" style={{ color: accentColor }}>
+                            <div className="scale-90">
+                              <WeatherIcon desc={d.description || ''} />
+                            </div>
+                          </div>
+                          <div className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--text-main)' }}>
+                            {formatTempNoDecimals(d.highTemperature)}/{formatTempNoDecimals(d.lowTemperature)}
+                          </div>
                         </div>
-                        <div style={{ color: accentColor }}>
-                          <WeatherIcon desc={h.description || ''} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 overflow-x-auto prism-scrollbar pb-1">
+                      {forecastHours.slice(0, 24).map((h, i) => (
+                        <div
+                          key={i}
+                          className="rounded-xl p-3 flex-shrink-0"
+                          style={{ width: 150, background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div
+                              className="text-[11px] font-semibold truncate"
+                              style={{ color: 'var(--text-muted)' }}
+                              title={h.localTime || ''}
+                            >
+                              {h.localTime || '—'}
+                            </div>
+                            <div style={{ color: accentColor }}>
+                              <WeatherIcon desc={h.description || ''} />
+                            </div>
+                          </div>
+                          <div className="text-sm font-bold mt-1" style={{ color: 'var(--text-main)' }}>
+                            {formatTempNoDecimals(h.temperature)}°F
+                          </div>
+                          <div className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                            {Math.round(toNumber(h.precipitationProbability) ?? 0)}% precip
+                          </div>
                         </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CollapsibleSection>
+            </div>
+
+            {/* Conditions Along Route */}
+            <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+              <CollapsibleSection
+                title="Conditions along route"
+                summary={
+                  routeMiles != null
+                    ? `~${formatMiles(routeMiles)} mi · ${routeConditions.length || 0} points`
+                    : `${routeConditions.length || 0} points`
+                }
+                defaultOpen={true}
+                rightHint={
+                  <span
+                    className="text-xs font-medium px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
+                  >
+                    {routeConditions.length || 0}
+                  </span>
+                }
+              >
+                <div className="mt-3">
+                  {!start || !dest ? (
+                    <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Enter both addresses to sample conditions along the route.
+                    </div>
+                  ) : loadingRoute || loadingConditions ? (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sampling conditions…
+                    </div>
+                  ) : routeConditions.length === 0 ? (
+                    <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      No along-route condition samples available.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {/* Segmented bar */}
+                      <div className="flex items-center gap-1">
+                        {routeConditions.map((p, idx) => {
+                          const s = conditionStyles(p.kind);
+                          return (
+                            <div
+                              key={`${p.milesAt}-${idx}`}
+                              title={`${p.milesAt} mi · ${p.desc}${p.tempF != null ? ` · ${Math.round(p.tempF)}°F` : ''}${
+                                p.windMph != null ? ` · ${Math.round(p.windMph)} mph wind` : ''
+                              }`}
+                              className="h-3 rounded-full flex-1"
+                              style={{
+                                background: s.fill,
+                                opacity: idx === 0 || idx === routeConditions.length - 1 ? 0.95 : 0.85,
+                              }}
+                            />
+                          );
+                        })}
                       </div>
-                      <div className="text-sm font-bold mt-1" style={{ color: 'var(--text-main)' }}>
-                        {formatTempNoDecimals(h.temperature)}°F
+                      {/* Labels */}
+                      <div className="flex items-center justify-between text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        <span>0 mi</span>
+                        <span>
+                          {routeConditions.length > 2 ? `${routeConditions[Math.floor(routeConditions.length / 2)].milesAt} mi` : ''}
+                        </span>
+                        <span>{routeConditions[routeConditions.length - 1].milesAt} mi</span>
                       </div>
-                      <div className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                        {Math.round(toNumber(h.precipitationProbability) ?? 0)}% precip
+
+                      {/* Compact list */}
+                      <div className="max-h-[220px] overflow-y-auto prism-scrollbar pr-1">
+                        <div className="space-y-1.5">
+                          {routeConditions.map((p, idx) => {
+                            const s = conditionStyles(p.kind);
+                            return (
+                              <div
+                                key={`${p.milesAt}-${idx}-row`}
+                                className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl"
+                                style={{ background: s.bg, border: `1px solid ${s.border}` }}
+                              >
+                                <div className="min-w-0">
+                                  <div className="text-xs font-semibold truncate" style={{ color: s.text }}>
+                                    {p.milesAt} mi · {p.desc}
+                                  </div>
+                                  <div className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>
+                                    {p.tempF != null ? `${Math.round(p.tempF)}°F` : '--'}
+                                    {p.windMph != null ? ` · ${Math.round(p.windMph)} mph wind` : ''}
+                                    {p.precipProb != null ? ` · ${Math.round(p.precipProb)}% precip` : ''}
+                                  </div>
+                                </div>
+                                <div
+                                  className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center"
+                                  style={{ background: `${s.fill}18`, color: s.fill }}
+                                >
+                                  <WeatherIcon desc={p.desc} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+              </CollapsibleSection>
             </div>
 
             {/* Route Alerts */}
             <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
-                  Route Weather Alerts
-                </div>
-                {/* Intentionally no numeric badge here (it was confusing in UI) */}
-              </div>
-
-              {!start || !dest ? (
-                <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                  Enter both addresses to scan alerts along the route.
-                </div>
-              ) : loadingRoute || loadingAlerts ? (
-                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Checking alerts along route…
-                </div>
-              ) : alerts.length === 0 ? (
-                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                  <AlertTriangle className="w-4 h-4" />
-                  No severe alerts found along sampled points.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {/* Sized so ~2 alerts are visible; additional alerts scroll */}
-                  <div className="max-h-[160px] overflow-y-auto prism-scrollbar pr-1">
-                    <div className="space-y-2">
-                      {alerts.map((a) => {
-                    const s = severityStyles(a.severity);
-                    return (
-                      <div key={a.key} className="p-2 rounded-xl" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div
-                              className="text-sm font-semibold"
-                              style={{
-                                color: s.text,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 1,
-                                WebkitBoxOrient: 'vertical' as any,
-                                overflow: 'hidden',
-                              }}
-                            >
-                              {a.title}
-                            </div>
-                            <div
-                              className="text-xs mt-1"
-                              style={{
-                                color: 'var(--text-secondary)',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                maxWidth: 320,
-                              }}
-                              title={`${
-                                routeMiles != null && a.milesAt != null
-                                  ? `${formatMiles(Math.max(0, routeMiles - a.milesAt))} miles from destination`
-                                  : 'Along your route'
-                              }${a.timeWindow ? ` · ${a.timeWindow}` : ''}`}
-                            >
-                              {routeMiles != null && a.milesAt != null
-                                ? `${formatMiles(Math.max(0, routeMiles - a.milesAt))} miles from destination`
-                                : 'Along your route'}
-                              {a.timeWindow ? ` · ${a.timeWindow}` : ''}
-                            </div>
-                          </div>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: '#00000010', color: s.text }}>
-                            {a.severity.toUpperCase()}
-                          </span>
-                        </div>
-                        {a.url ? (
-                          <a
-                            href={a.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold"
-                            style={{ color: 'var(--text-secondary)' }}
-                          >
-                            <Link2 className="w-3.5 h-3.5" />
-                            View details
-                          </a>
-                        ) : null}
-                      </div>
-                    );
-                      })}
+              <CollapsibleSection
+                title="Route Weather Alerts"
+                summary={
+                  !start || !dest
+                    ? 'Enter both addresses to scan alerts along the route.'
+                    : loadingRoute || loadingAlerts
+                      ? 'Checking alerts along route…'
+                      : alerts.length === 0
+                        ? 'No severe alerts found along sampled points.'
+                        : `${alerts.length} alert${alerts.length === 1 ? '' : 's'}`
+                }
+                defaultOpen={false}
+                rightHint={
+                  alerts.length > 0 ? (
+                    <span
+                      className="text-xs font-medium px-2 py-0.5 rounded-full"
+                      style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
+                    >
+                      {alerts.length}
+                    </span>
+                  ) : null
+                }
+              >
+                <div className="mt-3">
+                  {!start || !dest ? (
+                    <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                      Enter both addresses to scan alerts along the route.
                     </div>
-                  </div>
-                  {alerts.length > 2 && (
-                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Scroll to view all alerts
+                  ) : loadingRoute || loadingAlerts ? (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Checking alerts along route…
+                    </div>
+                  ) : alerts.length === 0 ? (
+                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                      <AlertTriangle className="w-4 h-4" />
+                      No severe alerts found along sampled points.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="max-h-[220px] overflow-y-auto prism-scrollbar pr-1">
+                        <div className="space-y-2">
+                          {alerts.map((a) => {
+                            const s = severityStyles(a.severity);
+                            return (
+                              <div key={a.key} className="p-2 rounded-xl" style={{ background: s.bg, border: `1px solid ${s.border}` }}>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div
+                                      className="text-sm font-semibold"
+                                      style={{
+                                        color: s.text,
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 1,
+                                        WebkitBoxOrient: 'vertical' as any,
+                                        overflow: 'hidden',
+                                      }}
+                                    >
+                                      {a.title}
+                                    </div>
+                                    <div
+                                      className="text-xs mt-1"
+                                      style={{
+                                        color: 'var(--text-secondary)',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: 320,
+                                      }}
+                                      title={`${
+                                        routeMiles != null && a.milesAt != null
+                                          ? `${formatMiles(Math.max(0, routeMiles - a.milesAt))} miles from destination`
+                                          : 'Along your route'
+                                      }${a.timeWindow ? ` · ${a.timeWindow}` : ''}`}
+                                    >
+                                      {routeMiles != null && a.milesAt != null
+                                        ? `${formatMiles(Math.max(0, routeMiles - a.milesAt))} miles from destination`
+                                        : 'Along your route'}
+                                      {a.timeWindow ? ` · ${a.timeWindow}` : ''}
+                                    </div>
+                                  </div>
+                                  <span
+                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                    style={{ background: '#00000010', color: s.text }}
+                                  >
+                                    {a.severity.toUpperCase()}
+                                  </span>
+                                </div>
+                                {a.url ? (
+                                  <a
+                                    href={a.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold"
+                                    style={{ color: 'var(--text-secondary)' }}
+                                  >
+                                    <Link2 className="w-3.5 h-3.5" />
+                                    View details
+                                  </a>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {alerts.length > 2 && (
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          Scroll to view all alerts
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+              </CollapsibleSection>
             </div>
           </div>
 
@@ -1392,7 +1780,6 @@ export default function RouteWeatherAlerts({
             accentColor={accentColor}
             height="100%"
             markers={markers}
-            circles={alertCircles}
             showRoute={!!routePolyline}
             routePolyline={routePolyline || undefined}
           />

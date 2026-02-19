@@ -405,7 +405,11 @@ export default function CheckoutFlowWidget({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Checkout Flow" subtitle="Address autocomplete, validation, and delivery map preview." />
+      <WidgetHeader
+        title="Checkout Flow"
+        subtitle="Address autocomplete, validation, and delivery map preview."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[805px]">
         {/* Left: Shipping form */}
         <div className="w-full md:flex-1 border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>

@@ -323,6 +323,39 @@ export async function GET(request: NextRequest) {
         break;
       }
 
+      case 'discover': {
+        // HERE Search / Discover (Places/POIs)
+        // Docs: https://developer.here.com/documentation/geocoding-search-api/dev_guide/topics/endpoints/discover-brief.html
+        const q = searchParams.get('q');
+        const at = searchParams.get('at'); // lat,lng
+        const inParam = searchParams.get('in'); // e.g., circle:lat,lng;r=15000
+        const limitRaw = searchParams.get('limit') || '20';
+        const limitNum = Math.max(1, Math.min(100, Math.round(Number(limitRaw) || 20)));
+        const limit = String(limitNum);
+        const lang = searchParams.get('lang') || 'en-US';
+
+        if (!q) {
+          return NextResponse.json({ error: 'Query (q) is required' }, { status: 400 });
+        }
+
+        if (!at && !inParam) {
+          return NextResponse.json({ error: 'Either at or in is required' }, { status: 400 });
+        }
+
+        const u = new URL(ENDPOINTS.discover);
+        u.searchParams.set('apiKey', HERE_API_KEY!);
+        u.searchParams.set('q', q);
+        u.searchParams.set('limit', limit);
+        u.searchParams.set('lang', lang);
+
+        // HERE Search APIs treat these as mutually exclusive: only one of `at` OR `in=*` is allowed.
+        if (inParam) u.searchParams.set('in', inParam);
+        else if (at) u.searchParams.set('at', at);
+
+        url = u.toString();
+        break;
+      }
+
       case 'elevation': {
         // Terrain / Elevation API: lookup elevation for a set of points.
         // We accept points as `lat,lng;lat,lng;...`

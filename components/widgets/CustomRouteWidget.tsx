@@ -868,7 +868,11 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
 
   const viewerContent = (
     <div className="flex flex-col h-full">
-      <WidgetHeader title="Custom Route" subtitle={effective.description || 'View a shared route with turn-by-turn details.'} />
+      <WidgetHeader
+        title="Custom Route"
+        subtitle={effective.description || 'View a shared route with turn-by-turn details.'}
+        variant="impressive"
+      />
 
       <div className="flex-1 min-h-0 p-4">
         <div className="rounded-xl overflow-hidden border h-[320px] md:h-[380px]" style={{ borderColor: 'var(--border-subtle)' }}>
@@ -1023,7 +1027,11 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
 
   const builderContent = (
     <div className="flex flex-col h-full">
-      <WidgetHeader title="Custom Route" subtitle="Add a start and end, then optional waypoints to influence the route." />
+      <WidgetHeader
+        title="Custom Route"
+        subtitle="Add a start and end, then optional waypoints to influence the route."
+        variant="impressive"
+      />
 
       {/* Two-panel layout */}
       <div className="flex flex-col md:flex-row flex-1 min-h-0">

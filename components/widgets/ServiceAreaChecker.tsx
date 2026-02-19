@@ -190,7 +190,11 @@ export default function ServiceAreaChecker({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Service Area Checker" subtitle="Check delivery availability by address or map click." />
+      <WidgetHeader
+        title="Service Area Checker"
+        subtitle="Check delivery availability by address or map click."
+        variant="impressive"
+      />
 
       {/* Content - Side by Side Layout */}
       <div className="flex flex-col md:flex-row" style={{ minHeight: '400px' }}>

@@ -305,7 +305,11 @@ export default function HeatmapDensity({
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader title="Heatmap Density" subtitle="Visualize hotspots for traffic, weather, or custom data." />
+      <WidgetHeader
+        title="Heatmap Density"
+        subtitle="Visualize hotspots for traffic, weather, or custom data."
+        variant="impressive"
+      />
       <div className="flex flex-col md:flex-row md:h-[760px]">
         {/* Left panel */}
         <div className="w-full md:w-[420px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: border }}>
