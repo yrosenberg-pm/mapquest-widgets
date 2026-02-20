@@ -241,8 +241,8 @@ export default function CommuteTimeCalculator({
   const mapCenter = destCoords || baseCoords || { lat: 39.8283, lng: -98.5795 };
   
   const markers: Array<{ lat: number; lng: number; label: string; color: string }> = [];
-  if (baseCoords) markers.push({ ...baseCoords, label: baseLabel, color: '#EF6351' });
-  if (destCoords) markers.push({ ...destCoords, label: 'Destination', color: '#4ADE80' });
+  if (baseCoords) markers.push({ ...baseCoords, label: baseLabel, color: '#DC2626' });
+  if (destCoords) markers.push({ ...destCoords, label: 'Destination', color: '#16A34A' });
 
   return (
     <div 

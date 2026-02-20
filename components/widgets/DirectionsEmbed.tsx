@@ -159,8 +159,8 @@ export default function DirectionsEmbed({
   const mapCenter = fromCoords || toCoords || { lat: 39.8283, lng: -98.5795 };
   
   const markers: Array<{ lat: number; lng: number; label: string; color: string }> = [];
-  if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: '#EF6351' });
-  if (toCoords) markers.push({ ...toCoords, label: 'B', color: '#4ADE80' });
+  if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: '#DC2626' });
+  if (toCoords) markers.push({ ...toCoords, label: 'B', color: '#16A34A' });
 
   // Track if we've calculated a route before (to know if we should auto-recalculate)
   const hasCalculatedRef = useRef(false);

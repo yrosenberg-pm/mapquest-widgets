@@ -976,8 +976,8 @@ export default function EVChargingPlanner({
 
   const markers = useMemo(() => {
     const m: any[] = [];
-    if (origin) m.push({ lat: origin.lat, lng: origin.lng, label: 'Origin', color: '#EF6351', type: 'home' });
-    if (dest) m.push({ lat: dest.lat, lng: dest.lng, label: 'Destination', color: '#4ADE80', type: 'home' });
+    if (origin) m.push({ lat: origin.lat, lng: origin.lng, label: 'Origin', color: '#DC2626', type: 'home' });
+    if (dest) m.push({ lat: dest.lat, lng: dest.lng, label: 'Destination', color: '#16A34A', type: 'home' });
 
     const stationsToRender = showOnlyPlannedStopsOnMap
       ? []

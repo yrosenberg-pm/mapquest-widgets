@@ -795,8 +795,8 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
 
   const waypointMarkers = useMemo(() => {
     const col = accentColor;
-    const PIN_START = '#EF6351';
-    const PIN_END = '#4ADE80';
+    const PIN_START = '#DC2626';
+    const PIN_END = '#16A34A';
     const base: MQMarker[] = withLabels
       .map((w, idx) => {
         const isFirst = idx === 0;
