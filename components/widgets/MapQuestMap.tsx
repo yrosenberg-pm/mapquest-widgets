@@ -478,12 +478,12 @@ export default function MapQuestMap({
         mapDiv.classList.add('dark-map');
       }
 
-      // Create a custom pane for traffic flow tiles so they render ABOVE route
-      // polylines (overlayPane z=400) but below markers (markerPane z=600).
-      // This lets the smooth, native MapQuest traffic flow coloring overlay the
-      // route line instead of being hidden underneath it.
-      map.createPane('trafficPane');
-      map.getPane('trafficPane').style.zIndex = '450';
+      // When showTraffic is enabled the native MapQuest traffic layer renders in
+      // the default overlayPane (z-index 400).  We draw the route "casing" in a
+      // lower pane so the smooth traffic flow colouring sits ON TOP of the route,
+      // while markers (600) stay above everything.
+      map.createPane('routeCasingPane');
+      map.getPane('routeCasingPane').style.zIndex = '380';
 
       mapRef.current = map;
       markersLayerRef.current = L.layerGroup().addTo(map);
@@ -1027,31 +1027,21 @@ export default function MapQuestMap({
     }
 
     if (showTraffic && apiKey) {
-      // Add MapQuest traffic flow layer to the custom trafficPane so it renders
-      // ABOVE route polylines.  This gives a smooth, continuous traffic overlay
-      // on the route line without needing per-maneuver custom coloring.
-      const trafficFlowLayer = L.tileLayer(
-        `https://api.mapquest.com/traffic/v2/flow/tile/{z}/{x}/{y}.png?key=${apiKey}`,
-        {
-          maxZoom: 20,
-          opacity: 0.75,
-          pane: 'trafficPane',
-        }
-      );
-      trafficFlowLayer.addTo(map);
-      trafficLayerRef.current = trafficFlowLayer;
-
-      // Add MapQuest traffic incidents layer (shows accident/construction markers)
-      const trafficIncidentsLayer = L.tileLayer(
-        `https://api.mapquest.com/traffic/v2/incidents/tile/{z}/{x}/{y}.png?key=${apiKey}`,
-        {
-          maxZoom: 20,
-          opacity: 0.9,
-          pane: 'trafficPane',
-        }
-      );
-      trafficIncidentsLayer.addTo(map);
-      trafficIncidentsRef.current = trafficIncidentsLayer;
+      // Use the native MapQuest traffic layer from the SDK.  It renders smooth,
+      // continuous congestion colouring on roads (green/yellow/red/black) — the
+      // same visualisation shown on mapquest.com.
+      //
+      // The layer renders in the default overlayPane (z-index 400) which sits
+      // ABOVE our routeCasingPane (z-index 380), so traffic colours overlay the
+      // route line naturally.
+      try {
+        const trafficLayer = L.mapquest.trafficLayer();
+        trafficLayer.addTo(map);
+        trafficLayerRef.current = trafficLayer;
+      } catch (_) {
+        // Fallback: if the SDK method is unavailable, silently skip.
+        console.warn('L.mapquest.trafficLayer() unavailable — traffic overlay disabled');
+      }
     }
   }, [showTraffic, apiKey, mapReady]);
 
@@ -1576,27 +1566,28 @@ export default function MapQuestMap({
     const latLngs = routePolyline.map(p => [p.lat, p.lng] as [number, number]);
 
     if (showTraffic) {
-      // When the MapQuest traffic flow tile layer is active it renders ABOVE the
-      // route polyline (via the custom trafficPane).  Draw the route as a wide,
-      // visible "casing" so the path is clearly identifiable under the
-      // semi-transparent traffic tiles.
-      // White outer glow — makes the route stand out from surrounding roads
+      // The native MapQuest traffic layer (overlayPane, z=400) sits ABOVE our
+      // routeCasingPane (z=380).  We draw a wide white-border + blue casing in
+      // the lower pane; the traffic flow colours render smoothly on top.
+      // White outer glow — makes the route path stand out from surrounding roads
       L.polyline(latLngs, {
         color: '#ffffff',
-        weight: 12,
-        opacity: 0.85,
+        weight: 14,
+        opacity: 0.9,
         lineCap: 'round',
         lineJoin: 'round',
         smoothFactor: 1,
+        pane: 'routeCasingPane',
       }).addTo(routeLayerRef.current);
-      // Core route line — blue, slightly transparent so traffic colours blend
+      // Core route tint — light blue so the route is identifiable under traffic
       L.polyline(latLngs, {
         color: routeColor || DEFAULT_ROUTE_BLUE,
-        weight: 6,
-        opacity: 0.55,
+        weight: 8,
+        opacity: 0.3,
         lineCap: 'round',
         lineJoin: 'round',
         smoothFactor: 1,
+        pane: 'routeCasingPane',
       }).addTo(routeLayerRef.current);
     } else {
       // Shadow
@@ -1610,11 +1601,12 @@ export default function MapQuestMap({
     }
 
     // Main route line (when traffic overlay is off, this is the primary visual;
-    // when it's on, the traffic tiles cover it so we already drew the casing above).
+    // when it's on, the traffic layer covers it so we just need the casing above
+    // plus an invisible hit-detection line).
     const routeLine = showTraffic
       ? L.polyline(latLngs, {
           color: routeColor || DEFAULT_ROUTE_BLUE,
-          weight: 4,
+          weight: 18,
           opacity: 0,     // invisible – needed only for click/drag hit detection
           lineCap: 'round',
           lineJoin: 'round',
