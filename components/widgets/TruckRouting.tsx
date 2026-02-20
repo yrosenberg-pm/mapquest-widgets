@@ -800,8 +800,8 @@ export default function TruckRouting({
     iconCircular?: boolean;
     clusterable?: boolean;
   }> = [];
-  if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: '#64748B', clusterable: false });
-  if (toCoords) markers.push({ ...toCoords, label: 'B', color: '#64748B', clusterable: false });
+  if (fromCoords) markers.push({ ...fromCoords, label: 'A', color: '#EF6351', clusterable: false });
+  if (toCoords) markers.push({ ...toCoords, label: 'B', color: '#4ADE80', clusterable: false });
 
   if (showTruckPois && truckPois.length) {
     const truckPoiIconUrl = darkMode ? '/brand/truck-poi-dark.svg' : '/brand/truck-poi-light.svg';

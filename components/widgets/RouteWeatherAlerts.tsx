@@ -1026,8 +1026,8 @@ export default function RouteWeatherAlerts({
 
   const markers = useMemo(() => {
     const m: any[] = [];
-    if (start) m.push({ lat: start.lat, lng: start.lng, label: `Start: ${start.label}`, color: '#64748B', type: 'default', clusterable: false });
-    if (dest) m.push({ lat: dest.lat, lng: dest.lng, label: `Destination: ${dest.label}`, color: accentColor, type: 'default', clusterable: false });
+    if (start) m.push({ lat: start.lat, lng: start.lng, label: `Start: ${start.label}`, color: '#EF6351', type: 'default', clusterable: false });
+    if (dest) m.push({ lat: dest.lat, lng: dest.lng, label: `Destination: ${dest.label}`, color: '#4ADE80', type: 'default', clusterable: false });
     if (routeConditions.length > 0) {
       for (const p of routeConditions) {
         const s = conditionStyles(p.kind);

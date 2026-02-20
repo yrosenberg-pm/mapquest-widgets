@@ -780,7 +780,7 @@ export default function MultiStopPlanner({
     lat: stop.lat!,
     lng: stop.lng!,
     label: `${index + 1}`,
-    color: darkMode ? '#6b7280' : '#4b5563',
+    color: index === 0 ? '#EF6351' : index === validStops.length - 1 ? '#4ADE80' : (darkMode ? '#6b7280' : '#4b5563'),
   }));
 
   const routeWaypoints = validStops.length > 2 

@@ -795,23 +795,29 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
 
   const waypointMarkers = useMemo(() => {
     const col = accentColor;
+    const PIN_START = '#EF6351';
+    const PIN_END = '#4ADE80';
     const base: MQMarker[] = withLabels
       .map((w, idx) => {
-        const isWaypoint = idx !== 0 && idx !== withLabels.length - 1;
+        const isFirst = idx === 0;
+        const isLast = idx === withLabels.length - 1;
+        const isWaypoint = !isFirst && !isLast;
         if (isWaypoint && !effective.showWaypoints) return null;
       const label = markerLabel(idx, effective.markerStyle);
+      // Pick colour: soft red for start, soft green for end, accent for waypoints.
+      const pinColor = isFirst ? PIN_START : isLast ? PIN_END : col;
       // Intermediate waypoints should be subtly represented (still visible, but not as prominent as start/end).
       const iconUrl =
         effective.markerStyle === 'dots'
-          ? stopDotIconDataUri({ color: col })
+          ? stopDotIconDataUri({ color: pinColor })
           : isWaypoint
-            ? stopDotIconDataUri({ color: col })
-            : waypointIconDataUri({ label: label || String(idx + 1), color: col });
+            ? stopDotIconDataUri({ color: pinColor })
+            : waypointIconDataUri({ label: label || String(idx + 1), color: pinColor });
       return {
         lat: w.lat,
         lng: w.lng,
-        type: idx === 0 ? ('home' as const) : ('default' as const),
-        color: col,
+        type: isFirst ? ('home' as const) : ('default' as const),
+        color: pinColor,
         label: w.label || `${w.lat.toFixed(4)}, ${w.lng.toFixed(4)}`,
         iconUrl,
         iconCircular: false,
