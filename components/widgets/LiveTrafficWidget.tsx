@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, MapPin, RefreshCw, Route } from 'lucide-react';
+import { AlertTriangle, Layers, Loader2, MapPin, RefreshCw, Route } from 'lucide-react';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
 import * as turf from '@turf/turf';
@@ -591,6 +591,7 @@ export default function LiveTrafficWidget({
   const [routeToLL, setRouteToLL] = useState<{ lat: number; lng: number } | null>(null);
   const [routeState, setRouteState] = useState<RouteState>({ status: 'idle' });
   const [corridorMiles, setCorridorMiles] = useState(1.0);
+  const [showTrafficOverlay, setShowTrafficOverlay] = useState(false);
 
   const [zoomToLocation, setZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
 
@@ -835,6 +836,7 @@ export default function LiveTrafficWidget({
         routeDelayMinutes: r.routeDelayMinutes,
         bbox: r.bbox,
       });
+      setShowTrafficOverlay(true); // auto-enable traffic layer when route is created
       setZoomToLocation(undefined);
     } catch (e: any) {
       setRouteState({ status: 'error', message: e?.message ? String(e.message) : 'Failed to build route.' });
@@ -945,12 +947,33 @@ export default function LiveTrafficWidget({
 
             <button
               type="button"
+              onClick={() => setShowTrafficOverlay((v) => !v)}
+              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm"
+              style={{
+                borderColor: showTrafficOverlay
+                  ? 'var(--brand-primary)'
+                  : isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
+                background: showTrafficOverlay
+                  ? 'var(--brand-primary)'
+                  : isDark ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.92)',
+                color: showTrafficOverlay ? 'white' : 'var(--text-main)',
+                backdropFilter: 'blur(10px)',
+              }}
+              aria-label={showTrafficOverlay ? 'Hide traffic overlay' : 'Show traffic overlay'}
+            >
+              <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+              Traffic
+            </button>
+
+            <button
+              type="button"
               onClick={() => void load()}
               className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium shadow-sm"
               style={{
-                borderColor: 'var(--border-subtle)',
-                background: 'var(--bg-panel)',
+                borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
+                background: isDark ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.92)',
                 color: 'var(--text-main)',
+                backdropFilter: 'blur(10px)',
               }}
               aria-label="Refresh traffic data"
             >
@@ -979,7 +1002,7 @@ export default function LiveTrafficWidget({
               clusterRadiusPx={56}
               circles={mode === 'area' ? radiusCircle : []}
               polygons={mapPolygons}
-              showTraffic={true}
+              showTraffic={showTrafficOverlay}
               interactive={true}
               zoomToLocation={zoomToLocation}
               fitBounds={mode === 'area' ? areaFitBounds : undefined}
