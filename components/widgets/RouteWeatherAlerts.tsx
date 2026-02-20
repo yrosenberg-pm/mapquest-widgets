@@ -596,7 +596,7 @@ function conditionStyles(kind: RouteConditionKind) {
     case 'wind':
       return { bg: '#F59E0B15', border: '#F59E0B40', text: '#F59E0B', fill: '#F59E0B' };
     case 'clear':
-      return { bg: '#10B98115', border: '#10B98140', text: '#10B981', fill: '#10B981' };
+      return { bg: '#EAB30815', border: '#EAB30840', text: '#EAB308', fill: '#EAB308' };
     case 'unknown':
     default:
       return { bg: '#94A3B815', border: '#94A3B840', text: '#94A3B8', fill: '#94A3B8' };
