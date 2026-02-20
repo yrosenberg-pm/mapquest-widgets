@@ -884,17 +884,7 @@ export default function LiveTrafficWidget({
         icon={<AlertTriangle className="w-4 h-4" />}
         subtitle={
           lastUpdated
-            ? `${
-                mode === 'area'
-                  ? (areaQuery?.trim()
-                      ? areaQuery.trim()
-                      : `${areaCenter.lat.toFixed(3)}, ${areaCenter.lng.toFixed(3)}`) + ` · ${areaRadiusMiles} mi`
-                  : mode === 'route'
-                    ? (routeFrom?.trim() && routeTo?.trim()
-                        ? `${routeFrom.trim()} → ${routeTo.trim()}`
-                        : 'Route')
-                    : ''
-              } · Last updated: ${minutesAgo(lastUpdated)}`
+            ? `Last updated: ${minutesAgo(lastUpdated)}`
             : `Fetching latest conditions…`
         }
       />
