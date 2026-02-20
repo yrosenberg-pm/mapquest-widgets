@@ -1751,7 +1751,7 @@ export default function RouteWeatherAlerts({
                     : loadingRoute || loadingAlerts
                       ? 'Checking alerts along route…'
                       : alerts.length === 0
-                        ? 'No severe alerts found along sampled points.'
+                        ? 'No severe alerts found along route.'
                         : `${alerts.length} alert${alerts.length === 1 ? '' : 's'}`
                 }
                 defaultOpen={false}
@@ -1779,7 +1779,7 @@ export default function RouteWeatherAlerts({
                   ) : alerts.length === 0 ? (
                     <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                       <AlertTriangle className="w-4 h-4" />
-                      No severe alerts found along sampled points.
+                      No severe alerts found along route.
                     </div>
                   ) : (
                     <div className="space-y-2">
