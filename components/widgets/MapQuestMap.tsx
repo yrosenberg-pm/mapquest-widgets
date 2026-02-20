@@ -382,18 +382,21 @@ export default function MapQuestMap({
         background: rgba(15, 23, 42, 0.95) !important;
         color: #fff !important;
         border: none !important;
-        border-radius: 10px !important;
-        padding: 9px 12px !important;
-        font-size: 13px !important;
+        border-radius: 8px !important;
+        padding: 7px 10px !important;
+        font-size: 12px !important;
         font-weight: 500 !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
-        /* Prefer a wide, single-line tooltip (easier to scan than a tall bubble) */
-        white-space: nowrap !important;
-        line-height: 1.25 !important;
-        min-width: 320px !important;
-        max-width: 720px !important;
+        /* Compact: wrap to ~2 lines, half the previous width */
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        line-height: 1.35 !important;
+        min-width: 0 !important;
+        max-width: 200px !important;
         overflow: hidden !important;
-        text-overflow: ellipsis !important;
+        display: -webkit-box !important;
+        -webkit-line-clamp: 3 !important;
+        -webkit-box-orient: vertical !important;
       }
       .marker-tooltip::before {
         border-top-color: rgba(15, 23, 42, 0.95) !important;
@@ -794,9 +797,11 @@ export default function MapQuestMap({
       const m = L.marker([marker.lat, marker.lng], { icon, zIndexOffset, draggable: !!marker.draggable }).addTo(markersLayerRef.current);
       
       if (marker.label) {
-        // Tooltip for hover state - shows location name on hover
+        // Tooltip for hover state - shows location name on hover.
+        // direction:'auto' repositions the tooltip to stay within the map
+        // when the marker is near an edge.
         m.bindTooltip(marker.label, { 
-          direction: 'top',
+          direction: 'auto',
           offset: type === 'home' ? [0, -20] : type === 'poi' ? [0, -14] : [0, -18],
           className: 'marker-tooltip',
           permanent: false,
@@ -914,7 +919,7 @@ export default function MapQuestMap({
     }).addTo(driverLayerRef.current);
     
     driverMarker.bindTooltip('Driver Location (Simulated)', {
-      direction: 'top',
+      direction: 'auto',
       offset: [0, -24],
       className: 'marker-tooltip',
     });
