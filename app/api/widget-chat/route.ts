@@ -3,15 +3,6 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const MQ_API_KEY = process.env.MAPQUEST_API_KEY || process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-interface CategoryScoreContext {
-  name: string;
-  score: number;
-  description: string;
-  poiCount: number;
-  closestDistance: number;
-  places: Array<{ name: string; distance: number }>;
-}
-
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -23,7 +14,7 @@ async function searchPlacesForChat(
   query: string,
   radiusMiles: number = 2,
   maxResults: number = 10
-): Promise<Array<{ name: string; distance: number; address?: string; lat?: number; lng?: number }>> {
+): Promise<Array<{ name: string; distance: number; address?: string }>> {
   try {
     const url = `https://www.mapquestapi.com/search/v4/place?key=${MQ_API_KEY}&location=${lng},${lat}&sort=distance&q=${encodeURIComponent(query)}&pageSize=${maxResults}`;
     const res = await fetch(url);
@@ -47,51 +38,23 @@ async function searchPlacesForChat(
       const addr = r.place?.properties?.street
         ? `${r.place.properties.street}, ${r.place.properties.city || ''}`
         : undefined;
-      return { name: r.name || 'Unknown', distance: Math.round(distance * 100) / 100, address: addr, lat: pLat, lng: pLng };
+      return { name: r.name || 'Unknown', distance: Math.round(distance * 100) / 100, address: addr };
     }).filter((p: any) => p.distance <= radiusMiles);
   } catch {
     return [];
   }
 }
 
-function buildSystemPrompt(
-  address: string,
-  lat: number,
-  lng: number,
-  categoryScores: CategoryScoreContext[]
-): string {
-  const scoresSummary = categoryScores.map(cs => {
-    const topPlaces = cs.places.slice(0, 5).map(p => `  - ${p.name} (${p.distance.toFixed(2)} mi)`).join('\n');
-    return `${cs.name}: ${cs.score.toFixed(1)}/5 — ${cs.poiCount} found, closest at ${cs.closestDistance === Infinity ? 'N/A' : cs.closestDistance.toFixed(2) + ' mi'}\n${topPlaces}`;
-  }).join('\n\n');
-
-  return `You are a helpful neighborhood assistant for the address: "${address}" (${lat.toFixed(5)}, ${lng.toFixed(5)}).
-
-You have access to neighborhood scoring data showing nearby amenities. Here is the current data:
-
-${scoresSummary || 'No scores have been calculated yet. The user needs to calculate scores first for full data.'}
-
-GUIDELINES:
-- Answer questions about the neighborhood, nearby places, walkability, and livability.
-- When the user asks about the closest place of a certain type, check the data above first. If the data doesn't cover that category, use the search_nearby_places tool to find results.
-- Keep answers concise (2-4 sentences max) and conversational.
-- Use distances in miles. Format numbers neatly.
-- If scores haven't been calculated yet, let the user know they should click "Calculate Scores" first for the best experience.
-- You can reference specific place names and distances from the data.
-- If asked about something outside your data (e.g. crime, home prices), be honest that you don't have that data.
-- Do NOT make up places or distances — only reference what's in the data above or from tool results.`;
-}
-
 const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: 'search_nearby_places',
-    description: 'Search for nearby places of a specific type that are not already in the neighborhood scores data. Use this when the user asks about a category or place type not covered by the existing data.',
+    description: 'Search for nearby places of a specific type. Use when the user asks about a place type not in the existing data.',
     input_schema: {
       type: 'object' as const,
       properties: {
         query: {
           type: 'string',
-          description: 'Search query, e.g. "hospital", "library", "dog park", "pizza"',
+          description: 'Search query, e.g. "hospital", "library", "gas station", "pizza"',
         },
         radius_miles: {
           type: 'number',
@@ -113,13 +76,12 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { message, history, address, lat, lng, categoryScores } = body as {
+  const { message, history, context, lat, lng } = body as {
     message: string;
     history: ChatMessage[];
-    address: string;
-    lat: number;
-    lng: number;
-    categoryScores: CategoryScoreContext[];
+    context: string;
+    lat?: number;
+    lng?: number;
   };
 
   if (!message) {
@@ -127,7 +89,17 @@ export async function POST(req: NextRequest) {
   }
 
   const anthropic = new Anthropic({ apiKey });
-  const systemPrompt = buildSystemPrompt(address, lat, lng, categoryScores || []);
+
+  const systemPrompt = `You are a helpful assistant embedded in a MapQuest widget. Answer questions using the data provided below.
+
+${context || 'No widget data available yet.'}
+
+GUIDELINES:
+- Keep answers concise (2-4 sentences max) and conversational.
+- Use distances in miles, temperatures in °F. Format numbers neatly.
+- Only reference data that is provided above or returned from tools. Do NOT make up places, distances, or weather data.
+- If the data hasn't been loaded yet, suggest the user run the relevant action first (e.g. "Calculate Scores" or "Get Weather & Alerts").
+- If asked about something outside your data, be honest that you don't have that information.`;
 
   const messages: Anthropic.MessageParam[] = [
     ...(history || []).map(h => ({
@@ -137,12 +109,14 @@ export async function POST(req: NextRequest) {
     { role: 'user', content: message },
   ];
 
+  const hasLocation = typeof lat === 'number' && typeof lng === 'number' && lat !== 0 && lng !== 0;
+
   try {
     let response = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
       system: systemPrompt,
       messages,
-      tools: lat && lng ? TOOL_DEFINITIONS : undefined,
+      tools: hasLocation ? TOOL_DEFINITIONS : undefined,
       max_tokens: 500,
     });
 
@@ -153,9 +127,9 @@ export async function POST(req: NextRequest) {
 
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       for (const block of toolUseBlocks) {
-        if (block.name === 'search_nearby_places') {
+        if (block.name === 'search_nearby_places' && hasLocation) {
           const args = block.input as { query: string; radius_miles?: number };
-          const results = await searchPlacesForChat(lat, lng, args.query, args.radius_miles || 2, 10);
+          const results = await searchPlacesForChat(lat!, lng!, args.query, args.radius_miles || 2, 10);
           toolResults.push({
             type: 'tool_result',
             tool_use_id: block.id,

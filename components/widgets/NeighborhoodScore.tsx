@@ -215,25 +215,28 @@ export default function NeighborhoodScore({
     setChatLoading(true);
 
     try {
-      const categoryContext = scores.map(s => ({
-        name: s.category.name,
-        score: s.score,
-        description: s.description,
-        poiCount: s.poiCount,
-        closestDistance: s.closestDistance,
-        places: s.places.slice(0, 10).map(p => ({ name: p.name, distance: p.distance })),
-      }));
+      const scoresSummary = scores.map(s => {
+        const topPlaces = s.places.slice(0, 5).map(p => `  - ${p.name} (${p.distance.toFixed(2)} mi)`).join('\n');
+        return `${s.category.name}: ${s.score.toFixed(1)}/5 — ${s.poiCount} found, closest at ${s.closestDistance === Infinity ? 'N/A' : s.closestDistance.toFixed(2) + ' mi'}\n${topPlaces}`;
+      }).join('\n\n');
 
-      const res = await fetch('/api/neighborhood-chat', {
+      const context = `WIDGET: Neighborhood Score
+ADDRESS: ${address || 'Unknown'}
+LOCATION: ${location ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : 'Not set'}
+OVERALL SCORE: ${overallScore !== null ? `${overallScore.toFixed(1)} / 5` : 'Not calculated yet'}
+
+CATEGORY SCORES:
+${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate Scores" first.'}`;
+
+      const res = await fetch('/api/widget-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: msg,
           history: chatMessages.slice(-10),
-          address: address || 'Unknown address',
-          lat: location?.lat || 0,
-          lng: location?.lng || 0,
-          categoryScores: categoryContext,
+          context,
+          lat: location?.lat,
+          lng: location?.lng,
         }),
       });
 
@@ -497,7 +500,7 @@ export default function NeighborhoodScore({
         icon={<MapPin className="w-4 h-4" />}
       />
       <div className="flex flex-col md:flex-row md:h-[600px]">
-        {/* Map - shown first on mobile */}
+        {/* Map + Chat overlay - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
             apiKey={apiKey}
@@ -562,6 +565,144 @@ export default function NeighborhoodScore({
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
           />
+
+          {/* Chat overlay — bottom-right of map */}
+          <div className="absolute bottom-3 right-3 z-[1000]" style={{ pointerEvents: 'auto' }}>
+            {chatOpen ? (
+              <div
+                className="flex flex-col rounded-2xl overflow-hidden shadow-xl"
+                style={{
+                  width: 320,
+                  height: 380,
+                  background: 'var(--bg-widget)',
+                  border: '1px solid var(--border-subtle)',
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
+                <div
+                  className="flex items-center gap-2 px-3 py-2.5 flex-shrink-0"
+                  style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                >
+                  <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
+                  <span className="text-xs font-semibold flex-1" style={{ color: 'var(--text-main)' }}>
+                    Neighborhood Assistant
+                  </span>
+                  <button
+                    onClick={() => setChatOpen(false)}
+                    className="p-1 rounded-md transition-colors hover:bg-black/5"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto prism-scrollbar px-3 py-2 space-y-2">
+                  {chatMessages.length === 0 && (
+                    <div className="text-center py-6">
+                      <Sparkles className="w-6 h-6 mx-auto mb-2" style={{ color: accentColor, opacity: 0.5 }} />
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Ask me anything about this neighborhood
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
+                        {[
+                          'What is the closest school?',
+                          'Is this area walkable?',
+                          'Best coffee nearby?',
+                        ].map(q => (
+                          <button
+                            key={q}
+                            onClick={() => sendChatMessage(q)}
+                            className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                            style={{
+                              background: accentColor + '15',
+                              color: accentColor,
+                              border: `1px solid ${accentColor}30`,
+                            }}
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className="max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed"
+                        style={
+                          msg.role === 'user'
+                            ? { background: accentColor, color: 'white', borderBottomRightRadius: 4 }
+                            : { background: 'var(--bg-input)', color: 'var(--text-main)', borderBottomLeftRadius: 4 }
+                        }
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div
+                        className="px-3 py-2 rounded-xl text-xs"
+                        style={{ background: 'var(--bg-input)', color: 'var(--text-muted)', borderBottomLeftRadius: 4 }}
+                      >
+                        <span className="inline-flex gap-1">
+                          <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
+                          <span className="animate-bounce" style={{ animationDelay: '150ms' }}>·</span>
+                          <span className="animate-bounce" style={{ animationDelay: '300ms' }}>·</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div
+                  className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
+                  style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                >
+                  <input
+                    ref={chatInputRef}
+                    type="text"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                    placeholder="Ask about this area..."
+                    className="flex-1 text-xs px-3 py-2 rounded-lg outline-none"
+                    style={{
+                      background: 'var(--bg-input)',
+                      color: 'var(--text-main)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                    disabled={chatLoading}
+                  />
+                  <button
+                    onClick={() => sendChatMessage()}
+                    disabled={!chatInput.trim() || chatLoading}
+                    className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                    style={{ background: accentColor, color: 'white' }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setChatOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105"
+                style={{
+                  background: 'var(--bg-widget)',
+                  border: '1px solid var(--border-subtle)',
+                  color: accentColor,
+                }}
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-xs font-semibold">Ask AI</span>
+              </button>
+            )}
+          </div>
         </div>
         {/* Sidebar */}
         <div 
@@ -881,145 +1022,6 @@ export default function NeighborhoodScore({
               </div>
             )}
           </div>
-
-          {/* Chat toggle + panel */}
-          {chatOpen ? (
-            <div
-              className="flex flex-col"
-              style={{
-                borderTop: '1px solid var(--border-subtle)',
-                background: 'var(--bg-panel)',
-                height: 320,
-                minHeight: 0,
-              }}
-            >
-              {/* Chat header */}
-              <div
-                className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
-                style={{ borderBottom: '1px solid var(--border-subtle)' }}
-              >
-                <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
-                <span className="text-xs font-semibold flex-1" style={{ color: 'var(--text-main)' }}>
-                  Neighborhood Assistant
-                </span>
-                <button
-                  onClick={() => setChatOpen(false)}
-                  className="p-1 rounded-md transition-colors hover:bg-black/5"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto prism-scrollbar px-3 py-2 space-y-2">
-                {chatMessages.length === 0 && (
-                  <div className="text-center py-6">
-                    <Sparkles className="w-6 h-6 mx-auto mb-2" style={{ color: accentColor, opacity: 0.5 }} />
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Ask me anything about this neighborhood
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
-                      {[
-                        'What is the closest school?',
-                        'Is this area walkable?',
-                        'Best coffee nearby?',
-                      ].map(q => (
-                        <button
-                          key={q}
-                          onClick={() => sendChatMessage(q)}
-                          className="text-[10px] px-2 py-1 rounded-full transition-colors"
-                          style={{
-                            background: accentColor + '15',
-                            color: accentColor,
-                            border: `1px solid ${accentColor}30`,
-                          }}
-                        >
-                          {q}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {chatMessages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className="max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed"
-                      style={
-                        msg.role === 'user'
-                          ? { background: accentColor, color: 'white', borderBottomRightRadius: 4 }
-                          : { background: 'var(--bg-input)', color: 'var(--text-main)', borderBottomLeftRadius: 4 }
-                      }
-                    >
-                      {msg.content}
-                    </div>
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className="flex justify-start">
-                    <div
-                      className="px-3 py-2 rounded-xl text-xs"
-                      style={{ background: 'var(--bg-input)', color: 'var(--text-muted)', borderBottomLeftRadius: 4 }}
-                    >
-                      <span className="inline-flex gap-1">
-                        <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
-                        <span className="animate-bounce" style={{ animationDelay: '150ms' }}>·</span>
-                        <span className="animate-bounce" style={{ animationDelay: '300ms' }}>·</span>
-                      </span>
-                    </div>
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-
-              {/* Input */}
-              <div
-                className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
-                style={{ borderTop: '1px solid var(--border-subtle)' }}
-              >
-                <input
-                  ref={chatInputRef}
-                  type="text"
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
-                  placeholder="Ask about this area..."
-                  className="flex-1 text-xs px-3 py-2 rounded-lg outline-none"
-                  style={{
-                    background: 'var(--bg-input)',
-                    color: 'var(--text-main)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                  disabled={chatLoading}
-                />
-                <button
-                  onClick={() => sendChatMessage()}
-                  disabled={!chatInput.trim() || chatLoading}
-                  className="p-2 rounded-lg transition-colors disabled:opacity-30"
-                  style={{ background: accentColor, color: 'white' }}
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setChatOpen(true)}
-              className="flex items-center gap-2 w-full px-4 py-3 text-xs font-medium transition-colors hover:brightness-95"
-              style={{
-                borderTop: '1px solid var(--border-subtle)',
-                background: `linear-gradient(135deg, ${accentColor}08 0%, ${accentColor}15 100%)`,
-                color: accentColor,
-              }}
-            >
-              <MessageCircle className="w-4 h-4" />
-              <span>Ask about this neighborhood</span>
-              <CornerDownLeft className="w-3 h-3 ml-auto opacity-50" />
-            </button>
-          )}
         </div>
 
       </div>

@@ -1,7 +1,7 @@
 // components/widgets/RouteWeatherAlerts.tsx
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Cloud,
   CloudDrizzle,
@@ -20,6 +20,11 @@ import {
   AlertTriangle,
   CloudSun,
   Link2,
+  MessageCircle,
+  Send,
+  X,
+  Sparkles,
+  CornerDownLeft,
 } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
 import WidgetHeader from './WidgetHeader';
@@ -1018,6 +1023,104 @@ export default function RouteWeatherAlerts({
   const [runError, setRunError] = useState<string | null>(null);
   const [closeToken, setCloseToken] = useState(0);
 
+  // Chat state
+  interface ChatMsg { role: 'user' | 'assistant'; content: string }
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (chatOpen) setTimeout(() => chatInputRef.current?.focus(), 150);
+  }, [chatOpen]);
+
+  const buildWeatherContext = useCallback(() => {
+    const parts: string[] = ['WIDGET: Route Weather Alerts'];
+
+    if (start) parts.push(`START: ${start.label} (${start.lat.toFixed(5)}, ${start.lng.toFixed(5)})`);
+    if (dest) parts.push(`DESTINATION: ${dest.label} (${dest.lat.toFixed(5)}, ${dest.lng.toFixed(5)})`);
+    if (routeMiles != null) parts.push(`ROUTE DISTANCE: ~${Math.round(routeMiles)} miles`);
+
+    if (obs) {
+      parts.push(`\nDESTINATION CURRENT WEATHER:`);
+      parts.push(`  Temperature: ${toNumber(obs.temperature) ?? '--'}°F (feels like ${toNumber(obs.comfort) ?? '--'}°F)`);
+      parts.push(`  Sky: ${obs.skyDescription || '—'}`);
+      parts.push(`  Humidity: ${toNumber(obs.humidity) ?? '--'}%`);
+      parts.push(`  Wind: ${toNumber(obs.windSpeed) ?? '--'} mph`);
+      parts.push(`  Visibility: ${toNumber(obs.visibility) ?? '--'} mi`);
+    }
+
+    if (forecastDays.length > 0) {
+      parts.push(`\nDAILY FORECAST (destination):`);
+      for (const d of forecastDays.slice(0, 7)) {
+        const day = d.dayOfWeek || d.dayOfMonth || '—';
+        parts.push(`  ${day}: High ${formatTempNoDecimals(d.highTemperature)}°F / Low ${formatTempNoDecimals(d.lowTemperature)}°F — ${d.description || '—'}`);
+      }
+    }
+
+    if (routeConditions.length > 0) {
+      parts.push(`\nCONDITIONS ALONG ROUTE:`);
+      for (const c of routeConditions) {
+        parts.push(`  ${c.milesAt} mi: ${c.desc}${c.tempF != null ? `, ${Math.round(c.tempF)}°F` : ''}${c.windMph != null ? `, ${Math.round(c.windMph)} mph wind` : ''}${c.precipProb != null ? `, ${Math.round(c.precipProb)}% precip` : ''} [${c.kind}]`);
+      }
+    }
+
+    if (alerts.length > 0) {
+      parts.push(`\nACTIVE WEATHER ALERTS:`);
+      for (const a of alerts) {
+        parts.push(`  - ${a.title} (${a.severity}${a.timeWindow ? `, ${a.timeWindow}` : ''}${a.milesAt != null ? `, at mile ${a.milesAt}` : ''})`);
+      }
+    } else if (start && dest) {
+      parts.push(`\nACTIVE WEATHER ALERTS: None found along route.`);
+    }
+
+    if (!start && !dest) {
+      parts.push(`\nNo route has been entered yet. The user needs to enter start/destination and click "Get Weather & Alerts" first.`);
+    }
+
+    return parts.join('\n');
+  }, [start, dest, routeMiles, obs, forecastDays, routeConditions, alerts]);
+
+  const sendChatMessage = useCallback(async (text?: string) => {
+    const msg = text ?? chatInput.trim();
+    if (!msg || chatLoading) return;
+    setChatInput('');
+    const userMsg: ChatMsg = { role: 'user', content: msg };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatLoading(true);
+
+    try {
+      const res = await fetch('/api/widget-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          history: chatMessages.slice(-10),
+          context: buildWeatherContext(),
+          lat: dest?.lat || start?.lat,
+          lng: dest?.lng || start?.lng,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: `Sorry, something went wrong: ${data.error}` }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t connect to the assistant. Please try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, [chatInput, chatLoading, chatMessages, buildWeatherContext, start, dest]);
+
   const mapCenter = useMemo(() => {
     const pt = dest || start;
     if (pt) return { lat: pt.lat, lng: pt.lng };
@@ -1388,8 +1491,8 @@ export default function RouteWeatherAlerts({
       />
       <div className="flex flex-col md:flex-row md:h-[870px]">
         {/* Left panel */}
-        <div className="w-full md:w-[600px] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 relative" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="w-full md:w-[40%] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="p-4 grid grid-cols-1 gap-3 relative" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             {(loadingWeather || loadingRoute || loadingAlerts) && (
               <div className="absolute right-4 top-4 pointer-events-none">
                 <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />
@@ -1862,8 +1965,8 @@ export default function RouteWeatherAlerts({
 
         </div>
 
-        {/* Map */}
-        <div className="h-[320px] md:h-auto md:flex-1 md:order-2">
+        {/* Map + Chat overlay */}
+        <div className="relative h-[320px] md:h-auto md:w-[60%] md:order-2">
           <MapQuestMap
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}
@@ -1877,6 +1980,147 @@ export default function RouteWeatherAlerts({
             showRoute={!!routePolyline}
             routePolyline={routePolyline || undefined}
           />
+
+          {/* Chat overlay — bottom-right of map */}
+          <div className="absolute bottom-3 right-3 z-[1000]" style={{ pointerEvents: 'auto' }}>
+            {chatOpen ? (
+              <div
+                className="flex flex-col rounded-2xl overflow-hidden shadow-xl"
+                style={{
+                  width: 340,
+                  height: 380,
+                  background: 'var(--bg-widget)',
+                  border: '1px solid var(--border-subtle)',
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
+                {/* Header */}
+                <div
+                  className="flex items-center gap-2 px-3 py-2.5 flex-shrink-0"
+                  style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                >
+                  <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
+                  <span className="text-xs font-semibold flex-1" style={{ color: 'var(--text-main)' }}>
+                    Weather Assistant
+                  </span>
+                  <button
+                    onClick={() => setChatOpen(false)}
+                    className="p-1 rounded-md transition-colors hover:bg-black/5"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto prism-scrollbar px-3 py-2 space-y-2">
+                  {chatMessages.length === 0 && (
+                    <div className="text-center py-6">
+                      <Sparkles className="w-6 h-6 mx-auto mb-2" style={{ color: accentColor, opacity: 0.5 }} />
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Ask me about weather along your route
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
+                        {[
+                          'Will I hit any rain?',
+                          'What\'s the forecast?',
+                          'Any severe alerts?',
+                        ].map(q => (
+                          <button
+                            key={q}
+                            onClick={() => sendChatMessage(q)}
+                            className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                            style={{
+                              background: accentColor + '15',
+                              color: accentColor,
+                              border: `1px solid ${accentColor}30`,
+                            }}
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className="max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed"
+                        style={
+                          msg.role === 'user'
+                            ? { background: accentColor, color: 'white', borderBottomRightRadius: 4 }
+                            : { background: 'var(--bg-input)', color: 'var(--text-main)', borderBottomLeftRadius: 4 }
+                        }
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div
+                        className="px-3 py-2 rounded-xl text-xs"
+                        style={{ background: 'var(--bg-input)', color: 'var(--text-muted)', borderBottomLeftRadius: 4 }}
+                      >
+                        <span className="inline-flex gap-1">
+                          <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
+                          <span className="animate-bounce" style={{ animationDelay: '150ms' }}>·</span>
+                          <span className="animate-bounce" style={{ animationDelay: '300ms' }}>·</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Input */}
+                <div
+                  className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
+                  style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                >
+                  <input
+                    ref={chatInputRef}
+                    type="text"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                    placeholder="Ask about the weather..."
+                    className="flex-1 text-xs px-3 py-2 rounded-lg outline-none"
+                    style={{
+                      background: 'var(--bg-input)',
+                      color: 'var(--text-main)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                    disabled={chatLoading}
+                  />
+                  <button
+                    onClick={() => sendChatMessage()}
+                    disabled={!chatInput.trim() || chatLoading}
+                    className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                    style={{ background: accentColor, color: 'white' }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setChatOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105"
+                style={{
+                  background: 'var(--bg-widget)',
+                  border: '1px solid var(--border-subtle)',
+                  color: accentColor,
+                }}
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-xs font-semibold">Ask AI</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

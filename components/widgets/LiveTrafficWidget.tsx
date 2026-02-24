@@ -1,8 +1,8 @@
 // components/widgets/LiveTrafficWidget.tsx
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, MapPin, RefreshCw, Route } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Loader2, MapPin, RefreshCw, Route, MessageCircle, Send, X, Sparkles, CornerDownLeft } from 'lucide-react';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
 import * as turf from '@turf/turf';
@@ -594,6 +594,95 @@ export default function LiveTrafficWidget({
 
   const [zoomToLocation, setZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
 
+  // Chat state
+  interface ChatMsg { role: 'user' | 'assistant'; content: string }
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (chatOpen) setTimeout(() => chatInputRef.current?.focus(), 150);
+  }, [chatOpen]);
+
+  const buildTrafficContext = useCallback(() => {
+    const parts: string[] = ['WIDGET: Live Traffic'];
+    parts.push(`MODE: ${mode}`);
+
+    if (mode === 'area') {
+      parts.push(`AREA CENTER: ${areaCenter.lat.toFixed(5)}, ${areaCenter.lng.toFixed(5)}`);
+      parts.push(`RADIUS: ${areaRadiusMiles} miles`);
+    } else {
+      if (routeFrom) parts.push(`ROUTE FROM: ${routeFrom}`);
+      if (routeTo) parts.push(`ROUTE TO: ${routeTo}`);
+      if (routeState.status === 'ready') {
+        if (routeState.routeTimeMinutes) parts.push(`BASELINE TRAVEL TIME: ${Math.round(routeState.routeTimeMinutes)} min`);
+        if (routeState.routeRealTimeMinutes) parts.push(`CURRENT TRAVEL TIME (with traffic): ${Math.round(routeState.routeRealTimeMinutes)} min`);
+        if (routeState.routeDelayMinutes) parts.push(`TRAFFIC DELAY: ${Math.round(routeState.routeDelayMinutes)} min`);
+      }
+    }
+
+    parts.push(`\nTOTAL INCIDENTS: ${incidents.length}`);
+    const bySev = { 4: 0, 3: 0, 2: 0, 1: 0 } as Record<number, number>;
+    incidents.forEach(i => { bySev[i.severity] = (bySev[i.severity] || 0) + 1; });
+    parts.push(`  Critical: ${bySev[4]}, Major: ${bySev[3]}, Minor: ${bySev[2]}, Low: ${bySev[1]}`);
+
+    if (incidents.length > 0) {
+      parts.push(`\nINCIDENTS (up to 15):`);
+      for (const inc of incidents.slice(0, 15)) {
+        const delay = inc.delayMinutes ? `, ~${Math.round(inc.delayMinutes)} min delay` : '';
+        parts.push(`  - [${severityMeta[inc.severity].label}] ${inc.shortDesc}${inc.road ? ` on ${inc.road}` : ''}${delay} (${inc.distanceMiles.toFixed(1)} mi away)`);
+      }
+    }
+
+    if (lastUpdated) {
+      const ago = Math.round((Date.now() - lastUpdated) / 60000);
+      parts.push(`\nLast updated: ${ago} min ago`);
+    }
+
+    return parts.join('\n');
+  }, [mode, areaCenter, areaRadiusMiles, routeFrom, routeTo, routeState, incidents, lastUpdated]);
+
+  const sendChatMessage = useCallback(async (text?: string) => {
+    const msg = text ?? chatInput.trim();
+    if (!msg || chatLoading) return;
+    setChatInput('');
+    const userMsg: ChatMsg = { role: 'user', content: msg };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatLoading(true);
+
+    try {
+      const res = await fetch('/api/widget-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          history: chatMessages.slice(-10),
+          context: buildTrafficContext(),
+          lat: areaCenter.lat,
+          lng: areaCenter.lng,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: `Sorry, something went wrong: ${data.error}` }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t connect to the assistant. Please try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, [chatInput, chatLoading, chatMessages, buildTrafficContext, areaCenter]);
+
   useEffect(() => {
     setAreaCenter(center);
   }, [center.lat, center.lng]);
@@ -995,6 +1084,144 @@ export default function LiveTrafficWidget({
               routeSegments={routeState.status === 'ready' ? routeState.segments : undefined}
               showRoute={routeState.status === 'ready'}
             />
+          </div>
+
+          {/* Chat overlay — bottom-right of map */}
+          <div className="absolute bottom-3 right-3 z-[1000]" style={{ pointerEvents: 'auto' }}>
+            {chatOpen ? (
+              <div
+                className="flex flex-col rounded-2xl overflow-hidden shadow-xl"
+                style={{
+                  width: 340,
+                  height: 380,
+                  background: 'var(--bg-widget)',
+                  border: '1px solid var(--border-subtle)',
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
+                <div
+                  className="flex items-center gap-2 px-3 py-2.5 flex-shrink-0"
+                  style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                >
+                  <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
+                  <span className="text-xs font-semibold flex-1" style={{ color: 'var(--text-main)' }}>
+                    Traffic Assistant
+                  </span>
+                  <button
+                    onClick={() => setChatOpen(false)}
+                    className="p-1 rounded-md transition-colors hover:bg-black/5"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto prism-scrollbar px-3 py-2 space-y-2">
+                  {chatMessages.length === 0 && (
+                    <div className="text-center py-6">
+                      <Sparkles className="w-6 h-6 mx-auto mb-2" style={{ color: accentColor, opacity: 0.5 }} />
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Ask me about traffic conditions
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
+                        {[
+                          'Any major incidents?',
+                          'How bad is traffic?',
+                          'Best time to leave?',
+                        ].map(q => (
+                          <button
+                            key={q}
+                            onClick={() => sendChatMessage(q)}
+                            className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                            style={{
+                              background: accentColor + '15',
+                              color: accentColor,
+                              border: `1px solid ${accentColor}30`,
+                            }}
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className="max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed"
+                        style={
+                          msg.role === 'user'
+                            ? { background: accentColor, color: 'white', borderBottomRightRadius: 4 }
+                            : { background: 'var(--bg-input)', color: 'var(--text-main)', borderBottomLeftRadius: 4 }
+                        }
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div
+                        className="px-3 py-2 rounded-xl text-xs"
+                        style={{ background: 'var(--bg-input)', color: 'var(--text-muted)', borderBottomLeftRadius: 4 }}
+                      >
+                        <span className="inline-flex gap-1">
+                          <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
+                          <span className="animate-bounce" style={{ animationDelay: '150ms' }}>·</span>
+                          <span className="animate-bounce" style={{ animationDelay: '300ms' }}>·</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div
+                  className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
+                  style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                >
+                  <input
+                    ref={chatInputRef}
+                    type="text"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                    placeholder="Ask about traffic..."
+                    className="flex-1 text-xs px-3 py-2 rounded-lg outline-none"
+                    style={{
+                      background: 'var(--bg-input)',
+                      color: 'var(--text-main)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                    disabled={chatLoading}
+                  />
+                  <button
+                    onClick={() => sendChatMessage()}
+                    disabled={!chatInput.trim() || chatLoading}
+                    className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                    style={{ background: accentColor, color: 'white' }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setChatOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105"
+                style={{
+                  background: 'var(--bg-widget)',
+                  border: '1px solid var(--border-subtle)',
+                  color: accentColor,
+                }}
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-xs font-semibold">Ask AI</span>
+              </button>
+            )}
           </div>
         </div>
 
