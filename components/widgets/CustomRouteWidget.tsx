@@ -94,6 +94,51 @@ function serializeRouteGeoJson(opts: {
   );
 }
 
+function serializeRouteGpx(opts: {
+  title?: string;
+  description?: string;
+  routePoints: Array<{ lat: number; lng: number }>;
+  stops: Waypoint[];
+}) {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const lines: string[] = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<gpx version="1.1" creator="MapQuest Custom Route Widget"',
+    '     xmlns="http://www.topografix.com/GPX/1/1">',
+  ];
+
+  if (opts.title || opts.description) {
+    lines.push('  <metadata>');
+    if (opts.title) lines.push(`    <name>${esc(opts.title)}</name>`);
+    if (opts.description) lines.push(`    <desc>${esc(opts.description)}</desc>`);
+    lines.push('  </metadata>');
+  }
+
+  // Waypoints
+  (opts.stops || []).forEach((w, idx) => {
+    if (!Number.isFinite(w.lat) || !Number.isFinite(w.lng)) return;
+    const role = idx === 0 ? 'Start' : idx === opts.stops.length - 1 ? 'End' : `Waypoint ${idx}`;
+    const name = w.label || role;
+    lines.push(`  <wpt lat="${w.lat}" lon="${w.lng}">`);
+    lines.push(`    <name>${esc(name)}</name>`);
+    lines.push('  </wpt>');
+  });
+
+  // Route track
+  const pts = (opts.routePoints || []).filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  if (pts.length >= 2) {
+    lines.push('  <trk>');
+    if (opts.title) lines.push(`    <name>${esc(opts.title)}</name>`);
+    lines.push('    <trkseg>');
+    pts.forEach((p) => lines.push(`      <trkpt lat="${p.lat}" lon="${p.lng}" />`));
+    lines.push('    </trkseg>');
+    lines.push('  </trk>');
+  }
+
+  lines.push('</gpx>');
+  return lines.join('\n');
+}
+
 function downloadTextFile(filename: string, content: string, mime: string) {
   try {
     const blob = new Blob([content], { type: mime });
@@ -753,6 +798,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
   const [newLabel, setNewLabel] = useState('');
   const [copiedWaypoints, setCopiedWaypoints] = useState(false);
   const [exportedGeoJson, setExportedGeoJson] = useState(false);
+  const [exportedGpx, setExportedGpx] = useState(false);
   const [routeOptionsOpen, setRouteOptionsOpen] = useState(false);
 
   // Map context menu (right-click): "Add waypoint" dialog.
@@ -1385,6 +1431,31 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                     aria-label="Export route as GeoJSON"
                   >
                     {exportedGeoJson ? 'Saved' : 'GeoJSON'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        if (!routePoints || routePoints.length < 2) {
+                          setError('Generate a route first to export GPX.');
+                          return;
+                        }
+                        const gpx = serializeRouteGpx({
+                          title: effective.title,
+                          description: effective.description,
+                          routePoints,
+                          stops: withLabels,
+                        });
+                        downloadTextFile('route.gpx', gpx, 'application/gpx+xml;charset=utf-8');
+                        setExportedGpx(true);
+                        window.setTimeout(() => setExportedGpx(false), 1200);
+                      } catch (_) {}
+                    }}
+                    className="rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                    style={{ borderColor: 'var(--border-subtle)', background: 'transparent', color: 'var(--text-main)' }}
+                    aria-label="Export route as GPX"
+                  >
+                    {exportedGpx ? 'Saved' : 'GPX'}
                   </button>
                   <button
                     type="button"
