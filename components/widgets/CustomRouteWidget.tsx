@@ -1385,7 +1385,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
             <div className="prism-panel p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Waypoints (optional)</div>
+                  <div className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>Waypoints</div>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
                   {(() => {
