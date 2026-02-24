@@ -592,7 +592,7 @@ export default function NHLArenaExplorer({
 
   const PlaceCard = ({ place, icon: Icon, color }: { place: any; icon: any; color: string }) => (
     <div 
-      className="p-2.5 rounded-xl cursor-pointer group transition-all"
+      className="p-2.5 rounded-xl cursor-pointer group transition-all hover:brightness-95"
       style={{ 
         background: 'var(--bg-panel)',
         border: '1px solid var(--border-subtle)',
@@ -686,9 +686,9 @@ export default function NHLArenaExplorer({
               <button 
                 key={s.id} 
                 onClick={() => { setSelectedStadium(s); setActiveTab('overview'); }}
-                className="w-full p-2 rounded-xl text-left transition-all"
+                className="w-full p-2 rounded-xl text-left transition-all hover:brightness-95"
                 style={{
-                  background: selectedStadium?.id === s.id ? `${accentColor}33` : 'transparent',
+                  background: selectedStadium?.id === s.id ? `${accentColor}33` : 'var(--bg-panel)',
                   border: selectedStadium?.id === s.id ? `1px solid ${accentColor}80` : '1px solid transparent',
                 }}
               >
