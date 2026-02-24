@@ -1,11 +1,11 @@
 // components/widgets/NeighborhoodScore.tsx
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
-  Bus, LucideIcon
+  Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft
 } from 'lucide-react';
 import { geocode, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -186,6 +186,69 @@ export default function NeighborhoodScore({
   const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
   const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  // Chat state
+  interface ChatMsg { role: 'user' | 'assistant'; content: string }
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (chatOpen) {
+      setTimeout(() => chatInputRef.current?.focus(), 150);
+    }
+  }, [chatOpen]);
+
+  const sendChatMessage = useCallback(async (text?: string) => {
+    const msg = text ?? chatInput.trim();
+    if (!msg || chatLoading) return;
+    setChatInput('');
+    const userMsg: ChatMsg = { role: 'user', content: msg };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatLoading(true);
+
+    try {
+      const categoryContext = scores.map(s => ({
+        name: s.category.name,
+        score: s.score,
+        description: s.description,
+        poiCount: s.poiCount,
+        closestDistance: s.closestDistance,
+        places: s.places.slice(0, 10).map(p => ({ name: p.name, distance: p.distance })),
+      }));
+
+      const res = await fetch('/api/neighborhood-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          history: chatMessages.slice(-10),
+          address: address || 'Unknown address',
+          lat: location?.lat || 0,
+          lng: location?.lng || 0,
+          categoryScores: categoryContext,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: `Sorry, something went wrong: ${data.error}` }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t connect to the assistant. Please try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, [chatInput, chatLoading, scores, chatMessages, address, location]);
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -818,6 +881,145 @@ export default function NeighborhoodScore({
               </div>
             )}
           </div>
+
+          {/* Chat toggle + panel */}
+          {chatOpen ? (
+            <div
+              className="flex flex-col"
+              style={{
+                borderTop: '1px solid var(--border-subtle)',
+                background: 'var(--bg-panel)',
+                height: 320,
+                minHeight: 0,
+              }}
+            >
+              {/* Chat header */}
+              <div
+                className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
+                style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              >
+                <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
+                <span className="text-xs font-semibold flex-1" style={{ color: 'var(--text-main)' }}>
+                  Neighborhood Assistant
+                </span>
+                <button
+                  onClick={() => setChatOpen(false)}
+                  className="p-1 rounded-md transition-colors hover:bg-black/5"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto prism-scrollbar px-3 py-2 space-y-2">
+                {chatMessages.length === 0 && (
+                  <div className="text-center py-6">
+                    <Sparkles className="w-6 h-6 mx-auto mb-2" style={{ color: accentColor, opacity: 0.5 }} />
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      Ask me anything about this neighborhood
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
+                      {[
+                        'What is the closest school?',
+                        'Is this area walkable?',
+                        'Best coffee nearby?',
+                      ].map(q => (
+                        <button
+                          key={q}
+                          onClick={() => sendChatMessage(q)}
+                          className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                          style={{
+                            background: accentColor + '15',
+                            color: accentColor,
+                            border: `1px solid ${accentColor}30`,
+                          }}
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {chatMessages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className="max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed"
+                      style={
+                        msg.role === 'user'
+                          ? { background: accentColor, color: 'white', borderBottomRightRadius: 4 }
+                          : { background: 'var(--bg-input)', color: 'var(--text-main)', borderBottomLeftRadius: 4 }
+                      }
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div
+                      className="px-3 py-2 rounded-xl text-xs"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-muted)', borderBottomLeftRadius: 4 }}
+                    >
+                      <span className="inline-flex gap-1">
+                        <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
+                        <span className="animate-bounce" style={{ animationDelay: '150ms' }}>·</span>
+                        <span className="animate-bounce" style={{ animationDelay: '300ms' }}>·</span>
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input */}
+              <div
+                className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <input
+                  ref={chatInputRef}
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                  placeholder="Ask about this area..."
+                  className="flex-1 text-xs px-3 py-2 rounded-lg outline-none"
+                  style={{
+                    background: 'var(--bg-input)',
+                    color: 'var(--text-main)',
+                    border: '1px solid var(--border-subtle)',
+                  }}
+                  disabled={chatLoading}
+                />
+                <button
+                  onClick={() => sendChatMessage()}
+                  disabled={!chatInput.trim() || chatLoading}
+                  className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                  style={{ background: accentColor, color: 'white' }}
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setChatOpen(true)}
+              className="flex items-center gap-2 w-full px-4 py-3 text-xs font-medium transition-colors hover:brightness-95"
+              style={{
+                borderTop: '1px solid var(--border-subtle)',
+                background: `linear-gradient(135deg, ${accentColor}08 0%, ${accentColor}15 100%)`,
+                color: accentColor,
+              }}
+            >
+              <MessageCircle className="w-4 h-4" />
+              <span>Ask about this neighborhood</span>
+              <CornerDownLeft className="w-3 h-3 ml-auto opacity-50" />
+            </button>
+          )}
         </div>
 
       </div>
