@@ -504,7 +504,7 @@ export default function NHLArenaExplorer({
         lat: routeStart.lat, 
         lng: routeStart.lng, 
         label: fromAddress || 'Starting Point',
-        color: '#DC2626',
+        color: '#16A34A',
         type: 'home'
       });
     }

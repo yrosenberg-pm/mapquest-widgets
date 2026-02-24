@@ -143,7 +143,7 @@ export default function DeliveryETA({
       lat: status.currentLocation.lat, 
       lng: status.currentLocation.lng, 
       label: status.status === 'delivered' ? 'Delivered' : `${status.driverName} - Driver`, 
-      color: '#DC2626',
+      color: '#16A34A',
       type: 'home'
     });
   }
@@ -153,7 +153,7 @@ export default function DeliveryETA({
       lat: status.destinationLocation.lat, 
       lng: status.destinationLocation.lng, 
       label: 'Delivery Address', 
-      color: '#16A34A'
+      color: '#DC2626'
     });
   }
 

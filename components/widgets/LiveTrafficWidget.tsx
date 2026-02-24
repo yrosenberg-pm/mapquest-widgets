@@ -969,7 +969,7 @@ export default function LiveTrafficWidget({
                           lat: routeFromLL.lat,
                           lng: routeFromLL.lng,
                           label: 'Start',
-                          color: '#DC2626',
+                          color: '#16A34A',
                           clusterable: false,
                         }] : []),
                         // End pin (green)
@@ -977,7 +977,7 @@ export default function LiveTrafficWidget({
                           lat: routeToLL.lat,
                           lng: routeToLL.lng,
                           label: 'Destination',
-                          color: '#16A34A',
+                          color: '#DC2626',
                           clusterable: false,
                         }] : []),
                         ...incidentMarkers,
