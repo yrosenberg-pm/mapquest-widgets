@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, Navigation, Route, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, Train, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, Navigation, Route, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -26,6 +26,7 @@ import {
   LiveTrafficWidget,
   CustomRouteWidget,
   PublicTransitDepartures,
+  ParkingFinder,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -51,7 +52,8 @@ type WidgetId =
   | 'ev-charging'
   | 'traffic'
   | 'custom-route'
-  | 'transit';
+  | 'transit'
+  | 'parking';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
 
@@ -76,6 +78,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', section: 'other', menuLucide: ShoppingBag },
   { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', section: 'other', menuLucide: Flame },
   { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', section: 'other', menuLucide: BatteryCharging },
+  { id: 'parking' as WidgetId, name: 'Parking Finder', description: 'Find on-street and off-street parking near a destination', section: 'other', menuLucide: ParkingCircle },
   // — Branded / partner demos ————————————————————————————————
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuIcon: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png' },
@@ -452,6 +455,8 @@ function HomeContent() {
         return <IsolineOverlapWidget {...commonProps} />;
       case 'transit':
         return <PublicTransitDepartures {...commonProps} />;
+      case 'parking':
+        return <ParkingFinder {...commonProps} />;
       default:
         return null;
     }

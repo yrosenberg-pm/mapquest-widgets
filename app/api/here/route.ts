@@ -13,6 +13,7 @@ const ENDPOINTS: Record<string, string> = {
   elevation: 'https://terrain.hereapi.com/v1/elevation',
   // HERE Search API (Places/POI)
   discover: 'https://discover.search.hereapi.com/v1/discover',
+  browse: 'https://browse.search.hereapi.com/v1/browse',
   // HERE Public Transit API - only returns subway, bus, tram, ferry (no taxi/car)
   transit: 'https://transit.router.hereapi.com/v8/routes',
   // HERE Public Transit - Station Search & Next Departures
@@ -352,6 +353,28 @@ export async function GET(request: NextRequest) {
         u.searchParams.set('lang', lang);
 
         // HERE Search APIs treat these as mutually exclusive: only one of `at` OR `in=*` is allowed.
+        if (inParam) u.searchParams.set('in', inParam);
+        else if (at) u.searchParams.set('at', at);
+
+        url = u.toString();
+        break;
+      }
+
+      case 'browse': {
+        const at = searchParams.get('at');
+        const inParam = searchParams.get('in');
+        const categories = searchParams.get('categories');
+        const limitRaw = searchParams.get('limit') || '50';
+        const limitNum = Math.max(1, Math.min(100, Math.round(Number(limitRaw) || 50)));
+
+        if (!at && !inParam) {
+          return NextResponse.json({ error: 'Either at or in is required' }, { status: 400 });
+        }
+
+        const u = new URL(ENDPOINTS.browse);
+        u.searchParams.set('apiKey', HERE_API_KEY!);
+        u.searchParams.set('limit', String(limitNum));
+        if (categories) u.searchParams.set('categories', categories);
         if (inParam) u.searchParams.set('in', inParam);
         else if (at) u.searchParams.set('at', at);
 

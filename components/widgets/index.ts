@@ -22,6 +22,7 @@ export { default as EVChargingPlanner } from './EVChargingPlanner';
 export { default as LiveTrafficWidget } from './LiveTrafficWidget';
 export { default as CustomRouteWidget } from './CustomRouteWidget';
 export { default as PublicTransitDepartures } from './PublicTransitDepartures';
+export { default as ParkingFinder } from './ParkingFinder';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

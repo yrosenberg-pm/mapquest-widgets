@@ -17,6 +17,10 @@ import {
   Filter,
   Locate,
   CircleDot,
+  MessageCircle,
+  Send,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -198,6 +202,23 @@ export default function PublicTransitDepartures({
   const [refreshing, setRefreshing] = useState(false);
   const lastRefreshRef = useRef(0);
 
+  // Chat state
+  interface ChatMsg { role: 'user' | 'assistant'; content: string }
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (chatOpen) setTimeout(() => chatInputRef.current?.focus(), 150);
+  }, [chatOpen]);
+
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
@@ -368,6 +389,82 @@ export default function PublicTransitDepartures({
     }
   };
 
+  const buildTransitContext = useCallback(() => {
+    const parts: string[] = ['WIDGET: Public Transit Departures'];
+    if (address) parts.push(`LOCATION: ${address}`);
+    if (location) parts.push(`COORDINATES: ${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`);
+
+    parts.push(`\nNEARBY STATIONS: ${stations.length}`);
+    if (stations.length > 0) {
+      for (const s of stations.slice(0, 8)) {
+        parts.push(`  - ${s.name} (${s.distance.toFixed(2)} mi) — modes: ${s.modes.join(', ')}`);
+      }
+    }
+
+    if (selectedStation) {
+      parts.push(`\nSELECTED STATION: ${selectedStation.name}`);
+      parts.push(`  Distance: ${selectedStation.distance.toFixed(2)} mi`);
+      parts.push(`  Modes: ${selectedStation.modes.join(', ')}`);
+
+      if (departureGroups.length > 0) {
+        parts.push(`\nUPCOMING DEPARTURES (${departureGroups.length} lines):`);
+        for (const g of departureGroups) {
+          const depTimes = g.departures.map(d => {
+            const mins = Math.max(0, Math.round((new Date(d.estimatedTime || d.scheduledTime).getTime() - Date.now()) / 60000));
+            const status = d.status === 'cancelled' ? ' [CANCELLED]' : d.status === 'delayed' ? ` [DELAYED +${d.delayMinutes}min]` : '';
+            const live = d.isRealtime ? ' (live)' : ' (scheduled)';
+            return `${mins}min${live}${status}`;
+          }).join(', ');
+          parts.push(`  - ${g.lineName} → ${g.direction} (${g.mode}): ${depTimes}`);
+        }
+      } else if (!loadingDepartures) {
+        parts.push(`\nNo departures loaded yet for this station.`);
+      }
+    } else {
+      parts.push(`\nNo station selected yet. The user needs to select a station from the list.`);
+    }
+
+    if (!location && stations.length === 0) {
+      parts.push(`\nNo location entered yet. The user needs to enter a location or allow geolocation first.`);
+    }
+
+    return parts.join('\n');
+  }, [address, location, stations, selectedStation, departureGroups, loadingDepartures]);
+
+  const sendChatMessage = useCallback(async (text?: string) => {
+    const msg = text ?? chatInput.trim();
+    if (!msg || chatLoading) return;
+    setChatInput('');
+    const userMsg: ChatMsg = { role: 'user', content: msg };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatLoading(true);
+
+    try {
+      const res = await fetch('/api/widget-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          history: chatMessages.slice(-10),
+          context: buildTransitContext(),
+          lat: location?.lat,
+          lng: location?.lng,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.error) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: `Sorry, something went wrong: ${data.error}` }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I couldn\'t connect to the assistant. Please try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, [chatInput, chatLoading, chatMessages, buildTransitContext, location]);
+
   const availableModes = [...new Set(departureGroups.map(g => g.mode))];
   const filteredGroups = modeFilter.size === 0
     ? departureGroups
@@ -463,6 +560,144 @@ export default function PublicTransitDepartures({
             markers={markers}
             zoomToLocation={selectedStation ? { lat: selectedStation.lat, lng: selectedStation.lng, zoom: 16 } : undefined}
           />
+
+          {/* Chat overlay — bottom-right of map */}
+          <div className="absolute bottom-3 right-3 z-[1000]" style={{ pointerEvents: 'auto' }}>
+            {chatOpen ? (
+              <div
+                className="flex flex-col rounded-2xl overflow-hidden shadow-xl"
+                style={{
+                  width: 340,
+                  height: 380,
+                  background: 'var(--bg-widget)',
+                  border: '1px solid var(--border-subtle)',
+                  backdropFilter: 'blur(12px)',
+                }}
+              >
+                <div
+                  className="flex items-center gap-2 px-3 py-2.5 flex-shrink-0"
+                  style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                >
+                  <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
+                  <span className="text-xs font-semibold flex-1" style={{ color: 'var(--text-main)' }}>
+                    Transit Assistant
+                  </span>
+                  <button
+                    onClick={() => setChatOpen(false)}
+                    className="p-1 rounded-md transition-colors hover:bg-black/5"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto prism-scrollbar px-3 py-2 space-y-2">
+                  {chatMessages.length === 0 && (
+                    <div className="text-center py-6">
+                      <Sparkles className="w-6 h-6 mx-auto mb-2" style={{ color: accentColor, opacity: 0.5 }} />
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        Ask me about transit departures
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
+                        {[
+                          'When is the next bus?',
+                          'Which lines run here?',
+                          'Any delays right now?',
+                        ].map(q => (
+                          <button
+                            key={q}
+                            onClick={() => sendChatMessage(q)}
+                            className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                            style={{
+                              background: accentColor + '15',
+                              color: accentColor,
+                              border: `1px solid ${accentColor}30`,
+                            }}
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className="max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed"
+                        style={
+                          msg.role === 'user'
+                            ? { background: accentColor, color: 'white', borderBottomRightRadius: 4 }
+                            : { background: 'var(--bg-input)', color: 'var(--text-main)', borderBottomLeftRadius: 4 }
+                        }
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div
+                        className="px-3 py-2 rounded-xl text-xs"
+                        style={{ background: 'var(--bg-input)', color: 'var(--text-muted)', borderBottomLeftRadius: 4 }}
+                      >
+                        <span className="inline-flex gap-1">
+                          <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
+                          <span className="animate-bounce" style={{ animationDelay: '150ms' }}>·</span>
+                          <span className="animate-bounce" style={{ animationDelay: '300ms' }}>·</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div
+                  className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
+                  style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                >
+                  <input
+                    ref={chatInputRef}
+                    type="text"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                    placeholder="Ask about departures..."
+                    className="flex-1 text-xs px-3 py-2 rounded-lg outline-none"
+                    style={{
+                      background: 'var(--bg-input)',
+                      color: 'var(--text-main)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                    disabled={chatLoading}
+                  />
+                  <button
+                    onClick={() => sendChatMessage()}
+                    disabled={!chatInput.trim() || chatLoading}
+                    className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                    style={{ background: accentColor, color: 'white' }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setChatOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105"
+                style={{
+                  background: 'var(--bg-widget)',
+                  border: '1px solid var(--border-subtle)',
+                  color: accentColor,
+                }}
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-xs font-semibold">Ask AI</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Sidebar */}
