@@ -1031,7 +1031,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
                 {/* Quick tool cards — side by side */}
                 {location && (
-                  <div className="grid grid-cols-2 gap-2 mt-3">
+                  <div className="flex flex-col gap-2 mt-3">
                     {/* Walkability card */}
                     <button
                       onClick={() => setShowWalkability(v => !v)}
