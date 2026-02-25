@@ -254,17 +254,6 @@ export default function NeighborhoodScore({
   const [commuteData, setCommuteData] = useState<{ driveMinutes: number; transitMinutes: number | null; distanceMiles: number } | null>(null);
   const [commuteLoading, setCommuteLoading] = useState(false);
 
-  // Transit route planner state
-  interface TransitStep { type: string; instruction: string; duration: string; lineName?: string }
-  const [transitRouteOpen, setTransitRouteOpen] = useState(false);
-  const [transitDestAddr, setTransitDestAddr] = useState('');
-  const [transitDestLoc, setTransitDestLoc] = useState<{ lat: number; lng: number } | null>(null);
-  const [transitSegments, setTransitSegments] = useState<{ type: string; coords: { lat: number; lng: number }[] }[]>([]);
-  const [transitSteps, setTransitSteps] = useState<TransitStep[]>([]);
-  const [transitRouteInfo, setTransitRouteInfo] = useState<{ duration: string; distance: string; modes: string } | null>(null);
-  const [transitRouteLoading, setTransitRouteLoading] = useState(false);
-  const [transitRouteError, setTransitRouteError] = useState<string | null>(null);
-
   // Chat state
   interface ChatMsg { role: 'user' | 'assistant'; content: string }
   const [chatOpen, setChatOpen] = useState(false);
@@ -418,116 +407,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     }
   }, [location, workLocation]);
 
-  const TRANSIT_MODE_NAMES: Record<string, string> = {
-    pedestrian: 'Walk', subway: 'Subway', bus: 'Bus', train: 'Train',
-    regionalTrain: 'Regional Train', intercityTrain: 'Intercity Train',
-    highSpeedTrain: 'High Speed', ferry: 'Ferry', tram: 'Tram',
-    lightRail: 'Light Rail', monorail: 'Monorail', metro: 'Metro', rail: 'Rail',
-  };
-
-  const TRANSIT_MODE_COLORS: Record<string, string> = {
-    pedestrian: '#6B7280', subway: '#8B5CF6', metro: '#8B5CF6', bus: '#F59E0B',
-    train: '#3B82F6', rail: '#3B82F6', regionalTrain: '#3B82F6',
-    intercityTrain: '#1D4ED8', lightRail: '#10B981', tram: '#10B981',
-    ferry: '#0EA5E9', monorail: '#8B5CF6',
-  };
-
-  const calculateTransitRoute = useCallback(async () => {
-    if (!location || !transitDestLoc) return;
-    setTransitRouteLoading(true);
-    setTransitRouteError(null);
-    setTransitSegments([]);
-    setTransitSteps([]);
-    setTransitRouteInfo(null);
-
-    try {
-      const params = new URLSearchParams({
-        endpoint: 'transit',
-        origin: `${location.lat},${location.lng}`,
-        destination: `${transitDestLoc.lat},${transitDestLoc.lng}`,
-        departureTime: new Date().toISOString(),
-      });
-      const res = await fetch(`/api/here?${params}`);
-      const data = await res.json();
-
-      if (data.error || !data.routes?.length) {
-        setTransitRouteError(data.error || 'No transit route found between these locations.');
-        return;
-      }
-
-      const route = data.routes[0];
-      const sections = route.sections || [];
-      let totalDuration = 0;
-      let totalLength = 0;
-      const modes: string[] = [];
-      const lines: string[] = [];
-      const steps: TransitStep[] = [];
-      const segs: { type: string; coords: { lat: number; lng: number }[] }[] = [];
-
-      sections.forEach((section: any) => {
-        const sType = section.type || 'unknown';
-        const dur = section.travelSummary?.duration || section.summary?.duration || 0;
-        const len = section.travelSummary?.length || section.summary?.length || 0;
-        totalDuration += dur;
-        totalLength += len;
-
-        if (sType !== 'pedestrian') modes.push(sType);
-        const lineName = section.transport?.name || section.transport?.shortName || section.transport?.headsign;
-        if (lineName) lines.push(lineName);
-
-        const friendly = TRANSIT_MODE_NAMES[sType] || sType.charAt(0).toUpperCase() + sType.slice(1);
-        let instruction = '';
-        if (sType === 'pedestrian') {
-          const m = len;
-          instruction = `Walk ${m > 1600 ? (m / 1609.34).toFixed(1) + ' mi' : Math.round(m * 3.28084) + ' ft'}`;
-        } else if (lineName) {
-          instruction = `Take ${friendly}: ${lineName}`;
-          if (section.transport?.headsign && section.transport.headsign !== lineName) instruction += ` toward ${section.transport.headsign}`;
-        } else {
-          instruction = friendly;
-        }
-        if (section.departure?.place?.name) instruction += ` from ${section.departure.place.name}`;
-        if (section.arrival?.place?.name && sType !== 'pedestrian') instruction += ` to ${section.arrival.place.name}`;
-
-        const durMin = Math.ceil(dur / 60);
-        steps.push({ type: sType, instruction, duration: durMin > 0 ? `${durMin} min` : '', lineName: lineName || undefined });
-
-        if (section.polyline) {
-          try {
-            const decoded = decodeHereFlexiblePolyline(section.polyline);
-            segs.push({ type: sType, coords: decoded.points.map(p => ({ lat: p.lat, lng: p.lng })) });
-          } catch { /* skip bad segment */ }
-        }
-      });
-
-      setTransitSegments(segs);
-      setTransitSteps(steps);
-
-      const hrs = Math.floor(totalDuration / 3600);
-      const mins = Math.floor((totalDuration % 3600) / 60);
-      const distMi = (totalLength / 1609.34).toFixed(1);
-      const uniqueModes = [...new Set(modes)].map(m => TRANSIT_MODE_NAMES[m] || m).join(' + ');
-      const uniqueLines = [...new Set(lines)].slice(0, 3).join(', ');
-      setTransitRouteInfo({
-        duration: hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`,
-        distance: `${distMi} mi`,
-        modes: uniqueLines ? `${uniqueModes} (${uniqueLines})` : uniqueModes || 'Transit',
-      });
-    } catch {
-      setTransitRouteError('Failed to calculate transit route.');
-    } finally {
-      setTransitRouteLoading(false);
-    }
-  }, [location, transitDestLoc]);
-
-  const clearTransitRoute = useCallback(() => {
-    setTransitSegments([]);
-    setTransitSteps([]);
-    setTransitRouteInfo(null);
-    setTransitRouteError(null);
-    setTransitDestAddr('');
-    setTransitDestLoc(null);
-  }, []);
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -823,7 +702,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         layout="inline"
         icon={<MapPin className="w-4 h-4" />}
       />
-      <div className="flex flex-col md:flex-row md:h-[600px]">
+      <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map + Chat overlay - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
@@ -895,10 +774,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                 markers.push({ lat: workLocation.lat, lng: workLocation.lng, label: 'Work', color: '#f59e0b', type: 'home' });
               }
 
-              if (transitDestLoc) {
-                markers.push({ lat: transitDestLoc.lat, lng: transitDestLoc.lng, label: transitDestAddr || 'Destination', color: '#ef4444', type: 'home' });
-              }
-              
               return markers;
             })()}
             polygons={showWalkability ? walkabilityPolygons.map(p => ({
@@ -907,7 +782,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
               fillOpacity: 0.12,
               strokeWidth: 2,
             })) : []}
-            transitSegments={transitSegments}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
           />
@@ -1052,7 +926,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         </div>
         {/* Sidebar */}
         <div 
-          className="w-full md:w-80 flex flex-col overflow-hidden border-t md:border-t-0 md:border-r md:order-1"
+          className="w-full md:w-[40%] flex flex-col overflow-hidden border-t md:border-t-0 md:border-r md:order-1"
           style={{ borderColor: 'var(--border-subtle)' }}
         >
           {/* Header with Input */}
@@ -1124,248 +998,159 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
             )}
           </div>
 
-          {/* Overall Score */}
-          {overallScore !== null && (
-            <div 
-              className="p-3"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <div className="flex items-center gap-3">
-                <ScoreRing score={overallScore} size={64} />
-                <div className="flex-1">
-                  <div 
-                    className="text-sm font-medium"
-                    style={{ color: 'var(--text-main)' }}
-                  >
-                    Neighborhood Score
-                  </div>
-                  <div 
-                    className="text-2xl font-bold"
-                    style={{ color: getScoreColor(overallScore) }}
-                  >
-                    {overallScore.toFixed(1)} / 5
-                  </div>
-                  <div 
-                    className="text-xs"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    {overallScore >= 4 ? 'Excellent' : overallScore >= 3 ? 'Good' : overallScore >= 2 ? 'Fair' : 'Limited'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Scrollable content area */}
+          <div className="flex-1 overflow-y-auto prism-scrollbar">
 
-          {/* Walkability + Commute */}
-          {overallScore !== null && location && (
-            <div 
-              className="px-3 py-2 space-y-2"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              {/* Walkability Isoline Toggle */}
-              <button
-                onClick={() => setShowWalkability(v => !v)}
-                className="w-full flex items-center justify-between p-2 rounded-lg transition-colors"
-                style={{
-                  background: showWalkability ? accentColor + '15' : 'var(--bg-panel)',
-                  border: `1px solid ${showWalkability ? accentColor + '40' : 'var(--border-subtle)'}`,
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Footprints className="w-4 h-4" style={{ color: showWalkability ? accentColor : 'var(--text-muted)' }} />
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>
-                    Walkability Zones
-                  </span>
-                  {walkabilityLoading && <Loader2 className="w-3 h-3 prism-spinner" style={{ color: 'var(--text-muted)' }} />}
-                </div>
-                <div
-                  className="w-8 h-[18px] rounded-full relative transition-colors"
-                  style={{ background: showWalkability ? accentColor : 'var(--border-default)' }}
-                >
-                  <div
-                    className="w-3.5 h-3.5 rounded-full bg-white absolute top-[2px] transition-all"
-                    style={{ left: showWalkability ? 16 : 2 }}
-                  />
-                </div>
-              </button>
-              {showWalkability && walkabilityPolygons.length > 0 && (
-                <div className="flex gap-3 px-2 pb-1">
-                  {walkabilityPolygons.map((p, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <div className="w-3 h-3 rounded-sm" style={{ background: p.color, opacity: 0.6 }} />
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{p.label}</span>
+            {/* Overall Score + Quick Tools */}
+            {overallScore !== null && (
+              <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                {/* Score header */}
+                <div className="flex items-center gap-4">
+                  <ScoreRing score={overallScore} size={72} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                      Neighborhood Score
                     </div>
-                  ))}
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="text-3xl font-extrabold leading-none" style={{ color: getScoreColor(overallScore) }}>
+                        {overallScore.toFixed(1)}
+                      </span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>/ 5</span>
+                      <span
+                        className="ml-auto text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          background: getScoreColor(overallScore) + '18',
+                          color: getScoreColor(overallScore),
+                        }}
+                      >
+                        {overallScore >= 4 ? 'Excellent' : overallScore >= 3 ? 'Good' : overallScore >= 2 ? 'Fair' : 'Limited'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              {/* Commute Time */}
-              <div
-                className="p-2 rounded-lg"
-                style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Briefcase className="w-4 h-4" style={{ color: '#f59e0b' }} />
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>Commute Time</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className="flex-1 rounded-lg flex items-center gap-1.5 px-2 py-1.5"
-                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
-                  >
-                    <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: '#f59e0b' }} />
-                    <AddressAutocomplete
-                      value={workAddress}
-                      onChange={(v) => { setWorkAddress(v); if (!v) { setWorkLocation(null); setCommuteData(null); } }}
-                      onSelect={(result) => {
-                        if (result.lat && result.lng) setWorkLocation({ lat: result.lat, lng: result.lng });
+                {/* Quick tool cards — side by side */}
+                {location && (
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    {/* Walkability card */}
+                    <button
+                      onClick={() => setShowWalkability(v => !v)}
+                      className="flex flex-col items-start gap-1.5 p-2.5 rounded-xl transition-all text-left"
+                      style={{
+                        background: showWalkability ? `${accentColor}12` : 'var(--bg-panel)',
+                        border: `1.5px solid ${showWalkability ? accentColor : 'var(--border-subtle)'}`,
                       }}
-                      placeholder="Work address..."
-                      darkMode={darkMode}
-                      inputBg={inputBg}
-                      textColor={textColor}
-                      mutedText={mutedText}
-                      borderColor={borderColor}
-                      className="flex-1"
-                      hideIcon
-                    />
-                  </div>
-                  <button
-                    onClick={calculateCommute}
-                    disabled={commuteLoading || !workLocation}
-                    className="p-1.5 rounded-lg disabled:opacity-40 transition-colors"
-                    style={{ background: accentColor, color: 'white' }}
-                  >
-                    {commuteLoading ? <Loader2 className="w-3.5 h-3.5 prism-spinner" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-                {commuteData && (
-                  <div className="flex items-center gap-3 mt-2">
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ background: accentColor + '15' }}>
-                      <Navigation className="w-3 h-3" style={{ color: accentColor }} />
-                      <span className="text-xs font-bold" style={{ color: accentColor }}>{commuteData.driveMinutes} min</span>
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>drive</span>
-                    </div>
-                    {commuteData.transitMinutes != null && (
-                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ background: '#0ea5e920' }}>
-                        <Bus className="w-3 h-3" style={{ color: '#0ea5e9' }} />
-                        <span className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{commuteData.transitMinutes} min</span>
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>transit</span>
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <Footprints className="w-4 h-4" style={{ color: showWalkability ? accentColor : 'var(--text-muted)' }} />
+                        {walkabilityLoading ? (
+                          <Loader2 className="w-3 h-3 animate-spin" style={{ color: 'var(--text-muted)' }} />
+                        ) : (
+                          <div
+                            className="w-7 h-4 rounded-full relative transition-colors flex-shrink-0"
+                            style={{ background: showWalkability ? accentColor : 'var(--border-default)' }}
+                          >
+                            <div
+                              className="w-3 h-3 rounded-full bg-white absolute top-[2px] transition-all shadow-sm"
+                              style={{ left: showWalkability ? 14 : 2 }}
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{commuteData.distanceMiles} mi</span>
+                      <span className="text-[11px] font-semibold leading-tight" style={{ color: 'var(--text-main)' }}>
+                        Walkability
+                      </span>
+                      {showWalkability && walkabilityPolygons.length > 0 ? (
+                        <div className="flex gap-2 flex-wrap">
+                          {walkabilityPolygons.map((p, i) => (
+                            <div key={i} className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded-sm" style={{ background: p.color, opacity: 0.7 }} />
+                              <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>{p.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          {showWalkability ? 'Loading zones...' : 'Show walk zones'}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Commute card */}
+                    <div
+                      className="flex flex-col items-start gap-1.5 p-2.5 rounded-xl"
+                      style={{
+                        background: commuteData ? `#f59e0b12` : 'var(--bg-panel)',
+                        border: `1.5px solid ${commuteData ? '#f59e0b' : 'var(--border-subtle)'}`,
+                      }}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <Briefcase className="w-4 h-4" style={{ color: commuteData ? '#f59e0b' : 'var(--text-muted)' }} />
+                      </div>
+                      <span className="text-[11px] font-semibold leading-tight" style={{ color: 'var(--text-main)' }}>
+                        Commute
+                      </span>
+                      {commuteData ? (
+                        <div className="flex flex-col gap-1 w-full">
+                          <div className="flex items-center gap-1">
+                            <Navigation className="w-2.5 h-2.5" style={{ color: accentColor }} />
+                            <span className="text-[11px] font-bold" style={{ color: accentColor }}>{commuteData.driveMinutes}m</span>
+                            <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>drive</span>
+                          </div>
+                          {commuteData.transitMinutes != null && (
+                            <div className="flex items-center gap-1">
+                              <Bus className="w-2.5 h-2.5" style={{ color: '#0ea5e9' }} />
+                              <span className="text-[11px] font-bold" style={{ color: '#0ea5e9' }}>{commuteData.transitMinutes}m</span>
+                              <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>transit</span>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => { setCommuteData(null); setWorkAddress(''); setWorkLocation(null); }}
+                            className="text-[9px] mt-0.5 self-start transition-colors"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            Change address
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 w-full">
+                          <div
+                            className="flex-1 rounded-md flex items-center gap-1 px-1.5 py-1"
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <AddressAutocomplete
+                              value={workAddress}
+                              onChange={(v) => { setWorkAddress(v); if (!v) { setWorkLocation(null); setCommuteData(null); } }}
+                              onSelect={(result) => {
+                                if (result.lat && result.lng) setWorkLocation({ lat: result.lat, lng: result.lng });
+                              }}
+                              placeholder="Work address..."
+                              darkMode={darkMode}
+                              inputBg="transparent"
+                              textColor={textColor}
+                              mutedText={mutedText}
+                              borderColor="transparent"
+                              className="flex-1"
+                              hideIcon
+                            />
+                          </div>
+                          <button
+                            onClick={calculateCommute}
+                            disabled={commuteLoading || !workLocation}
+                            className="p-1 rounded-md disabled:opacity-30 transition-colors flex-shrink-0"
+                            style={{ background: accentColor, color: 'white' }}
+                          >
+                            {commuteLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronRight className="w-3 h-3" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Transit Route Planner */}
-          {location && (
-            <div
-              className="px-3 py-2"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
-            >
-              <button
-                onClick={() => { setTransitRouteOpen(v => !v); if (transitRouteOpen) clearTransitRoute(); }}
-                className="w-full flex items-center justify-between p-2 rounded-lg transition-colors"
-                style={{
-                  background: transitRouteOpen ? accentColor + '15' : 'var(--bg-panel)',
-                  border: `1px solid ${transitRouteOpen ? accentColor + '40' : 'var(--border-subtle)'}`,
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Bus className="w-4 h-4" style={{ color: transitRouteOpen ? accentColor : 'var(--text-muted)' }} />
-                  <span className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>Transit Route Planner</span>
-                </div>
-                {transitRouteOpen ? <ChevronUp className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> : <ChevronDown className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />}
-              </button>
-
-              {transitRouteOpen && (
-                <div className="mt-2 space-y-2">
-                  {/* From (locked to home address) */}
-                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
-                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: accentColor }} />
-                    <span className="text-xs truncate" style={{ color: 'var(--text-main)' }}>{address || `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`}</span>
-                  </div>
-
-                  {/* To */}
-                  <div className="flex items-center gap-1.5">
-                    <div
-                      className="flex-1 rounded-lg flex items-center gap-1.5 px-2 py-1.5"
-                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
-                    >
-                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#ef4444' }} />
-                      <AddressAutocomplete
-                        value={transitDestAddr}
-                        onChange={(v) => { setTransitDestAddr(v); if (!v) { clearTransitRoute(); } }}
-                        onSelect={(result) => { if (result.lat && result.lng) setTransitDestLoc({ lat: result.lat, lng: result.lng }); }}
-                        placeholder="Where to?"
-                        darkMode={darkMode}
-                        inputBg={inputBg}
-                        textColor={textColor}
-                        mutedText={mutedText}
-                        borderColor={borderColor}
-                        className="flex-1"
-                        hideIcon
-                      />
-                    </div>
-                    <button
-                      onClick={calculateTransitRoute}
-                      disabled={transitRouteLoading || !transitDestLoc}
-                      className="p-1.5 rounded-lg disabled:opacity-40 transition-colors"
-                      style={{ background: accentColor, color: 'white' }}
-                    >
-                      {transitRouteLoading ? <Loader2 className="w-3.5 h-3.5 prism-spinner" /> : <Navigation className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-
-                  {transitRouteError && (
-                    <p className="text-[11px] px-2 py-1.5 rounded-lg" style={{ color: 'var(--color-error)', background: 'var(--color-error-bg)' }}>
-                      {transitRouteError}
-                    </p>
-                  )}
-
-                  {/* Route Summary */}
-                  {transitRouteInfo && (
-                    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
-                      <div className="px-3 py-2" style={{ background: `linear-gradient(135deg, ${accentColor}18 0%, ${accentColor}08 100%)` }}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg font-bold" style={{ color: accentColor }}>{transitRouteInfo.duration}</span>
-                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{transitRouteInfo.distance}</span>
-                        </div>
-                        <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{transitRouteInfo.modes}</div>
-                      </div>
-
-                      {/* Step-by-step */}
-                      <div className="px-2 py-1.5" style={{ background: 'var(--bg-panel)' }}>
-                        {transitSteps.map((step, i) => {
-                          const dotColor = TRANSIT_MODE_COLORS[step.type] || accentColor;
-                          return (
-                            <div key={i} className="flex items-start gap-2 py-1.5 relative">
-                              <div className="flex flex-col items-center flex-shrink-0 mt-0.5">
-                                <div className="w-2.5 h-2.5 rounded-full" style={{ background: dotColor, border: '2px solid white', boxShadow: `0 0 0 1px ${dotColor}40` }} />
-                                {i < transitSteps.length - 1 && (
-                                  <div className="w-px flex-1 min-h-[12px] mt-0.5" style={{ background: 'var(--border-default)' }} />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-[11px] leading-tight" style={{ color: 'var(--text-main)' }}>{step.instruction}</div>
-                                {step.duration && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{step.duration}</span>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Category Scores */}
-          <div className="flex-1 overflow-y-auto prism-scrollbar">
+            {/* Category Scores */}
             {selectedCategory ? (
               <div className="p-3">
                 <button

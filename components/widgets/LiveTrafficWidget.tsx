@@ -2,7 +2,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, MapPin, RefreshCw, Route, MessageCircle, Send, X, Sparkles, CornerDownLeft } from 'lucide-react';
+import { AlertTriangle, Loader2, MapPin, RefreshCw, Route, MessageCircle, Send, X, Sparkles, CornerDownLeft, Search, Navigation2, Milestone } from 'lucide-react';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
 import * as turf from '@turf/turf';
@@ -594,6 +594,19 @@ export default function LiveTrafficWidget({
 
   const [zoomToLocation, setZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
 
+  // Exit / mile marker search state
+  interface ExitSearchResult {
+    title: string;
+    address: string;
+    lat: number;
+    lng: number;
+  }
+  const [exitQuery, setExitQuery] = useState('');
+  const [exitResults, setExitResults] = useState<ExitSearchResult[]>([]);
+  const [exitSearching, setExitSearching] = useState(false);
+  const [exitError, setExitError] = useState<string | null>(null);
+  const [exitPin, setExitPin] = useState<{ lat: number; lng: number; label: string } | null>(null);
+
   // Chat state
   interface ChatMsg { role: 'user' | 'assistant'; content: string }
   const [chatOpen, setChatOpen] = useState(false);
@@ -628,6 +641,10 @@ export default function LiveTrafficWidget({
       }
     }
 
+    if (exitPin) {
+      parts.push(`EXIT/MILE MARKER PIN: "${exitPin.label}" at ${exitPin.lat.toFixed(5)}, ${exitPin.lng.toFixed(5)}`);
+    }
+
     parts.push(`\nTOTAL INCIDENTS: ${incidents.length}`);
     const bySev = { 4: 0, 3: 0, 2: 0, 1: 0 } as Record<number, number>;
     incidents.forEach(i => { bySev[i.severity] = (bySev[i.severity] || 0) + 1; });
@@ -647,7 +664,7 @@ export default function LiveTrafficWidget({
     }
 
     return parts.join('\n');
-  }, [mode, areaCenter, areaRadiusMiles, routeFrom, routeTo, routeState, incidents, lastUpdated]);
+  }, [mode, areaCenter, areaRadiusMiles, routeFrom, routeTo, routeState, incidents, lastUpdated, exitPin]);
 
   const sendChatMessage = useCallback(async (text?: string) => {
     const msg = text ?? chatInput.trim();
@@ -828,6 +845,82 @@ export default function LiveTrafficWidget({
       },
     ];
   }, [mode, areaCenter.lat, areaCenter.lng, areaRadiusMiles, accentColor]);
+
+  const searchExitOrMileMarker = useCallback(async (query: string) => {
+    const q = query.trim();
+    if (!q) return;
+    setExitSearching(true);
+    setExitError(null);
+    setExitResults([]);
+
+    try {
+      // Use HERE geocode with the raw natural-language query first.
+      // HERE handles highway-related queries like "exit 9 I-405" reasonably well.
+      const contextAt = `${areaCenter.lat},${areaCenter.lng}`;
+      const geoRes = await fetch(`/api/here?endpoint=geocode&q=${encodeURIComponent(q)}`);
+      const geoData = await geoRes.json();
+
+      // Also try autosuggest for additional fuzzy results
+      const suggestRes = await fetch(
+        `/api/here?endpoint=autosuggest&q=${encodeURIComponent(q)}&at=${contextAt}&limit=6`
+      );
+      const suggestData = await suggestRes.json();
+
+      const seen = new Set<string>();
+      const results: ExitSearchResult[] = [];
+
+      // Merge geocode results
+      for (const item of geoData?.items || []) {
+        const lat = item.position?.lat;
+        const lng = item.position?.lng;
+        if (lat == null || lng == null) continue;
+        const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push({
+          title: item.title || item.address?.label || 'Unknown',
+          address: item.address?.label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          lat,
+          lng,
+        });
+      }
+
+      // Merge autosuggest results (only those with positions)
+      for (const item of suggestData?.items || []) {
+        const lat = item.position?.lat;
+        const lng = item.position?.lng;
+        if (lat == null || lng == null) continue;
+        const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push({
+          title: item.title || 'Unknown',
+          address: item.address?.label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          lat,
+          lng,
+        });
+      }
+
+      if (results.length === 0) {
+        setExitError(`No results found for "${q}". Try "Exit 9 I-405" or "I-95 mile marker 42".`);
+      }
+      setExitResults(results.slice(0, 8));
+    } catch (err) {
+      console.error('[ExitSearch] Error:', err);
+      setExitError('Search failed. Please try again.');
+    } finally {
+      setExitSearching(false);
+    }
+  }, [areaCenter.lat, areaCenter.lng]);
+
+  function selectExitResult(result: ExitSearchResult) {
+    setExitPin({ lat: result.lat, lng: result.lng, label: result.title });
+    setAreaCenter({ lat: result.lat, lng: result.lng });
+    setZoomToLocation({ lat: result.lat, lng: result.lng, zoom: 15 });
+    setSelectedId(null);
+    setExitResults([]);
+    setTimeout(() => void load(), 0);
+  }
 
   async function load() {
     if (!apiKey) {
@@ -1048,12 +1141,19 @@ export default function LiveTrafficWidget({
               zoom={z}
               darkMode={isDark}
               height="100%"
-              markers={
-                mode === 'area'
+              markers={[
+                ...(exitPin ? [{
+                  lat: exitPin.lat,
+                  lng: exitPin.lng,
+                  label: exitPin.label,
+                  color: '#8B5CF6',
+                  clusterable: false,
+                  zIndexOffset: 3000,
+                }] : []),
+                ...(mode === 'area'
                   ? incidentMarkers
                   : routeState.status === 'ready'
                     ? [
-                        // Start pin (red)
                         ...(routeFromLL ? [{
                           lat: routeFromLL.lat,
                           lng: routeFromLL.lng,
@@ -1061,7 +1161,6 @@ export default function LiveTrafficWidget({
                           color: '#16A34A',
                           clusterable: false,
                         }] : []),
-                        // End pin (green)
                         ...(routeToLL ? [{
                           lat: routeToLL.lat,
                           lng: routeToLL.lng,
@@ -1072,7 +1171,8 @@ export default function LiveTrafficWidget({
                         ...incidentMarkers,
                       ]
                     : (selectedId ? selectedMapMarker : [])
-              }
+                ),
+              ]}
               clusterMarkers={mode === 'area' || (mode === 'route' && routeState.status === 'ready')}
               clusterRadiusPx={56}
               circles={mode === 'area' ? radiusCircle : []}
@@ -1354,6 +1454,114 @@ export default function LiveTrafficWidget({
                 </CollapsibleSection>
               </div>
             )}
+
+            {/* Exit / Mile Marker Search */}
+            <div
+              className="mb-4 rounded-xl border p-3"
+              style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Milestone className="w-4 h-4" style={{ color: accentColor }} />
+                <span className="text-xs font-semibold" style={{ color: 'var(--text-main)' }}>
+                  Exit &amp; Mile Marker Search
+                </span>
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  searchExitOrMileMarker(exitQuery);
+                }}
+                className="flex items-center gap-2"
+              >
+                <div
+                  className="flex-1 rounded-xl flex items-center gap-2"
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    padding: '8px 10px',
+                  }}
+                >
+                  <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
+                  <input
+                    type="text"
+                    value={exitQuery}
+                    onChange={(e) => setExitQuery(e.target.value)}
+                    placeholder='e.g. "Exit 9 I-405" or "I-95 mile marker 42"'
+                    className="flex-1 bg-transparent text-xs outline-none"
+                    style={{ color: 'var(--text-main)' }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={exitSearching || !exitQuery.trim()}
+                  className="rounded-xl px-3 py-2 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  style={{
+                    background: exitQuery.trim() ? accentColor : 'var(--bg-input)',
+                    color: exitQuery.trim() ? 'white' : 'var(--text-muted)',
+                    opacity: exitSearching ? 0.6 : 1,
+                  }}
+                >
+                  {exitSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+                  Find
+                </button>
+              </form>
+
+              {/* Error */}
+              {exitError && (
+                <div className="mt-2 text-[11px] px-1" style={{ color: 'var(--color-warning, #f59e0b)' }}>
+                  {exitError}
+                </div>
+              )}
+
+              {/* Results */}
+              {exitResults.length > 0 && (
+                <div className="mt-2 space-y-1.5 max-h-[200px] overflow-y-auto prism-scrollbar">
+                  {exitResults.map((r, i) => (
+                    <button
+                      key={`${r.lat}-${r.lng}-${i}`}
+                      onClick={() => selectExitResult(r)}
+                      className="w-full flex items-start gap-2.5 p-2.5 rounded-xl transition-colors text-left"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = `${accentColor}10`)}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
+                    >
+                      <Navigation2 className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: accentColor }} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium truncate" style={{ color: 'var(--text-main)' }}>
+                          {r.title}
+                        </div>
+                        <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                          {r.address}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Active pin indicator */}
+              {exitPin && (
+                <div
+                  className="mt-2 flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl"
+                  style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}30` }}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <MapPin className="w-3.5 h-3.5 flex-shrink-0" style={{ color: accentColor }} />
+                    <span className="text-[11px] font-medium truncate" style={{ color: accentColor }}>
+                      {exitPin.label}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExitPin(null)}
+                    className="p-0.5 rounded hover:bg-black/10 transition-colors"
+                    title="Remove pin"
+                  >
+                    <X className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Route inputs */}
             {mode === 'route' && (
