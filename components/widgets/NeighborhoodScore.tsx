@@ -5,9 +5,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
-  Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft
+  Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft,
+  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase
 } from 'lucide-react';
 import { geocode, searchPlaces } from '@/lib/mapquest';
+import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
@@ -65,12 +67,18 @@ const DEFAULT_CATEGORIES: Category[] = [
   { id: 'grocery', name: 'Groceries', icon: ShoppingCart, group: 'Amenities', mqCategory: 'multi:sic:541105,sic:541101,grocery store,supermarket', weight: 3 },
   { id: 'restaurant', name: 'Restaurants', icon: Utensils, group: 'Amenities', mqCategory: 'q:restaurant', weight: 2 },
   { id: 'coffee', name: 'Coffee Shops', icon: Coffee, group: 'Amenities', mqCategory: 'sic:581228', weight: 1 },
-  { id: 'parks', name: 'Parks', icon: Trees, group: 'Lifestyle', mqCategory: 'sic:799951', weight: 2 },
-  { id: 'fitness', name: 'Fitness', icon: Dumbbell, group: 'Lifestyle', mqCategory: 'sic:799101', weight: 1 },
-  { id: 'schools', name: 'Schools', icon: GraduationCap, group: 'Education', mqCategory: 'sic:821101', weight: 2 },
+  { id: 'shopping', name: 'Shopping', icon: Store, group: 'Amenities', mqCategory: 'multi:sic:531101,sic:531102,shopping center,convenience store,retail store', weight: 1 },
   { id: 'pharmacy', name: 'Pharmacy', icon: Pill, group: 'Amenities', mqCategory: 'sic:591205', weight: 2 },
   { id: 'banks', name: 'Banks', icon: Building2, group: 'Amenities', mqCategory: 'sic:602101', weight: 1 },
-  { id: 'publicTransit', name: 'Public Transportation', icon: Bus, group: 'Transportation', mqCategory: 'multi:sic:411101,sic:411104,sic:411201,sic:401101,sic:413101,sic:448301,metro station,subway,train station,light rail,trolley,streetcar,ferry terminal,transit center,amtrak,commuter rail', weight: 2 },
+  { id: 'parks', name: 'Parks', icon: Trees, group: 'Lifestyle', mqCategory: 'sic:799951', weight: 2 },
+  { id: 'fitness', name: 'Fitness', icon: Dumbbell, group: 'Lifestyle', mqCategory: 'sic:799101', weight: 1 },
+  { id: 'nightlife', name: 'Nightlife', icon: Wine, group: 'Lifestyle', mqCategory: 'multi:sic:581301,bar,nightclub,theater,entertainment venue', weight: 1 },
+  { id: 'petFriendly', name: 'Pet-Friendly', icon: Dog, group: 'Lifestyle', mqCategory: 'multi:sic:074201,dog park,pet store,veterinary clinic', weight: 1 },
+  { id: 'healthcare', name: 'Healthcare', icon: HeartPulse, group: 'Healthcare', mqCategory: 'multi:sic:801101,sic:806201,hospital,urgent care,medical clinic', weight: 3 },
+  { id: 'schools', name: 'Schools', icon: GraduationCap, group: 'Education', mqCategory: 'sic:821101', weight: 2 },
+  { id: 'daycare', name: 'Daycare', icon: Baby, group: 'Education', mqCategory: 'multi:sic:835101,daycare center,preschool,child care center', weight: 2 },
+  { id: 'publicTransit', name: 'Public Transit', icon: Bus, group: 'Transportation', mqCategory: 'multi:sic:411101,sic:411104,sic:411201,sic:401101,sic:413101,sic:448301,metro station,subway,train station,light rail,trolley,streetcar,ferry terminal,transit center,amtrak,commuter rail', weight: 2 },
+  { id: 'evCharging', name: 'EV Charging', icon: Zap, group: 'Transportation', mqCategory: 'multi:ev charging station,electric vehicle charger', weight: 1 },
 ];
 
 const STANDARD_THRESHOLDS = [
@@ -101,25 +109,73 @@ const categoryConfigs: Record<string, CategoryConfig> = {
   grocery: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
   restaurant: { idealCount: 10, searchRadius: 2, thresholdType: 'standard' },
   coffee: { idealCount: 5, searchRadius: 1, thresholdType: 'walkable' },
+  shopping: { idealCount: 5, searchRadius: 2, thresholdType: 'standard' },
   pharmacy: { idealCount: 2, searchRadius: 2, thresholdType: 'standard' },
   banks: { idealCount: 2, searchRadius: 2, thresholdType: 'standard' },
   parks: { idealCount: 3, searchRadius: 1, thresholdType: 'walkable' },
   fitness: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+  nightlife: { idealCount: 5, searchRadius: 2, thresholdType: 'standard' },
+  petFriendly: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+  healthcare: { idealCount: 3, searchRadius: 3, thresholdType: 'standard' },
   schools: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
-  publicTransit: { idealCount: 5, searchRadius: 1, thresholdType: 'walkable' },
+  daycare: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+  publicTransit: { idealCount: 5, searchRadius: 2, thresholdType: 'walkable' },
+  evCharging: { idealCount: 3, searchRadius: 3, thresholdType: 'standard' },
 };
 
 const categoryColors: Record<string, string> = {
   grocery: '#8b5cf6',
   restaurant: '#ef4444',
   coffee: '#f59e0b',
+  shopping: '#f97316',
   pharmacy: '#06b6d4',
   banks: '#3b82f6',
   parks: '#10b981',
   fitness: '#ec4899',
+  nightlife: '#7c3aed',
+  petFriendly: '#a855f7',
+  healthcare: '#dc2626',
   schools: '#6366f1',
+  daycare: '#f472b6',
   publicTransit: '#0ea5e9',
+  evCharging: '#16a34a',
 };
+
+const CATEGORY_ICON_SVG: Record<string, string> = {
+  grocery: '<path d="M9 9h1l1 5h6l1-4H11" fill="none" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="16" r=".9" fill="white"/><circle cx="16" cy="16" r=".9" fill="white"/>',
+  restaurant: '<path d="M11 8v4a2 2 0 004 0V8M13 12v6M17 8v8M17 8a2 2 0 01-.5 4" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  coffee: '<path d="M10 9h6v5a3 3 0 01-3 3h0a3 3 0 01-3-3V9zM16 10h1a2 2 0 010 4h-1M10 19h6" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  shopping: '<path d="M9 10l1-3h6l1 3M9 10h8l-.7 7H9.7L9 10z" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="13" y1="13" x2="13" y2="15" stroke="white" stroke-width="1.5" stroke-linecap="round"/>',
+  pharmacy: '<path d="M13 9v8M9 13h8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>',
+  banks: '<path d="M13 8l-5 3h10l-5-3zM9 12v5M13 12v5M17 12v5M8 17h10" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  parks: '<path d="M13 7l-4 6h8l-4-6zM13 11l-3 5h6l-3-5z" fill="none" stroke="white" stroke-width="1.4" stroke-linejoin="round"/><line x1="13" y1="16" x2="13" y2="19" stroke="white" stroke-width="1.5"/>',
+  fitness: '<path d="M8 13h10M10 10v6M16 10v6" stroke="white" stroke-width="2" stroke-linecap="round"/>',
+  nightlife: '<path d="M10 8h6l-2.5 4v3h-1v-3L10 8zM11 18h4" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  petFriendly: '<circle cx="10.5" cy="9.5" r="1.3" fill="white"/><circle cx="15.5" cy="9.5" r="1.3" fill="white"/><circle cx="8.5" cy="13" r="1.3" fill="white"/><circle cx="17.5" cy="13" r="1.3" fill="white"/><ellipse cx="13" cy="16" rx="2.5" ry="2" fill="white"/>',
+  healthcare: '<path d="M13 9c-1.2-1.8-3.5-2-4.5-.5s-.3 4.2 4.5 8c4.8-3.8 5.5-6.5 4.5-8s-3.3-1.3-4.5.5z" fill="white" fill-opacity="0.9" stroke="white" stroke-width="1"/>',
+  schools: '<path d="M13 8l-6 3.5 6 3.5 6-3.5L13 8z" fill="none" stroke="white" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 13v3.5l3 2 3-2V13" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>',
+  daycare: '<circle cx="13" cy="10" r="2.5" fill="none" stroke="white" stroke-width="1.5"/><path d="M9.5 19v-2a3.5 3.5 0 017 0v2" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/>',
+  publicTransit: '<rect x="9" y="8" width="8" height="10" rx="2" fill="none" stroke="white" stroke-width="1.5"/><line x1="9" y1="14" x2="17" y2="14" stroke="white" stroke-width="1.5"/><circle cx="11" cy="16.5" r=".8" fill="white"/><circle cx="15" cy="16.5" r=".8" fill="white"/>',
+  evCharging: '<path d="M15 8l-4.5 6H13l-.5 4L17 12h-2.5L15 8z" fill="white" fill-opacity="0.9" stroke="white" stroke-width=".8" stroke-linejoin="round"/>',
+};
+
+function categoryPinSvg(categoryId: string, color: string, isHighlighted: boolean): string {
+  const size = isHighlighted ? 36 : 28;
+  const viewBox = 26;
+  const cx = viewBox / 2;
+  const cy = 10;
+  const r = 9;
+  const iconSvg = CATEGORY_ICON_SVG[categoryId] || '';
+  const strokeW = isHighlighted ? 2.5 : 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${Math.round(size * 1.35)}" viewBox="0 0 ${viewBox} ${Math.round(viewBox * 1.35)}">
+    <defs><filter id="s"><feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.25"/></filter></defs>
+    <g filter="url(#s)">
+      <path d="M${cx} ${viewBox * 1.25}C${cx} ${viewBox * 1.25} ${cx + r + 1} ${cy + r + 2} ${cx + r + 1} ${cy} A${r + 1} ${r + 1} 0 0 0 ${cx - r - 1} ${cy} C${cx - r - 1} ${cy + r + 2} ${cx} ${viewBox * 1.25} ${cx} ${viewBox * 1.25}Z" fill="${color}" stroke="white" stroke-width="${strokeW}"/>
+      <g transform="translate(${cx - 13}, ${cy - 13}) scale(1)">${iconSvg}</g>
+    </g>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -187,6 +243,28 @@ export default function NeighborhoodScore({
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
   const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
+  // Walkability isoline state
+  const [showWalkability, setShowWalkability] = useState(false);
+  const [walkabilityPolygons, setWalkabilityPolygons] = useState<Array<{ coordinates: { lat: number; lng: number }[]; color: string; label: string }>>([]);
+  const [walkabilityLoading, setWalkabilityLoading] = useState(false);
+
+  // Commute time state
+  const [workAddress, setWorkAddress] = useState('');
+  const [workLocation, setWorkLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [commuteData, setCommuteData] = useState<{ driveMinutes: number; transitMinutes: number | null; distanceMiles: number } | null>(null);
+  const [commuteLoading, setCommuteLoading] = useState(false);
+
+  // Transit route planner state
+  interface TransitStep { type: string; instruction: string; duration: string; lineName?: string }
+  const [transitRouteOpen, setTransitRouteOpen] = useState(false);
+  const [transitDestAddr, setTransitDestAddr] = useState('');
+  const [transitDestLoc, setTransitDestLoc] = useState<{ lat: number; lng: number } | null>(null);
+  const [transitSegments, setTransitSegments] = useState<{ type: string; coords: { lat: number; lng: number }[] }[]>([]);
+  const [transitSteps, setTransitSteps] = useState<TransitStep[]>([]);
+  const [transitRouteInfo, setTransitRouteInfo] = useState<{ duration: string; distance: string; modes: string } | null>(null);
+  const [transitRouteLoading, setTransitRouteLoading] = useState(false);
+  const [transitRouteError, setTransitRouteError] = useState<string | null>(null);
+
   // Chat state
   interface ChatMsg { role: 'user' | 'assistant'; content: string }
   const [chatOpen, setChatOpen] = useState(false);
@@ -220,10 +298,17 @@ export default function NeighborhoodScore({
         return `${s.category.name}: ${s.score.toFixed(1)}/5 — ${s.poiCount} found, closest at ${s.closestDistance === Infinity ? 'N/A' : s.closestDistance.toFixed(2) + ' mi'}\n${topPlaces}`;
       }).join('\n\n');
 
+      const commuteStr = commuteData
+        ? `COMMUTE: ${commuteData.driveMinutes} min drive (${commuteData.distanceMiles} mi)${commuteData.transitMinutes != null ? `, ${commuteData.transitMinutes} min transit` : ''} to ${workAddress || 'work'}`
+        : '';
+      const walkStr = walkabilityPolygons.length > 0 ? 'WALKABILITY: 10-min and 20-min walk zones available on map' : '';
+
       const context = `WIDGET: Neighborhood Score
 ADDRESS: ${address || 'Unknown'}
 LOCATION: ${location ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : 'Not set'}
 OVERALL SCORE: ${overallScore !== null ? `${overallScore.toFixed(1)} / 5` : 'Not calculated yet'}
+${commuteStr}
+${walkStr}
 
 CATEGORY SCORES:
 ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate Scores" first.'}`;
@@ -252,6 +337,197 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
       setChatLoading(false);
     }
   }, [chatInput, chatLoading, scores, chatMessages, address, location]);
+
+  const fetchWalkabilityIsolines = useCallback(async (loc: { lat: number; lng: number }) => {
+    setWalkabilityLoading(true);
+    try {
+      const params = new URLSearchParams({
+        endpoint: 'isoline',
+        origin: `${loc.lat},${loc.lng}`,
+        rangeType: 'time',
+        rangeValues: '600,1200',
+        transportMode: 'pedestrian',
+      });
+      const res = await fetch(`/api/here?${params}`);
+      if (!res.ok) throw new Error('Isoline fetch failed');
+      const data = await res.json();
+      const polys: typeof walkabilityPolygons = [];
+      const labels = ['10-min walk', '20-min walk'];
+      const colors = ['#3b82f6', '#93c5fd'];
+      if (data.isolines) {
+        data.isolines.forEach((iso: any, idx: number) => {
+          if (iso.polygons?.[0]?.outer) {
+            const decoded = decodeHereFlexiblePolyline(iso.polygons[0].outer);
+            polys.push({
+              coordinates: decoded.points.map(p => ({ lat: p.lat, lng: p.lng })),
+              color: colors[idx] || '#3b82f6',
+              label: labels[idx] || `${(idx + 1) * 10}-min`,
+            });
+          }
+        });
+      }
+      setWalkabilityPolygons(polys);
+    } catch {
+      setWalkabilityPolygons([]);
+    } finally {
+      setWalkabilityLoading(false);
+    }
+  }, []);
+
+  const calculateCommute = useCallback(async () => {
+    if (!location || !workLocation) return;
+    setCommuteLoading(true);
+    try {
+      const driveParams = new URLSearchParams({
+        endpoint: 'routes',
+        origin: `${location.lat},${location.lng}`,
+        destination: `${workLocation.lat},${workLocation.lng}`,
+        transportMode: 'car',
+      });
+      const driveRes = await fetch(`/api/here?${driveParams}`);
+      const driveData = await driveRes.json();
+      const driveRoute = driveData.routes?.[0]?.sections?.[0];
+      const driveSec = driveRoute?.summary?.duration || 0;
+      const driveDist = (driveRoute?.summary?.length || 0) / 1609.34;
+
+      let transitMin: number | null = null;
+      try {
+        const transitParams = new URLSearchParams({
+          endpoint: 'transit',
+          origin: `${location.lat},${location.lng}`,
+          destination: `${workLocation.lat},${workLocation.lng}`,
+        });
+        const transitRes = await fetch(`/api/here?${transitParams}`);
+        const transitData = await transitRes.json();
+        const transitRoute = transitData.routes?.[0];
+        if (transitRoute) {
+          const totalSec = transitRoute.sections?.reduce((sum: number, s: any) => sum + (s.travelSummary?.duration || 0), 0) || 0;
+          transitMin = Math.round(totalSec / 60);
+        }
+      } catch { /* transit not always available */ }
+
+      setCommuteData({
+        driveMinutes: Math.round(driveSec / 60),
+        transitMinutes: transitMin,
+        distanceMiles: Math.round(driveDist * 10) / 10,
+      });
+    } catch {
+      setCommuteData(null);
+    } finally {
+      setCommuteLoading(false);
+    }
+  }, [location, workLocation]);
+
+  const TRANSIT_MODE_NAMES: Record<string, string> = {
+    pedestrian: 'Walk', subway: 'Subway', bus: 'Bus', train: 'Train',
+    regionalTrain: 'Regional Train', intercityTrain: 'Intercity Train',
+    highSpeedTrain: 'High Speed', ferry: 'Ferry', tram: 'Tram',
+    lightRail: 'Light Rail', monorail: 'Monorail', metro: 'Metro', rail: 'Rail',
+  };
+
+  const TRANSIT_MODE_COLORS: Record<string, string> = {
+    pedestrian: '#6B7280', subway: '#8B5CF6', metro: '#8B5CF6', bus: '#F59E0B',
+    train: '#3B82F6', rail: '#3B82F6', regionalTrain: '#3B82F6',
+    intercityTrain: '#1D4ED8', lightRail: '#10B981', tram: '#10B981',
+    ferry: '#0EA5E9', monorail: '#8B5CF6',
+  };
+
+  const calculateTransitRoute = useCallback(async () => {
+    if (!location || !transitDestLoc) return;
+    setTransitRouteLoading(true);
+    setTransitRouteError(null);
+    setTransitSegments([]);
+    setTransitSteps([]);
+    setTransitRouteInfo(null);
+
+    try {
+      const params = new URLSearchParams({
+        endpoint: 'transit',
+        origin: `${location.lat},${location.lng}`,
+        destination: `${transitDestLoc.lat},${transitDestLoc.lng}`,
+        departureTime: new Date().toISOString(),
+      });
+      const res = await fetch(`/api/here?${params}`);
+      const data = await res.json();
+
+      if (data.error || !data.routes?.length) {
+        setTransitRouteError(data.error || 'No transit route found between these locations.');
+        return;
+      }
+
+      const route = data.routes[0];
+      const sections = route.sections || [];
+      let totalDuration = 0;
+      let totalLength = 0;
+      const modes: string[] = [];
+      const lines: string[] = [];
+      const steps: TransitStep[] = [];
+      const segs: { type: string; coords: { lat: number; lng: number }[] }[] = [];
+
+      sections.forEach((section: any) => {
+        const sType = section.type || 'unknown';
+        const dur = section.travelSummary?.duration || section.summary?.duration || 0;
+        const len = section.travelSummary?.length || section.summary?.length || 0;
+        totalDuration += dur;
+        totalLength += len;
+
+        if (sType !== 'pedestrian') modes.push(sType);
+        const lineName = section.transport?.name || section.transport?.shortName || section.transport?.headsign;
+        if (lineName) lines.push(lineName);
+
+        const friendly = TRANSIT_MODE_NAMES[sType] || sType.charAt(0).toUpperCase() + sType.slice(1);
+        let instruction = '';
+        if (sType === 'pedestrian') {
+          const m = len;
+          instruction = `Walk ${m > 1600 ? (m / 1609.34).toFixed(1) + ' mi' : Math.round(m * 3.28084) + ' ft'}`;
+        } else if (lineName) {
+          instruction = `Take ${friendly}: ${lineName}`;
+          if (section.transport?.headsign && section.transport.headsign !== lineName) instruction += ` toward ${section.transport.headsign}`;
+        } else {
+          instruction = friendly;
+        }
+        if (section.departure?.place?.name) instruction += ` from ${section.departure.place.name}`;
+        if (section.arrival?.place?.name && sType !== 'pedestrian') instruction += ` to ${section.arrival.place.name}`;
+
+        const durMin = Math.ceil(dur / 60);
+        steps.push({ type: sType, instruction, duration: durMin > 0 ? `${durMin} min` : '', lineName: lineName || undefined });
+
+        if (section.polyline) {
+          try {
+            const decoded = decodeHereFlexiblePolyline(section.polyline);
+            segs.push({ type: sType, coords: decoded.points.map(p => ({ lat: p.lat, lng: p.lng })) });
+          } catch { /* skip bad segment */ }
+        }
+      });
+
+      setTransitSegments(segs);
+      setTransitSteps(steps);
+
+      const hrs = Math.floor(totalDuration / 3600);
+      const mins = Math.floor((totalDuration % 3600) / 60);
+      const distMi = (totalLength / 1609.34).toFixed(1);
+      const uniqueModes = [...new Set(modes)].map(m => TRANSIT_MODE_NAMES[m] || m).join(' + ');
+      const uniqueLines = [...new Set(lines)].slice(0, 3).join(', ');
+      setTransitRouteInfo({
+        duration: hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`,
+        distance: `${distMi} mi`,
+        modes: uniqueLines ? `${uniqueModes} (${uniqueLines})` : uniqueModes || 'Transit',
+      });
+    } catch {
+      setTransitRouteError('Failed to calculate transit route.');
+    } finally {
+      setTransitRouteLoading(false);
+    }
+  }, [location, transitDestLoc]);
+
+  const clearTransitRoute = useCallback(() => {
+    setTransitSegments([]);
+    setTransitSteps([]);
+    setTransitRouteInfo(null);
+    setTransitRouteError(null);
+    setTransitDestAddr('');
+    setTransitDestLoc(null);
+  }, []);
 
   // Keep Tailwind classes for AddressAutocomplete compatibility
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
@@ -287,11 +563,71 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     setError(null);
 
     try {
+      const haversine = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+        const R = 3959;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      };
+
       const categoryScores: CategoryScore[] = await Promise.all(
         categories.map(async (category) => {
           try {
             const config = categoryConfigs[category.id] || { idealCount: 3, searchRadius: 2, thresholdType: 'standard' as ThresholdType };
-            
+
+            // Public Transit: use HERE Stations API with a wide fetch, then
+            // prioritize subway/rail so they aren't drowned out by bus stops.
+            if (category.id === 'publicTransit') {
+              const fetchRadius = Math.round(Math.max(config.searchRadius, 2) * 1609.34);
+              const inStr = `${loc!.lat},${loc!.lng};r=${fetchRadius}`;
+              const res = await fetch(`/api/here?endpoint=stations&in=${encodeURIComponent(inStr)}&maxPlaces=50`);
+              if (!res.ok) throw new Error('Station search failed');
+              const data = await res.json();
+
+              const RAIL_MODES = new Set(['subway', 'metro', 'lightRail', 'tram', 'monorail',
+                'regionalTrain', 'intercityTrain', 'highSpeedTrain', 'cityTrain', 'train', 'rail']);
+
+              interface StationPOI extends POI { isRail: boolean }
+
+              const allStations: StationPOI[] = (data.stations || []).map((s: any) => {
+                const sLat = s.place?.location?.lat ?? s.place?.lat ?? 0;
+                const sLng = s.place?.location?.lng ?? s.place?.lng ?? 0;
+                const dist = haversine(loc!.lat, loc!.lng, sLat, sLng);
+                const transports: any[] = s.transports || s.place?.transports || [];
+                const modeNames = transports.map((t: any) => t.mode || t.name || '').filter(Boolean);
+                const uniqueModes = [...new Set(modeNames)];
+                const isRail = uniqueModes.some(m => RAIL_MODES.has(m));
+                const modeStr = uniqueModes.length > 0 ? ` (${uniqueModes.join(', ')})` : '';
+                return {
+                  distance: Math.round(dist * 100) / 100,
+                  name: (s.place?.name || s.name || 'Transit Stop') + modeStr,
+                  lat: sLat || undefined,
+                  lng: sLng || undefined,
+                  isRail,
+                };
+              }).filter((p: StationPOI) => p.distance > 0 && p.distance <= config.searchRadius);
+
+              // Prioritize: all rail/subway first, then bus stops
+              const railStations = allStations.filter(s => s.isRail).sort((a, b) => a.distance - b.distance);
+              const busStations = allStations.filter(s => !s.isRail).sort((a, b) => a.distance - b.distance);
+              const stationPois: POI[] = [...railStations, ...busStations];
+
+              const poiCount = stationPois.length;
+              const closestDistance = poiCount > 0 ? Math.min(...stationPois.map(p => p.distance)) : Infinity;
+              const score = calculateCategoryScore(stationPois, config);
+              let description: string;
+              const railCount = railStations.length;
+              if (score >= 4) description = `Excellent transit access${railCount > 0 ? ` — ${railCount} subway/rail station${railCount > 1 ? 's' : ''}` : ''}`;
+              else if (score >= 3) description = `Good transit options${railCount > 0 ? ` — ${railCount} subway/rail` : ''}`;
+              else if (score >= 2) description = 'Some transit stops available';
+              else if (score >= 1) description = 'Limited transit in this area';
+              else description = 'No transit stops found nearby';
+              return { category, score, description, places: stationPois, poiCount, closestDistance };
+            }
+
             const places = await searchPlaces(
               loc!.lat, 
               loc!.lng, 
@@ -311,19 +647,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
               };
             }
 
-            const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-              const R = 3959;
-              const dLat = (lat2 - lat1) * Math.PI / 180;
-              const dLng = (lng2 - lng1) * Math.PI / 180;
-              const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-              return R * c;
-            };
-
             // Blocklist of company names that are definitely NOT grocery stores
-            // These often get incorrectly categorized in place data
             const groceryBlocklist = [
               'apple', 'microsoft', 'google', 'best buy', 'target mobile', 
               'verizon', 'at&t', 't-mobile', 'sprint', 'gamestop',
@@ -349,7 +673,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     lng = coords[0];
                     lat = coords[1];
                     if ((distance === undefined || distance === null || distance === 0)) {
-                      distance = calculateDistance(loc!.lat, loc!.lng, lat, lng);
+                      distance = haversine(loc!.lat, loc!.lng, lat, lng);
                     }
                   }
                 }
@@ -367,7 +691,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
               })
               .filter(p => p.distance > 0)
               .filter(p => p.distance <= config.searchRadius)
-              // Filter out blocklisted names for grocery category
               .filter(p => {
                 if (category.id === 'grocery') {
                   const nameLower = p.name.toLowerCase();
@@ -419,6 +742,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
       if (loc) {
         setMapZoomToLocation({ lat: loc.lat, lng: loc.lng, zoom: 14 });
         setMapFitBounds(undefined);
+        fetchWalkabilityIsolines(loc);
       }
 
       onScoreCalculated?.({ overall, categories: categoryScores });
@@ -510,25 +834,32 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
             accentColor={accentColor}
             height="100%"
             markers={(() => {
-              const markers: Array<{ lat: number; lng: number; label?: string; color?: string; type?: 'home' | 'poi'; onClick?: () => void }> = [];
+              const markers: Array<{ lat: number; lng: number; label?: string; color?: string; type?: 'home' | 'poi'; iconUrl?: string; iconSize?: [number, number]; iconAnchor?: [number, number]; iconCircular?: boolean; zIndexOffset?: number; onClick?: () => void }> = [];
               
               if (location) {
                 markers.push({ lat: location.lat, lng: location.lng, label: 'Home', color: accentColor, type: 'home' });
               }
               
               if (selectedCategory && selectedCategory.places.length > 0) {
-                const categoryColor = categoryColors[selectedCategory.category.id] || '#10b981';
-                const highlightedPoiColor = '#3b82f6';
+                const catId = selectedCategory.category.id;
+                const categoryColor = categoryColors[catId] || '#10b981';
+                const highlightedColor = '#1d4ed8';
                 
                 selectedCategory.places.forEach((poi) => {
                   if (poi.lat && poi.lng) {
                     const isHighlighted = selectedPlace?.name === poi.name && selectedPlace?.distance === poi.distance;
+                    const pinColor = isHighlighted ? highlightedColor : categoryColor;
+                    const pinSize = isHighlighted ? 36 : 28;
+                    const pinH = Math.round(pinSize * 1.35);
                     markers.push({
                       lat: poi.lat,
                       lng: poi.lng,
                       label: poi.name,
-                      color: isHighlighted ? highlightedPoiColor : categoryColor,
-                      type: 'poi',
+                      iconUrl: categoryPinSvg(catId, pinColor, isHighlighted),
+                      iconSize: [pinSize, pinH],
+                      iconAnchor: [pinSize / 2, pinH],
+                      iconCircular: false,
+                      zIndexOffset: isHighlighted ? 900 : 0,
                       onClick: () => {
                         const matchingPoi = selectedCategory.places.find(
                           p => p.lat === poi.lat && p.lng === poi.lng
@@ -559,9 +890,24 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                   }
                 });
               }
+
+              if (workLocation) {
+                markers.push({ lat: workLocation.lat, lng: workLocation.lng, label: 'Work', color: '#f59e0b', type: 'home' });
+              }
+
+              if (transitDestLoc) {
+                markers.push({ lat: transitDestLoc.lat, lng: transitDestLoc.lng, label: transitDestAddr || 'Destination', color: '#ef4444', type: 'home' });
+              }
               
               return markers;
             })()}
+            polygons={showWalkability ? walkabilityPolygons.map(p => ({
+              coordinates: p.coordinates,
+              color: p.color,
+              fillOpacity: 0.12,
+              strokeWidth: 2,
+            })) : []}
+            transitSegments={transitSegments}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
           />
@@ -807,6 +1153,214 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Walkability + Commute */}
+          {overallScore !== null && location && (
+            <div 
+              className="px-3 py-2 space-y-2"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              {/* Walkability Isoline Toggle */}
+              <button
+                onClick={() => setShowWalkability(v => !v)}
+                className="w-full flex items-center justify-between p-2 rounded-lg transition-colors"
+                style={{
+                  background: showWalkability ? accentColor + '15' : 'var(--bg-panel)',
+                  border: `1px solid ${showWalkability ? accentColor + '40' : 'var(--border-subtle)'}`,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Footprints className="w-4 h-4" style={{ color: showWalkability ? accentColor : 'var(--text-muted)' }} />
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>
+                    Walkability Zones
+                  </span>
+                  {walkabilityLoading && <Loader2 className="w-3 h-3 prism-spinner" style={{ color: 'var(--text-muted)' }} />}
+                </div>
+                <div
+                  className="w-8 h-[18px] rounded-full relative transition-colors"
+                  style={{ background: showWalkability ? accentColor : 'var(--border-default)' }}
+                >
+                  <div
+                    className="w-3.5 h-3.5 rounded-full bg-white absolute top-[2px] transition-all"
+                    style={{ left: showWalkability ? 16 : 2 }}
+                  />
+                </div>
+              </button>
+              {showWalkability && walkabilityPolygons.length > 0 && (
+                <div className="flex gap-3 px-2 pb-1">
+                  {walkabilityPolygons.map((p, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <div className="w-3 h-3 rounded-sm" style={{ background: p.color, opacity: 0.6 }} />
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{p.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Commute Time */}
+              <div
+                className="p-2 rounded-lg"
+                style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Briefcase className="w-4 h-4" style={{ color: '#f59e0b' }} />
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>Commute Time</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className="flex-1 rounded-lg flex items-center gap-1.5 px-2 py-1.5"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
+                  >
+                    <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: '#f59e0b' }} />
+                    <AddressAutocomplete
+                      value={workAddress}
+                      onChange={(v) => { setWorkAddress(v); if (!v) { setWorkLocation(null); setCommuteData(null); } }}
+                      onSelect={(result) => {
+                        if (result.lat && result.lng) setWorkLocation({ lat: result.lat, lng: result.lng });
+                      }}
+                      placeholder="Work address..."
+                      darkMode={darkMode}
+                      inputBg={inputBg}
+                      textColor={textColor}
+                      mutedText={mutedText}
+                      borderColor={borderColor}
+                      className="flex-1"
+                      hideIcon
+                    />
+                  </div>
+                  <button
+                    onClick={calculateCommute}
+                    disabled={commuteLoading || !workLocation}
+                    className="p-1.5 rounded-lg disabled:opacity-40 transition-colors"
+                    style={{ background: accentColor, color: 'white' }}
+                  >
+                    {commuteLoading ? <Loader2 className="w-3.5 h-3.5 prism-spinner" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                {commuteData && (
+                  <div className="flex items-center gap-3 mt-2">
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ background: accentColor + '15' }}>
+                      <Navigation className="w-3 h-3" style={{ color: accentColor }} />
+                      <span className="text-xs font-bold" style={{ color: accentColor }}>{commuteData.driveMinutes} min</span>
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>drive</span>
+                    </div>
+                    {commuteData.transitMinutes != null && (
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-md" style={{ background: '#0ea5e920' }}>
+                        <Bus className="w-3 h-3" style={{ color: '#0ea5e9' }} />
+                        <span className="text-xs font-bold" style={{ color: '#0ea5e9' }}>{commuteData.transitMinutes} min</span>
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>transit</span>
+                      </div>
+                    )}
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{commuteData.distanceMiles} mi</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Transit Route Planner */}
+          {location && (
+            <div
+              className="px-3 py-2"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              <button
+                onClick={() => { setTransitRouteOpen(v => !v); if (transitRouteOpen) clearTransitRoute(); }}
+                className="w-full flex items-center justify-between p-2 rounded-lg transition-colors"
+                style={{
+                  background: transitRouteOpen ? accentColor + '15' : 'var(--bg-panel)',
+                  border: `1px solid ${transitRouteOpen ? accentColor + '40' : 'var(--border-subtle)'}`,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Bus className="w-4 h-4" style={{ color: transitRouteOpen ? accentColor : 'var(--text-muted)' }} />
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>Transit Route Planner</span>
+                </div>
+                {transitRouteOpen ? <ChevronUp className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> : <ChevronDown className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />}
+              </button>
+
+              {transitRouteOpen && (
+                <div className="mt-2 space-y-2">
+                  {/* From (locked to home address) */}
+                  <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: accentColor }} />
+                    <span className="text-xs truncate" style={{ color: 'var(--text-main)' }}>{address || `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`}</span>
+                  </div>
+
+                  {/* To */}
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="flex-1 rounded-lg flex items-center gap-1.5 px-2 py-1.5"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
+                    >
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#ef4444' }} />
+                      <AddressAutocomplete
+                        value={transitDestAddr}
+                        onChange={(v) => { setTransitDestAddr(v); if (!v) { clearTransitRoute(); } }}
+                        onSelect={(result) => { if (result.lat && result.lng) setTransitDestLoc({ lat: result.lat, lng: result.lng }); }}
+                        placeholder="Where to?"
+                        darkMode={darkMode}
+                        inputBg={inputBg}
+                        textColor={textColor}
+                        mutedText={mutedText}
+                        borderColor={borderColor}
+                        className="flex-1"
+                        hideIcon
+                      />
+                    </div>
+                    <button
+                      onClick={calculateTransitRoute}
+                      disabled={transitRouteLoading || !transitDestLoc}
+                      className="p-1.5 rounded-lg disabled:opacity-40 transition-colors"
+                      style={{ background: accentColor, color: 'white' }}
+                    >
+                      {transitRouteLoading ? <Loader2 className="w-3.5 h-3.5 prism-spinner" /> : <Navigation className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  {transitRouteError && (
+                    <p className="text-[11px] px-2 py-1.5 rounded-lg" style={{ color: 'var(--color-error)', background: 'var(--color-error-bg)' }}>
+                      {transitRouteError}
+                    </p>
+                  )}
+
+                  {/* Route Summary */}
+                  {transitRouteInfo && (
+                    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
+                      <div className="px-3 py-2" style={{ background: `linear-gradient(135deg, ${accentColor}18 0%, ${accentColor}08 100%)` }}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-lg font-bold" style={{ color: accentColor }}>{transitRouteInfo.duration}</span>
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{transitRouteInfo.distance}</span>
+                        </div>
+                        <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{transitRouteInfo.modes}</div>
+                      </div>
+
+                      {/* Step-by-step */}
+                      <div className="px-2 py-1.5" style={{ background: 'var(--bg-panel)' }}>
+                        {transitSteps.map((step, i) => {
+                          const dotColor = TRANSIT_MODE_COLORS[step.type] || accentColor;
+                          return (
+                            <div key={i} className="flex items-start gap-2 py-1.5 relative">
+                              <div className="flex flex-col items-center flex-shrink-0 mt-0.5">
+                                <div className="w-2.5 h-2.5 rounded-full" style={{ background: dotColor, border: '2px solid white', boxShadow: `0 0 0 1px ${dotColor}40` }} />
+                                {i < transitSteps.length - 1 && (
+                                  <div className="w-px flex-1 min-h-[12px] mt-0.5" style={{ background: 'var(--border-default)' }} />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-[11px] leading-tight" style={{ color: 'var(--text-main)' }}>{step.instruction}</div>
+                                {step.duration && <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{step.duration}</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

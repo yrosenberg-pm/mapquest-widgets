@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, Navigation, Route, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -133,6 +133,7 @@ function HomeContent() {
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<MenuSection, boolean>>({ routing: false, other: false, branded: false });
+  const [iconTooltip, setIconTooltip] = useState<{ name: string; top: number; left: number } | null>(null);
 
   // iPad/tablet-friendly auto-scaling for widgets so they fit the available width.
   const widgetViewportRef = useRef<HTMLDivElement | null>(null);
@@ -497,36 +498,24 @@ function HomeContent() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex" style={{ minHeight: '100vh' }}>
-      {/* Desktop sticky tab to re-open the menu when hidden (iPad friendly) */}
-      {sidebarHidden && (
-        <button
-          type="button"
-          onClick={toggleSidebarHidden}
-          className="hidden md:flex fixed left-0 top-1/2 -translate-y-1/2 z-[80] items-center gap-2 pl-2 pr-3 py-2 rounded-r-2xl bg-white text-gray-700 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all border border-gray-200 border-l-0"
-          title="Show menu"
-        >
-          <Menu className="w-4 h-4" />
-          <span className="text-xs font-semibold tracking-wide">Menu</span>
-        </button>
-      )}
-
       {/* Mobile overlay */}
       {sidebarMobileOpen && (
         <div className="fixed inset-0 bg-black/40 z-[60] md:hidden" onClick={() => setSidebarMobileOpen(false)} />
       )}
 
-      {/* Sidebar (desktop) */}
-      {!sidebarHidden && (
-        <aside
-          className={[
-            'bg-white border-r border-gray-200 flex-shrink-0',
-            'w-[280px]',
-            'hidden md:flex md:flex-col',
-            // Keep the left menu fixed to the viewport and let the list itself scroll.
-            'h-screen sticky top-0',
-          ].join(' ')}
-        >
-          <div className="h-14 px-3 flex items-center justify-between border-b border-gray-200">
+      {/* Sidebar (desktop) — expands to full width or collapses to icon rail */}
+      <aside
+        className={[
+          'bg-white border-r border-gray-200 flex-shrink-0',
+          'hidden md:flex md:flex-col',
+          'h-screen sticky top-0',
+          'transition-[width] duration-200 ease-in-out',
+          sidebarHidden ? 'w-[60px]' : 'w-[280px]',
+        ].join(' ')}
+      >
+        {/* Header */}
+        <div className={`h-14 flex items-center border-b border-gray-200 ${sidebarHidden ? 'justify-center px-0' : 'justify-between px-3'}`}>
+          {!sidebarHidden && (
             <div className="flex items-center gap-2 min-w-0">
               <img src="/brand/mq-directions-arrow.svg" alt="MapQuest" className="w-9 h-9 flex-shrink-0" />
               <div className="min-w-0">
@@ -534,19 +523,64 @@ function HomeContent() {
                 <div className="text-[11px] text-gray-500 truncate">Pick a widget</div>
               </div>
             </div>
+          )}
+          <button
+            type="button"
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+            onClick={toggleSidebarHidden}
+            title={sidebarHidden ? 'Expand menu' : 'Collapse menu'}
+          >
+            {sidebarHidden ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+        </div>
 
-            <button
-              type="button"
-              className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
-              onClick={toggleSidebarHidden}
-              title="Hide menu"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <nav className="flex-1 min-h-0 overflow-y-auto p-2 prism-scrollbar">
-            {(['routing', 'other', 'branded'] as MenuSection[]).map((section) => {
+        {/* Nav — full labels or icon-only depending on collapsed state */}
+        <nav className="flex-1 min-h-0 overflow-y-auto p-2 prism-scrollbar">
+          {sidebarHidden ? (
+            /* ——— Collapsed icon rail ——— */
+            <div className="flex flex-col items-center gap-1 pt-1">
+              {WIDGETS.map((w) => {
+                const isActive = activeWidget === w.id;
+                const href = `/?widget=${w.id}`;
+                const isBranded = w.section === 'branded';
+                return (
+                  <Link
+                    key={w.id}
+                    href={href}
+                    onClick={() => handleWidgetSelect(w.id)}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setIconTooltip({ name: w.name, top: rect.top + rect.height / 2, left: rect.right });
+                    }}
+                    onMouseLeave={() => setIconTooltip(null)}
+                    className={[
+                      'relative w-10 h-10 flex items-center justify-center rounded-xl transition-all',
+                      isActive ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-100',
+                    ].join(' ')}
+                  >
+                    {w.menuIcon ? (
+                      <img src={w.menuIcon} alt="" className="w-5 h-5 object-contain" />
+                    ) : w.menuLucide ? (
+                      <w.menuLucide
+                        className="w-[18px] h-[18px]"
+                        style={{ color: isActive ? accentColor : '#6b7280' }}
+                      />
+                    ) : (
+                      <div
+                        className="w-2.5 h-2.5 rounded-full"
+                        style={{ backgroundColor: isActive ? (isBranded ? '#f97316' : accentColor) : '#d1d5db' }}
+                      />
+                    )}
+                    {isActive && (
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ backgroundColor: accentColor }} />
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            /* ——— Expanded full menu ——— */
+            (['routing', 'other', 'branded'] as MenuSection[]).map((section) => {
               const sectionWidgets = WIDGETS.filter((w) => w.section === section);
               if (sectionWidgets.length === 0) return null;
               const isCollapsed = collapsedSections[section];
@@ -605,10 +639,21 @@ function HomeContent() {
                   })}
                 </div>
               );
-            })}
-          </nav>
-        </aside>
-      )}
+            })
+          )}
+        </nav>
+
+        {/* Fixed tooltip for collapsed icon rail (rendered outside overflow container) */}
+        {sidebarHidden && iconTooltip && (
+          <div
+            className="pointer-events-none fixed px-2.5 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-medium whitespace-nowrap shadow-lg z-[9999]"
+            style={{ top: iconTooltip.top, left: iconTooltip.left + 8, transform: 'translateY(-50%)' }}
+          >
+            {iconTooltip.name}
+            <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-gray-900" />
+          </div>
+        )}
+      </aside>
 
       {/* Mobile drawer */}
       <aside

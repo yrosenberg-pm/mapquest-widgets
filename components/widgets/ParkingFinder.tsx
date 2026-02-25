@@ -17,7 +17,6 @@ import {
   Search,
   Accessibility,
   Zap,
-  Timer,
   Building2,
   AlertTriangle,
   X,
@@ -300,11 +299,8 @@ export default function ParkingFinder({
   ];
 
   const handleNavigate = (spot: ParkingSpot) => {
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}`, '_blank');
-  };
-
-  const handleStreetView = (spot: ParkingSpot) => {
-    window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${spot.lat},${spot.lng}`, '_blank');
+    const destName = encodeURIComponent(spot.name);
+    window.open(`https://www.mapquest.com/directions/to/${destName}/${spot.lat},${spot.lng}`, '_blank');
   };
 
   const onColor = '#3B82F6';
@@ -637,30 +633,15 @@ export default function ParkingFinder({
                   </div>
 
                   {/* Actions */}
-                  <div className="grid grid-cols-3 gap-2 mt-3">
+                  <div className="mt-3">
                     <button
                       onClick={() => handleNavigate(selectedSpot)}
-                      className="flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold text-white transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white transition-colors"
                       style={{ background: accentColor, boxShadow: `0 2px 8px ${accentColor}30` }}
                     >
                       <Navigation className="w-4 h-4" />
-                      Navigate
-                    </button>
-                    <button
-                      onClick={() => handleStreetView(selectedSpot)}
-                      className="flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-colors"
-                      style={{ background: 'var(--bg-input)', color: 'var(--text-main)', border: '1px solid var(--border-subtle)' }}
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      Street View
-                    </button>
-                    <button
-                      className="flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-colors"
-                      style={{ background: 'var(--bg-input)', color: 'var(--text-main)', border: '1px solid var(--border-subtle)' }}
-                      onClick={() => {/* timer placeholder */}}
-                    >
-                      <Timer className="w-4 h-4" />
-                      Timer
+                      Navigate on MapQuest
+                      <ExternalLink className="w-3 h-3 opacity-60" />
                     </button>
                   </div>
                 </div>

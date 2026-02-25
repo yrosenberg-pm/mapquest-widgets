@@ -528,20 +528,16 @@ export async function GET(request: NextRequest) {
       case 'stations': {
         const inParam = searchParams.get('in');
         const name = searchParams.get('name');
-        const maxPlaces = searchParams.get('maxPlaces') || '10';
-
+        const maxPlacesRaw = Math.max(1, Math.min(100, Math.round(Number(searchParams.get('maxPlaces')) || 50)));
+        const maxPlaces = String(maxPlacesRaw);
         if (!inParam) {
           return NextResponse.json({ error: 'in parameter is required (e.g. in=41.8781,-87.6298)' }, { status: 400 });
         }
 
-        const u = new URL(ENDPOINTS.stations);
-        u.searchParams.set('apiKey', HERE_API_KEY!);
-        u.searchParams.set('in', inParam);
-        u.searchParams.set('maxPlaces', maxPlaces);
-        u.searchParams.set('return', 'transport');
-        if (name) u.searchParams.set('name', name);
-
-        url = u.toString();
+        // Build URL manually to avoid URLSearchParams double-encoding semicolons in `in`
+        url = `${ENDPOINTS.stations}?apiKey=${HERE_API_KEY}&in=${encodeURIComponent(inParam)}&maxPlaces=${maxPlaces}&return=transport`;
+        if (name) url += `&name=${encodeURIComponent(name)}`;
+        console.log(`[HERE Stations] in=${inParam} maxPlaces=${maxPlaces}`);
         break;
       }
 

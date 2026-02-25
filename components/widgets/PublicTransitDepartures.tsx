@@ -258,9 +258,24 @@ export default function PublicTransitDepartures({
     setStationModeFilter(new Set());
 
     try {
-      const res = await fetch(`/api/here?endpoint=stations&in=${lat},${lng}%3Br%3D5000&maxPlaces=10`);
+      const res = await fetch(`/api/here?endpoint=stations&in=${lat},${lng}%3Br%3D5000&maxPlaces=50`);
       if (!res.ok) throw new Error('Station search failed');
       const data = await res.json();
+
+      const rawStations = data.stations || [];
+      const allRawModes = rawStations.flatMap((s: any) =>
+        (s.transports || s.place?.transports || []).map((t: any) => t?.mode)
+      );
+      const modeCounts: Record<string, number> = {};
+      for (const m of allRawModes) modeCounts[m] = (modeCounts[m] || 0) + 1;
+      console.log('[Transit] Station API response:', {
+        totalStations: rawStations.length,
+        rawModeCounts: modeCounts,
+        stations: rawStations.map((s: any) => ({
+          name: s.place?.name || s.name,
+          modes: (s.transports || s.place?.transports || []).map((t: any) => t?.mode),
+        })),
+      });
 
       const R = 3959;
       const stationList: TransitStation[] = (data.stations || []).map((s: any) => {

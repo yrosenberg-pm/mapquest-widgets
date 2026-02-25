@@ -1570,6 +1570,7 @@ export default function MapQuestMap({
     if (!routePolyline || routePolyline.length === 0) return;
 
     const latLngs = routePolyline.map(p => [p.lat, p.lng] as [number, number]);
+    console.log('[MapQuestMap] Drawing routePolyline:', latLngs.length, 'points, first:', latLngs[0], 'last:', latLngs[latLngs.length - 1]);
 
     if (showTraffic) {
       // The native MapQuest traffic layer (overlayPane, z=400) sits ABOVE our
@@ -1719,7 +1720,7 @@ export default function MapQuestMap({
     if (mapRef.current && latLngs.length > 1) {
       mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
     }
-  }, [routePolyline, transitSegments, routeColor, accentColor, showRoute, showTraffic, routeStart, routeEnd, mapReady, onRouteLineClick, onRouteLineDrag]);
+  }, [routePolyline, routeSegments, transitSegments, routeColor, accentColor, showRoute, showTraffic, routeStart, routeEnd, mapReady, onRouteLineClick, onRouteLineDrag]);
 
   return (
     <div
