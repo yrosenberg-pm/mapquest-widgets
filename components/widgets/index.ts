@@ -21,6 +21,7 @@ export { default as HeatmapDensity } from './HeatmapDensity';
 export { default as EVChargingPlanner } from './EVChargingPlanner';
 export { default as LiveTrafficWidget } from './LiveTrafficWidget';
 export { default as CustomRouteWidget } from './CustomRouteWidget';
+export { default as PublicTransitDepartures } from './PublicTransitDepartures';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

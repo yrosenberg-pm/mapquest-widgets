@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, Navigation, Route, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, Navigation, Route, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, Train, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -25,6 +25,7 @@ import {
   EVChargingPlanner,
   LiveTrafficWidget,
   CustomRouteWidget,
+  PublicTransitDepartures,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -49,7 +50,8 @@ type WidgetId =
   | 'heatmap'
   | 'ev-charging'
   | 'traffic'
-  | 'custom-route';
+  | 'custom-route'
+  | 'transit';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
 
@@ -63,6 +65,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', section: 'routing', menuLucide: Truck },
   { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing', menuLucide: AlertTriangle },
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', section: 'routing', menuLucide: CloudSun },
+  { id: 'transit' as WidgetId, name: 'Public Transit Departures', description: 'Real-time station boards & departure times', section: 'routing', menuLucide: Train },
   { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
   { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
@@ -447,6 +450,8 @@ function HomeContent() {
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
       case 'isoline-overlap':
         return <IsolineOverlapWidget {...commonProps} />;
+      case 'transit':
+        return <PublicTransitDepartures {...commonProps} />;
       default:
         return null;
     }

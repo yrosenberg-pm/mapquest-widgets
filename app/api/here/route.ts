@@ -15,6 +15,9 @@ const ENDPOINTS: Record<string, string> = {
   discover: 'https://discover.search.hereapi.com/v1/discover',
   // HERE Public Transit API - only returns subway, bus, tram, ferry (no taxi/car)
   transit: 'https://transit.router.hereapi.com/v8/routes',
+  // HERE Public Transit - Station Search & Next Departures
+  stations: 'https://transit.hereapi.com/v8/stations',
+  departures: 'https://transit.hereapi.com/v8/departures',
   // HERE Destination Weather API
   weather: 'https://weather.ls.hereapi.com/weather/1.0/report.json',
   // HERE Fleet Telematics - Truck Restrictions
@@ -496,6 +499,47 @@ export async function GET(request: NextRequest) {
         url = `${ENDPOINTS.truckrestrictions}?apiKey=${HERE_API_KEY}&overlay=${overlay}&bbox=${bbox}&responseattributes=shape`;
         
         console.log('HERE Truck Restrictions API URL:', url.replace(HERE_API_KEY!, '***'));
+        break;
+      }
+
+      case 'stations': {
+        const inParam = searchParams.get('in');
+        const name = searchParams.get('name');
+        const maxPlaces = searchParams.get('maxPlaces') || '10';
+
+        if (!inParam) {
+          return NextResponse.json({ error: 'in parameter is required (e.g. in=41.8781,-87.6298)' }, { status: 400 });
+        }
+
+        const u = new URL(ENDPOINTS.stations);
+        u.searchParams.set('apiKey', HERE_API_KEY!);
+        u.searchParams.set('in', inParam);
+        u.searchParams.set('maxPlaces', maxPlaces);
+        u.searchParams.set('return', 'transport');
+        if (name) u.searchParams.set('name', name);
+
+        url = u.toString();
+        break;
+      }
+
+      case 'departures': {
+        const ids = searchParams.get('ids');
+        const inParam = searchParams.get('in');
+        const departureTime = searchParams.get('departureTime');
+        const maxPerBoard = searchParams.get('maxPerBoard') || '10';
+
+        if (!ids && !inParam) {
+          return NextResponse.json({ error: 'ids or in parameter is required' }, { status: 400 });
+        }
+
+        const u = new URL(ENDPOINTS.departures);
+        u.searchParams.set('apiKey', HERE_API_KEY!);
+        if (ids) u.searchParams.set('ids', ids);
+        if (inParam) u.searchParams.set('in', inParam);
+        u.searchParams.set('maxPerBoard', maxPerBoard);
+        if (departureTime) u.searchParams.set('departureTime', departureTime);
+
+        url = u.toString();
         break;
       }
 

@@ -10,6 +10,7 @@ interface MapMarker {
   type?: 'home' | 'poi' | 'default';
   iconUrl?: string;
   iconSize?: [number, number];
+  iconAnchor?: [number, number];
   // When using `iconUrl`, MapQuestMap used to force a circular crop via border-radius.
   // Keep that as the default for backward compatibility, but allow callers to opt out.
   iconCircular?: boolean;
@@ -719,8 +720,8 @@ export default function MapQuestMap({
         const size = marker.iconSize || [28, 28];
         const iconCircular = marker.iconCircular !== false;
         iconSize = size as [number, number];
-        iconAnchor = [size[0] / 2, size[1] / 2] as [number, number];
-        popupAnchor = [0, -size[1] / 2] as [number, number];
+        iconAnchor = marker.iconAnchor || [size[0] / 2, size[1] / 2] as [number, number];
+        popupAnchor = [0, -iconAnchor[1]] as [number, number];
         markerHtml = `
           <img src="${marker.iconUrl}" 
                width="${size[0]}" 
