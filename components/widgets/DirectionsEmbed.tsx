@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp, Clock, Train, Bus, Footprints } from 'lucide-react';
+import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp, Clock, Train, Bus, Footprints, Ship, TramFront } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -96,8 +96,14 @@ function waypointPinIcon(opts: { label: string; color: string }) {
   return svgDataUri(svg);
 }
 
+const BUS_TYPES = new Set(['bus', 'privateBus', 'busRapid']);
+const TRAM_TYPES = new Set(['tram', 'lightRail']);
+
 function transitStepIcon(type: string) {
   if (type === 'pedestrian') return Footprints;
+  if (type === 'ferry') return Ship;
+  if (TRAM_TYPES.has(type)) return TramFront;
+  if (BUS_TYPES.has(type)) return Bus;
   if (RAIL_TYPES.has(type)) return Train;
   return Bus;
 }
@@ -191,7 +197,11 @@ export default function DirectionsEmbed({
       const segs: { type: string; coords: { lat: number; lng: number }[] }[] = [];
 
       sections.forEach((section: any) => {
-        const sType = section.type || 'unknown';
+        // HERE Transit API: section.type is generic ("pedestrian" or "transit").
+        // section.transport.mode has the specific mode (bus, subway, regionalTrain, etc.)
+        const rawType = section.type || 'unknown';
+        const transportMode = section.transport?.mode || '';
+        const sType = rawType === 'pedestrian' ? 'pedestrian' : (transportMode || rawType);
         const dur = section.travelSummary?.duration || section.summary?.duration || 0;
         const len = section.travelSummary?.length || section.summary?.length || 0;
         totalDuration += dur;
@@ -382,19 +392,21 @@ export default function DirectionsEmbed({
 
   const mapCenter = fromCoords || toCoords || { lat: 39.8283, lng: -98.5795 };
 
-  // Per-segment colored polylines for Google Maps-style transit visualization
+  // Per-segment colored polylines — visually distinct per transit mode
   const transitPolylines = useMemo(() => {
     if (!isTransit || transitSegs.length === 0) return undefined;
     return transitSegs.map((seg) => {
       const segType = seg.type.toLowerCase();
       const color = TRANSIT_SEG_COLORS[segType] || accentColor;
       const isPedestrian = segType === 'pedestrian';
+      const isBus = segType === 'bus' || segType === 'privateBus' || segType === 'busRapid';
+      const isFerry = segType === 'ferry';
       return {
         coords: seg.coords,
         color,
-        weight: isPedestrian ? 4 : 6,
-        opacity: isPedestrian ? 0.8 : 0.95,
-        dashed: isPedestrian,
+        weight: isPedestrian ? 4 : isBus ? 5 : 7,
+        opacity: isPedestrian ? 0.7 : 0.95,
+        dashed: isPedestrian || isFerry,
       };
     });
   }, [isTransit, transitSegs, accentColor]);
