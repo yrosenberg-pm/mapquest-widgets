@@ -7,8 +7,6 @@ import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
-// decodeHereFlexiblePolyline has precision issues in browser environments
-// that cause coordinates to wrap around the globe. Using raw API coordinates instead.
 
 interface RouteStep {
   narrative: string;
@@ -133,8 +131,10 @@ export default function DirectionsEmbed({
   const [transitSegs, setTransitSegs] = useState<{ type: string; coords: { lat: number; lng: number }[] }[]>([]);
   const [transitSteps, setTransitSteps] = useState<TransitStep[]>([]);
   const [transitSummary, setTransitSummary] = useState<TransitSummary | null>(null);
+  const [pedestrianShape, setPedestrianShape] = useState<{ lat: number; lng: number }[]>([]);
 
   const isTransit = routeType === 'transit';
+  const isPedestrian = routeType === 'pedestrian';
   const hasResults = !!(route || transitSummary);
 
   const formatDepartureTime = (time: 'now' | Date) => {
@@ -164,6 +164,7 @@ export default function DirectionsEmbed({
     setTransitSegs([]);
     setTransitSteps([]);
     setTransitSummary(null);
+    setPedestrianShape([]);
   };
 
   const calculateTransitRoute = useCallback(async (origin: { lat: number; lng: number }, dest: { lat: number; lng: number }) => {
@@ -254,28 +255,37 @@ export default function DirectionsEmbed({
           intermediateStops: section.intermediateStops?.length || 0,
         });
 
-        // Try to decode the section's polyline for road-snapped geometry.
-        // Fall back to raw departure/arrival coordinates if decoding fails
-        // or produces coordinates far from the expected area.
+        // Use server-decoded polyline coordinates for road/rail-snapped geometry.
+        // Fall back to raw departure/arrival coordinates if unavailable.
         let segCoords: { lat: number; lng: number }[] = [];
         const depLoc = section.departure?.place?.location;
         const arrLoc = section.arrival?.place?.location;
 
-        if (section.polyline) {
+        // Prefer server-decoded coords (decoded on the API proxy to avoid browser issues)
+        if (section.decodedCoords && Array.isArray(section.decodedCoords) && section.decodedCoords.length >= 2) {
+          const pts = section.decodedCoords as { lat: number; lng: number }[];
+          // Sanity check: first point should be near the departure location
+          if (depLoc?.lat != null) {
+            const dLat = Math.abs(pts[0].lat - depLoc.lat);
+            const dLng = Math.abs(pts[0].lng - depLoc.lng);
+            if (dLat < 5 && dLng < 5) {
+              segCoords = pts;
+            }
+          } else {
+            segCoords = pts;
+          }
+        }
+
+        // Fallback: try client-side decoding of the raw polyline
+        if (segCoords.length < 2 && section.polyline) {
           try {
             const decoded = decodeHereFlexiblePolyline(section.polyline);
             const pts = decoded.points.map((p: any) => ({ lat: p.lat, lng: p.lng }));
-            // Sanity check: verify decoded points are near the departure location
-            if (pts.length >= 2 && depLoc?.lat != null) {
-              const dLat = Math.abs(pts[0].lat - depLoc.lat);
-              const dLng = Math.abs(pts[0].lng - depLoc.lng);
-              if (dLat < 2 && dLng < 2) {
-                segCoords = pts;
-              }
-            }
+            if (pts.length >= 2) segCoords = pts;
           } catch { /* fall through to raw coords */ }
         }
 
+        // Final fallback: raw departure/intermediate/arrival coordinates (straight lines)
         if (segCoords.length < 2) {
           if (depLoc?.lat != null && depLoc?.lng != null) segCoords.push({ lat: depLoc.lat, lng: depLoc.lng });
           if (section.intermediateStops) {
@@ -307,13 +317,15 @@ export default function DirectionsEmbed({
             });
             const pedRes = await fetch(`/api/here?${pedParams}`);
             const pedData = await pedRes.json();
-            const shape = pedData?.routes?.[0]?.sections?.[0]?.polyline;
-            if (shape) {
-              const { decodeHereFlexiblePolyline } = await import('@/lib/hereFlexiblePolyline');
-              const decoded = decodeHereFlexiblePolyline(shape);
-              const pts = decoded.points.map(p => ({ lat: p.lat, lng: p.lng }));
-              if (pts.length >= 2) return { ...seg, coords: pts };
+            const sections = pedData?.routes?.[0]?.sections || [];
+            const { decodeHereFlexiblePolyline } = await import('@/lib/hereFlexiblePolyline');
+            const allPts: { lat: number; lng: number }[] = [];
+            for (const sec of sections) {
+              if (!sec.polyline) continue;
+              const decoded = decodeHereFlexiblePolyline(sec.polyline);
+              allPts.push(...decoded.points.map(p => ({ lat: p.lat, lng: p.lng })));
             }
+            if (allPts.length >= 2) return { ...seg, coords: allPts };
           } catch { /* keep original straight-line coords */ }
           return seg;
         })
@@ -375,6 +387,7 @@ export default function DirectionsEmbed({
       }
 
       clearTransitData();
+      setPedestrianShape([]);
 
       const mqRouteType = routeType as Exclude<RouteType, 'transit'>;
       const directions = await getDirections(
@@ -397,6 +410,39 @@ export default function DirectionsEmbed({
 
       setRoute(routeInfo);
       onRouteCalculated?.(routeInfo);
+
+      // For pedestrian mode, fetch road-snapped shape from HERE Routing API
+      // (MapQuest pedestrian routing can produce straight lines over water).
+      // Combine ALL sections since the route may be split across multiple segments.
+      if (routeType === 'pedestrian') {
+        try {
+          const pedParams = new URLSearchParams({
+            endpoint: 'routes',
+            origin: `${fromLoc.lat},${fromLoc.lng}`,
+            destination: `${toLoc.lat},${toLoc.lng}`,
+            transportMode: 'pedestrian',
+            return: 'polyline',
+          });
+          const pedRes = await fetch(`/api/here?${pedParams}`);
+          const pedData = await pedRes.json();
+          const sections = pedData?.routes?.[0]?.sections || [];
+          const { decodeHereFlexiblePolyline } = await import('@/lib/hereFlexiblePolyline');
+          const allPts: { lat: number; lng: number }[] = [];
+          for (const sec of sections) {
+            if (!sec.polyline) continue;
+            const decoded = decodeHereFlexiblePolyline(sec.polyline);
+            const pts = decoded.points.map((p: any) => ({ lat: p.lat, lng: p.lng }));
+            if (pts.length > 0) allPts.push(...pts);
+          }
+          if (allPts.length >= 2) {
+            const dLat = Math.abs(allPts[0].lat - fromLoc.lat);
+            const dLng = Math.abs(allPts[0].lng - fromLoc.lng);
+            if (dLat < 2 && dLng < 2) {
+              setPedestrianShape(allPts);
+            }
+          }
+        } catch { /* fall back to MapQuest rendering */ }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to calculate route');
       setRoute(null);
@@ -416,24 +462,36 @@ export default function DirectionsEmbed({
 
   const mapCenter = fromCoords || toCoords || { lat: 39.8283, lng: -98.5795 };
 
-  // Per-segment colored polylines — visually distinct per transit mode
-  const transitPolylines = useMemo(() => {
-    if (!isTransit || transitSegs.length === 0) return undefined;
-    return transitSegs.map((seg) => {
-      const segType = seg.type;
-      const color = TRANSIT_SEG_COLORS[segType] || accentColor;
-      const isPedestrian = segType === 'pedestrian';
-      const isBus = BUS_TYPES.has(segType);
-      const isFerry = segType === 'ferry';
-      return {
-        coords: seg.coords,
-        color,
-        weight: isPedestrian ? 4 : isBus ? 5 : 7,
-        opacity: isPedestrian ? 0.7 : 0.95,
-        dashed: isPedestrian || isFerry,
-      };
-    });
-  }, [isTransit, transitSegs, accentColor]);
+  // Per-segment colored polylines — visually distinct per transit mode,
+  // and road-snapped shape for pedestrian mode
+  const routePolylines = useMemo(() => {
+    if (isTransit && transitSegs.length > 0) {
+      return transitSegs.map((seg) => {
+        const segType = seg.type;
+        const color = TRANSIT_SEG_COLORS[segType] || accentColor;
+        const isPed = segType === 'pedestrian';
+        const isBus = BUS_TYPES.has(segType);
+        const isFerry = segType === 'ferry';
+        return {
+          coords: seg.coords,
+          color,
+          weight: isPed ? 4 : isBus ? 5 : 7,
+          opacity: isPed ? 0.7 : 0.95,
+          dashed: isPed || isFerry,
+        };
+      });
+    }
+    if (isPedestrian && pedestrianShape.length >= 2) {
+      return [{
+        coords: pedestrianShape,
+        color: accentColor,
+        weight: 5,
+        opacity: 0.9,
+        dashed: false,
+      }];
+    }
+    return undefined;
+  }, [isTransit, isPedestrian, transitSegs, pedestrianShape, accentColor]);
 
   const mapFitBounds = useMemo(() => {
     if (!fromCoords || !toCoords) return undefined;
@@ -441,18 +499,17 @@ export default function DirectionsEmbed({
     let south = Math.min(fromCoords.lat, toCoords.lat);
     let east = Math.max(fromCoords.lng, toCoords.lng);
     let west = Math.min(fromCoords.lng, toCoords.lng);
-    if (isTransit && transitSegs.length > 0) {
-      for (const seg of transitSegs) {
-        for (const c of seg.coords) {
-          if (c.lat > north) north = c.lat;
-          if (c.lat < south) south = c.lat;
-          if (c.lng > east) east = c.lng;
-          if (c.lng < west) west = c.lng;
-        }
+    const allSegs = isTransit ? transitSegs : isPedestrian && pedestrianShape.length > 0 ? [{ coords: pedestrianShape }] : [];
+    for (const seg of allSegs) {
+      for (const c of seg.coords) {
+        if (c.lat > north) north = c.lat;
+        if (c.lat < south) south = c.lat;
+        if (c.lng > east) east = c.lng;
+        if (c.lng < west) west = c.lng;
       }
     }
     return { north, south, east, west };
-  }, [fromCoords?.lat, fromCoords?.lng, toCoords?.lat, toCoords?.lng, isTransit, transitSegs]);
+  }, [fromCoords?.lat, fromCoords?.lng, toCoords?.lat, toCoords?.lng, isTransit, isPedestrian, transitSegs, pedestrianShape]);
   
   const markers = useMemo(() => {
     const result: Array<{
@@ -518,11 +575,11 @@ export default function DirectionsEmbed({
             accentColor={accentColor}
             height="100%"
             markers={markers}
-            showRoute={!isTransit && !!(fromCoords && toCoords)}
-            routeStart={!isTransit ? (fromCoords || undefined) : undefined}
-            routeEnd={!isTransit ? (toCoords || undefined) : undefined}
-            routeType={isTransit ? undefined : (routeType === 'shortest' ? 'fastest' : routeType)}
-            polylines={transitPolylines}
+            showRoute={!isTransit && !isPedestrian && !!(fromCoords && toCoords)}
+            routeStart={!isTransit && !isPedestrian ? (fromCoords || undefined) : undefined}
+            routeEnd={!isTransit && !isPedestrian ? (toCoords || undefined) : undefined}
+            routeType={isTransit || isPedestrian ? undefined : (routeType === 'shortest' ? 'fastest' : routeType)}
+            polylines={routePolylines}
             fitBounds={mapFitBounds}
           />
         </div>
@@ -779,7 +836,10 @@ export default function DirectionsEmbed({
               {/* Compact summary bar */}
               <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <Car className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+                  {(() => {
+                    const ModeIcon = routeTypes.find(r => r.id === routeType)?.icon || Car;
+                    return <ModeIcon className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />;
+                  })()}
                   <span className="text-base font-bold" style={{ color: 'var(--text-main)' }}>{formatTime(route.time)}</span>
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}>· {formatDistance(route.distance)}</span>
                 </div>

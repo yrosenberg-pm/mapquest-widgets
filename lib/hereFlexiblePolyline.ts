@@ -1,6 +1,9 @@
 // lib/hereFlexiblePolyline.ts
-// Minimal HERE Flexible Polyline decoder (supports optional 3rd dimension, e.g. elevation)
+// HERE Flexible Polyline decoder (supports optional 3rd dimension, e.g. elevation)
 // Spec: https://github.com/heremaps/flexible-polyline
+//
+// IMPORTANT: Uses standard arithmetic (not bitwise ops) to avoid 32-bit integer
+// overflow that causes coordinates to wrap to incorrect locations (e.g. China).
 
 export type HerePolylinePoint = {
   lat: number;
@@ -27,7 +30,7 @@ const DECODING_TABLE: Record<string, number> = (() => {
 
 function decodeUnsignedVarint(encoded: string, startIndex: number): { value: number; newIndex: number } {
   let result = 0;
-  let shift = 0;
+  let multiplier = 1; // 2^shift — avoids bitwise << which truncates to 32-bit
   let index = startIndex;
 
   while (index < encoded.length) {
@@ -35,10 +38,10 @@ function decodeUnsignedVarint(encoded: string, startIndex: number): { value: num
     const value = DECODING_TABLE[char];
     if (value === undefined) throw new Error(`Invalid character: ${char}`);
 
-    result |= (value & 0x1f) << shift;
+    result += (value & 0x1f) * multiplier;
     if ((value & 0x20) === 0) return { value: result, newIndex: index + 1 };
 
-    shift += 5;
+    multiplier *= 32; // equivalent to shift += 5
     index++;
   }
 
@@ -48,7 +51,8 @@ function decodeUnsignedVarint(encoded: string, startIndex: number): { value: num
 function decodeSignedVarint(encoded: string, startIndex: number): { value: number; newIndex: number } {
   const unsigned = decodeUnsignedVarint(encoded, startIndex);
   const v = unsigned.value;
-  const decoded = (v >> 1) ^ (-(v & 1));
+  // Zig-zag decode without bitwise ops to avoid 32-bit truncation
+  const decoded = v % 2 === 0 ? v / 2 : -(v + 1) / 2;
   return { value: decoded, newIndex: unsigned.newIndex };
 }
 
@@ -59,7 +63,6 @@ function decodeSignedVarint(encoded: string, startIndex: number): { value: numbe
 export function decodeHereFlexiblePolyline(encoded: string): DecodeHereFlexiblePolylineResult {
   let index = 0;
 
-  // Version (currently 1); unused, but we need to consume it.
   const version = decodeUnsignedVarint(encoded, index);
   index = version.newIndex;
 
@@ -107,4 +110,3 @@ export function decodeHereFlexiblePolyline(encoded: string): DecodeHereFlexibleP
 
   return { points, hasThirdDimension, thirdDimType };
 }
-

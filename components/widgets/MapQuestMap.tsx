@@ -1353,29 +1353,33 @@ export default function MapQuestMap({
     
     // Don't run if we have transit segments - that's handled by the other useEffect
     if (transitSegments && transitSegments.length > 0) return;
-    // Only handle the "fetch directions" route when start/end are provided.
-    // Other route rendering modes (e.g., pre-calculated `routePolyline`) are handled by the next useEffect.
-    if (!showRoute || !routeStart || !routeEnd) return;
+    if (!showRoute || !routeStart || !routeEnd) {
+      // Clear stale route when showRoute is disabled (e.g. switching to transit/pedestrian mode)
+      routeLayerRef.current.clearLayers();
+      return;
+    }
     
     const L = window.L;
     routeLayerRef.current.clearLayers();
+
+    const abortController = new AbortController();
 
     const fetchRoute = async () => {
       try {
         const locations = [routeStart];
         if (waypoints && waypoints.length > 0) {
-          // Waypoints should be inserted between start and end
           locations.push(...waypoints);
         }
         locations.push(routeEnd);
 
-        // Build URL with multiple 'to' parameters for waypoints
         const from = `${locations[0].lat},${locations[0].lng}`;
         const toParams = locations.slice(1).map(l => `to=${l.lat},${l.lng}`).join('&');
         const url = `/api/mapquest?endpoint=directions&from=${from}&${toParams}&routeType=${routeType}&fullShape=true`;
         
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: abortController.signal });
         const data = await res.json();
+
+        if (abortController.signal.aborted) return;
 
         if (data?.route?.shape?.shapePoints) {
           const points = data.route.shape.shapePoints;
@@ -1385,7 +1389,6 @@ export default function MapQuestMap({
             latLngs.push([points[i], points[i + 1]]);
           }
 
-          // When a segment is highlighted, make the full route gray
           const isSegmentHighlighted = highlightedSegment !== null;
           const mainRouteColor = isSegmentHighlighted ? '#9CA3AF' : (routeColor || DEFAULT_ROUTE_BLUE);
           const mainRouteOpacity = isSegmentHighlighted ? 0.5 : 0.9;
@@ -1408,17 +1411,19 @@ export default function MapQuestMap({
             lineJoin: 'round',
           }).addTo(routeLayerRef.current);
 
-          // Only fit bounds if no segment is highlighted (let highlight effect handle zoom)
           if (mapRef.current && !isSegmentHighlighted) {
             mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
           }
         }
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
         console.error('Failed to fetch route:', err);
       }
     };
 
     fetchRoute();
+
+    return () => { abortController.abort(); };
   }, [showRoute, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady, transitSegments, highlightedSegment]);
 
   // Draw pre-calculated route polyline (e.g., from HERE transit API)

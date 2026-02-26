@@ -1,5 +1,6 @@
 // app/api/here/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 
 const HERE_API_KEY = process.env.HERE_API_KEY;
 
@@ -587,6 +588,28 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+
+    // For transit responses, decode polylines server-side so the client gets
+    // pre-decoded coordinates (avoids browser-side decoding issues).
+    if (endpoint === 'transit' && data.routes) {
+      for (const route of data.routes) {
+        if (!route.sections) continue;
+        for (const section of route.sections) {
+          if (section.polyline && typeof section.polyline === 'string') {
+            try {
+              const decoded = decodeHereFlexiblePolyline(section.polyline);
+              section.decodedCoords = decoded.points.map((p: { lat: number; lng: number }) => ({
+                lat: p.lat,
+                lng: p.lng,
+              }));
+            } catch (e) {
+              console.error('[Transit] Failed to decode polyline for section:', section.id, e);
+              section.decodedCoords = null;
+            }
+          }
+        }
+      }
+    }
 
     return NextResponse.json(data, {
       headers: {
