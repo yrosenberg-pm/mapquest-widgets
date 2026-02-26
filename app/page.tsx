@@ -150,6 +150,7 @@ function HomeContent() {
   const [brandingMode, setBrandingMode] = useState<'mapquest' | 'cobranded' | 'whitelabel'>('mapquest');
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
+  const [hideBranded, setHideBranded] = useState(false);
 
   // Custom Route: keep the latest builder config so the Customize → Embed Code tab can generate a real embed.
   const [customRouteConfig, setCustomRouteConfig] = useState<any>(null);
@@ -539,7 +540,7 @@ function HomeContent() {
           {sidebarHidden ? (
             /* ——— Collapsed icon rail ——— */
             <div className="flex flex-col items-center gap-1 pt-1">
-              {WIDGETS.map((w) => {
+              {WIDGETS.filter((w) => !hideBranded || w.section !== 'branded').map((w) => {
                 const isActive = activeWidget === w.id;
                 const href = `/?widget=${w.id}`;
                 const isBranded = w.section === 'branded';
@@ -581,6 +582,7 @@ function HomeContent() {
           ) : (
             /* ——— Expanded full menu ——— */
             (['routing', 'other', 'branded'] as MenuSection[]).map((section) => {
+              if (hideBranded && section === 'branded') return null;
               const sectionWidgets = WIDGETS.filter((w) => w.section === section);
               if (sectionWidgets.length === 0) return null;
               const isCollapsed = collapsedSections[section];
@@ -671,6 +673,7 @@ function HomeContent() {
         </div>
         <nav className="h-[calc(100%-56px)] overflow-y-auto p-2 prism-scrollbar">
           {(['routing', 'other', 'branded'] as MenuSection[]).map((section) => {
+            if (hideBranded && section === 'branded') return null;
             const sectionWidgets = WIDGETS.filter((w) => w.section === section);
             if (sectionWidgets.length === 0) return null;
             const isCollapsed = collapsedSections[section];
@@ -885,6 +888,22 @@ function HomeContent() {
                         <Moon className={`w-6 h-6 mx-auto mb-2 ${darkMode ? 'text-blue-400' : 'text-gray-400'}`} />
                         <p className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>Dark</p>
                       </button>
+                    </div>
+
+                    <div className={`mt-6 pt-6 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                      <h3 className={`font-medium mb-3 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Menu</h3>
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Hide branded widgets</span>
+                        <button
+                          onClick={() => setHideBranded(!hideBranded)}
+                          className={`relative w-10 h-5 rounded-full transition-colors ${hideBranded ? 'bg-blue-500' : darkMode ? 'bg-gray-600' : 'bg-gray-300'}`}
+                        >
+                          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${hideBranded ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        </button>
+                      </label>
+                      <p className={`text-xs mt-1.5 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                        Hides branded demo widgets (NHL, Starbucks, etc.) from the sidebar
+                      </p>
                     </div>
                   </div>
                 )}
