@@ -195,8 +195,9 @@ export default function DirectionsEmbed({
       const lineNames: string[] = [];
       const steps: TransitStep[] = [];
       const segs: { type: string; coords: { lat: number; lng: number }[] }[] = [];
+      const { decodeHereFlexiblePolyline } = await import('@/lib/hereFlexiblePolyline');
 
-      sections.forEach((section: any) => {
+      for (const section of sections) {
         // HERE Transit API: section.type is generic ("pedestrian" or "transit").
         // section.transport.mode has the specific mode (bus, subway, regionalTrain, etc.)
         const rawType = section.type || 'unknown';
@@ -253,21 +254,43 @@ export default function DirectionsEmbed({
           intermediateStops: section.intermediateStops?.length || 0,
         });
 
-        const segCoords: { lat: number; lng: number }[] = [];
+        // Try to decode the section's polyline for road-snapped geometry.
+        // Fall back to raw departure/arrival coordinates if decoding fails
+        // or produces coordinates far from the expected area.
+        let segCoords: { lat: number; lng: number }[] = [];
         const depLoc = section.departure?.place?.location;
         const arrLoc = section.arrival?.place?.location;
-        if (depLoc?.lat != null && depLoc?.lng != null) segCoords.push({ lat: depLoc.lat, lng: depLoc.lng });
-        if (section.intermediateStops) {
-          for (const stop of section.intermediateStops) {
-            const loc = stop.departure?.place?.location || stop.arrival?.place?.location;
-            if (loc?.lat != null && loc?.lng != null) segCoords.push({ lat: loc.lat, lng: loc.lng });
-          }
+
+        if (section.polyline) {
+          try {
+            const decoded = decodeHereFlexiblePolyline(section.polyline);
+            const pts = decoded.points.map((p: any) => ({ lat: p.lat, lng: p.lng }));
+            // Sanity check: verify decoded points are near the departure location
+            if (pts.length >= 2 && depLoc?.lat != null) {
+              const dLat = Math.abs(pts[0].lat - depLoc.lat);
+              const dLng = Math.abs(pts[0].lng - depLoc.lng);
+              if (dLat < 2 && dLng < 2) {
+                segCoords = pts;
+              }
+            }
+          } catch { /* fall through to raw coords */ }
         }
-        if (arrLoc?.lat != null && arrLoc?.lng != null) segCoords.push({ lat: arrLoc.lat, lng: arrLoc.lng });
+
+        if (segCoords.length < 2) {
+          if (depLoc?.lat != null && depLoc?.lng != null) segCoords.push({ lat: depLoc.lat, lng: depLoc.lng });
+          if (section.intermediateStops) {
+            for (const stop of section.intermediateStops) {
+              const loc = stop.departure?.place?.location || stop.arrival?.place?.location;
+              if (loc?.lat != null && loc?.lng != null) segCoords.push({ lat: loc.lat, lng: loc.lng });
+            }
+          }
+          if (arrLoc?.lat != null && arrLoc?.lng != null) segCoords.push({ lat: arrLoc.lat, lng: arrLoc.lng });
+        }
+
         if (segCoords.length >= 2) {
           segs.push({ type: sType, coords: segCoords });
         }
-      });
+      }
 
       // Snap pedestrian segments to roads via HERE Routing API
       const snappedSegs = await Promise.all(

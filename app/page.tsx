@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -62,7 +62,7 @@ type MenuSection = 'routing' | 'other' | 'branded';
 const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuSection; isCustom?: boolean; menuIcon?: string; menuLucide?: LucideIcon }[] = [
   // — Routing & navigation ————————————————————————————————————
   { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', section: 'routing', menuLucide: Navigation },
-  { id: 'custom-route' as WidgetId, name: 'Custom Route', description: 'Build & embed forced waypoint routes', section: 'routing', menuLucide: Route },
+  { id: 'custom-route' as WidgetId, name: 'Custom Route', description: 'Build & embed forced waypoint routes', section: 'routing', menuLucide: Waypoints },
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', section: 'routing', menuLucide: Route },
   { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', section: 'routing', menuLucide: Truck },
   { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing', menuLucide: AlertTriangle },
