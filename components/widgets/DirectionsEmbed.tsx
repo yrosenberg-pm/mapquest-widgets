@@ -202,6 +202,7 @@ export default function DirectionsEmbed({
         const rawType = section.type || 'unknown';
         const transportMode = section.transport?.mode || '';
         const sType = rawType === 'pedestrian' ? 'pedestrian' : (transportMode || rawType);
+        console.log('[Transit] Section:', { rawType, transportMode, sType, color: TRANSIT_SEG_COLORS[sType] || 'fallback→accentColor' });
         const dur = section.travelSummary?.duration || section.summary?.duration || 0;
         const len = section.travelSummary?.length || section.summary?.length || 0;
         totalDuration += dur;
@@ -396,10 +397,10 @@ export default function DirectionsEmbed({
   const transitPolylines = useMemo(() => {
     if (!isTransit || transitSegs.length === 0) return undefined;
     return transitSegs.map((seg) => {
-      const segType = seg.type.toLowerCase();
+      const segType = seg.type;
       const color = TRANSIT_SEG_COLORS[segType] || accentColor;
       const isPedestrian = segType === 'pedestrian';
-      const isBus = segType === 'bus' || segType === 'privateBus' || segType === 'busRapid';
+      const isBus = BUS_TYPES.has(segType);
       const isFerry = segType === 'ferry';
       return {
         coords: seg.coords,
