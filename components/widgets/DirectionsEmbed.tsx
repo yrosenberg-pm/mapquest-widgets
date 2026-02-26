@@ -813,7 +813,7 @@ export default function DirectionsEmbed({
                           <Icon className="w-3 h-3" style={{ color: step.color }} />
                         </div>
                         {!isLast && (
-                          <div className="w-0.5 flex-1 min-h-[12px] my-0.5 rounded-full" style={{ background: transitSteps[i + 1]?.color || 'var(--border-default)', opacity: 0.3 }} />
+                          <div className="w-0.5 flex-1 min-h-[12px] my-0.5 rounded-full" style={{ background: step.color, opacity: 0.5 }} />
                         )}
                       </div>
                       <div className="flex-1 min-w-0 py-2" style={{ borderBottom: isLast ? 'none' : '1px solid var(--border-subtle)' }}>
