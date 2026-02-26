@@ -764,33 +764,38 @@ export default function DirectionsEmbed({
                     <span className="text-[11px] ml-auto truncate max-w-[40%]" style={{ color: 'var(--text-muted)' }}>{transitSummary.lines}</span>
                   )}
                 </div>
-                {/* Route segment preview — colored chips (like Route Weather) */}
-                <div className="flex items-center gap-1 w-full">
-                  {transitSteps.map((step, i) => {
-                    const Icon = transitStepIcon(step.type);
-                    const isPedestrian = step.type === 'pedestrian';
-                    return (
-                      <div
-                        key={i}
-                        className="h-7 rounded-full flex items-center justify-center gap-1 px-2 min-w-0"
-                        style={{
-                          flex: Math.max(step.durationMin, 2),
-                          background: `${step.color}18`,
-                          border: `1.5px ${isPedestrian ? 'dashed' : 'solid'} ${step.color}`,
-                        }}
-                        title={`${step.instruction} · ${step.durationMin} min`}
-                      >
-                        <Icon className="w-3 h-3 flex-shrink-0" style={{ color: step.color }} />
-                        <span
-                          className="text-[10px] font-semibold truncate"
-                          style={{ color: step.color }}
-                        >
-                          {step.lineName || `${step.durationMin}m`}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                {/* Route segment preview bar */}
+                {(() => {
+                  const totalDur = transitSteps.reduce((s, st) => s + Math.max(st.durationMin, 1), 0);
+                  return (
+                    <div className="flex w-full h-3 rounded-full overflow-hidden">
+                      {transitSteps.map((step, i) => {
+                        const pct = (Math.max(step.durationMin, 1) / totalDur) * 100;
+                        const isPed = step.type === 'pedestrian';
+                        const Icon = transitStepIcon(step.type);
+                        return (
+                          <div
+                            key={i}
+                            className="relative h-full flex items-center justify-center"
+                            style={{
+                              width: `${pct}%`,
+                              minWidth: 6,
+                              background: isPed
+                                ? `repeating-linear-gradient(90deg, ${step.color}30 0 4px, transparent 4px 8px)`
+                                : step.color,
+                              opacity: isPed ? 1 : 0.85,
+                            }}
+                            title={`${step.instruction} · ${step.durationMin} min`}
+                          >
+                            {pct > 12 && (
+                              <Icon className="w-2.5 h-2.5" style={{ color: isPed ? step.color : '#fff' }} />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Transit step-by-step — always visible, scrollable */}

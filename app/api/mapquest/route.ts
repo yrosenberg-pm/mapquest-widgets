@@ -42,16 +42,15 @@ export async function GET(request: NextRequest) {
       case 'geocoding': {
         const location = searchParams.get('location');
         const maxResults = searchParams.get('maxResults') || '5';
-        url = `${ENDPOINTS.geocoding}?key=${MAPQUEST_KEY}&location=${encodeURIComponent(location || '')}&maxResults=${maxResults}`;
+        const usBounds = '24.396308,-124.848974,49.384358,-66.885444';
+        url = `${ENDPOINTS.geocoding}?key=${MAPQUEST_KEY}&location=${encodeURIComponent(location || '')}&maxResults=${maxResults}&boundingBox=${usBounds}`;
         break;
       }
 
       case 'searchahead': {
         const q = searchParams.get('q');
         const limit = searchParams.get('limit') || '6';
-        // MapQuest Search API v3 prediction endpoint format
-        // Include POIs so users can type things like "Empire State Building" across all widgets.
-        url = `${ENDPOINTS.searchahead}?key=${MAPQUEST_KEY}&q=${encodeURIComponent(q || '')}&limit=${limit}&collection=address,adminArea,poi`;
+        url = `${ENDPOINTS.searchahead}?key=${MAPQUEST_KEY}&q=${encodeURIComponent(q || '')}&limit=${limit}&collection=address,adminArea,poi&countryCode=US`;
         break;
       }
 

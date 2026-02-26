@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
         if (!q) {
           return NextResponse.json({ error: 'Query is required' }, { status: 400 });
         }
-        url = `${ENDPOINTS.geocode}?apiKey=${HERE_API_KEY}&q=${encodeURIComponent(q)}&limit=5`;
+        url = `${ENDPOINTS.geocode}?apiKey=${HERE_API_KEY}&q=${encodeURIComponent(q)}&limit=5&in=countryCode:USA`;
         break;
       }
 
@@ -114,9 +114,7 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Query is required' }, { status: 400 });
         }
 
-        // Autosuggest endpoint
-        // resultTypes keeps it focused on places/addresses
-        url = `${ENDPOINTS.autosuggest}?apiKey=${HERE_API_KEY}&q=${encodeURIComponent(q)}&at=${encodeURIComponent(at)}&limit=${limit}&resultTypes=address,place&lang=en-US`;
+        url = `${ENDPOINTS.autosuggest}?apiKey=${HERE_API_KEY}&q=${encodeURIComponent(q)}&at=${encodeURIComponent(at)}&limit=${limit}&resultTypes=address,place&lang=en-US&in=countryCode:USA`;
         break;
       }
 
@@ -196,9 +194,7 @@ export async function GET(request: NextRequest) {
         {
           const u = new URL(ENDPOINTS.discover);
           u.searchParams.set('apiKey', HERE_API_KEY!);
-          // NOTE: HERE Search APIs treat these as mutually exclusive: only one of `at` OR `in=*` is allowed.
-          // For radius queries, prefer `in=circle:*` and omit `at`.
-          u.searchParams.set('in', `circle:${lat},${lng};r=${rMeters}`);
+          u.searchParams.set('in', `circle:${lat},${lng};r=${rMeters},countryCode:USA`);
           u.searchParams.set('q', q);
           u.searchParams.set('limit', limit);
           u.searchParams.set('lang', 'en-US');
@@ -353,9 +349,12 @@ export async function GET(request: NextRequest) {
         u.searchParams.set('limit', limit);
         u.searchParams.set('lang', lang);
 
-        // HERE Search APIs treat these as mutually exclusive: only one of `at` OR `in=*` is allowed.
-        if (inParam) u.searchParams.set('in', inParam);
-        else if (at) u.searchParams.set('at', at);
+        if (inParam) {
+          u.searchParams.set('in', inParam + ',countryCode:USA');
+        } else if (at) {
+          u.searchParams.set('at', at);
+          u.searchParams.set('in', 'countryCode:USA');
+        }
 
         url = u.toString();
         break;
@@ -376,8 +375,12 @@ export async function GET(request: NextRequest) {
         u.searchParams.set('apiKey', HERE_API_KEY!);
         u.searchParams.set('limit', String(limitNum));
         if (categories) u.searchParams.set('categories', categories);
-        if (inParam) u.searchParams.set('in', inParam);
-        else if (at) u.searchParams.set('at', at);
+        if (inParam) {
+          u.searchParams.set('in', inParam + ',countryCode:USA');
+        } else if (at) {
+          u.searchParams.set('at', at);
+          u.searchParams.set('in', 'countryCode:USA');
+        }
 
         url = u.toString();
         break;

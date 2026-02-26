@@ -45,7 +45,7 @@ type WidgetId =
   | 'delivery'
   | 'instacart'
   | 'route-weather'
-  | 'here-isoline'
+  | 'isoline'
   | 'isoline-overlap'
   | 'checkout'
   | 'heatmap'
@@ -68,7 +68,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing', menuLucide: AlertTriangle },
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', section: 'routing', menuLucide: CloudSun },
   { id: 'transit' as WidgetId, name: 'Public Transit Departures', description: 'Real-time station boards & departure times', section: 'routing', menuLucide: Train },
-  { id: 'here-isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
+  { id: 'isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
   { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
   { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', section: 'other', menuLucide: MapPin },
@@ -450,7 +450,7 @@ function HomeContent() {
         return <DeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
       case 'instacart':
         return <InstacartDeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
-      case 'here-isoline':
+      case 'isoline':
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
       case 'isoline-overlap':
         return <IsolineOverlapWidget {...commonProps} />;
