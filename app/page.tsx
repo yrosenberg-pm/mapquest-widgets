@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -27,6 +27,7 @@ import {
   PublicTransitDepartures,
   ParkingFinder,
   ConstructionHeatmap,
+  ContractorFinder,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -53,7 +54,8 @@ type WidgetId =
   | 'custom-route'
   | 'transit'
   | 'parking'
-  | 'construction';
+  | 'construction'
+  | 'contractor-finder';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
 
@@ -79,6 +81,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', section: 'other', menuLucide: BatteryCharging },
   { id: 'parking' as WidgetId, name: 'Parking Finder', description: 'Find on-street and off-street parking near a destination', section: 'other', menuLucide: ParkingCircle },
   { id: 'construction' as WidgetId, name: 'Construction Heatmap', description: 'Building permit activity heat map powered by Shovels.ai', section: 'other', menuLucide: Hammer },
+  { id: 'contractor-finder' as WidgetId, name: 'Contractor Finder', description: 'Find contractors by specialty with coverage maps', section: 'other', menuLucide: HardHat },
   // — Branded / partner demos ————————————————————————————————
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuIcon: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png' },
@@ -459,6 +462,8 @@ function HomeContent() {
         return <ParkingFinder {...commonProps} />;
       case 'construction':
         return <ConstructionHeatmap {...commonProps} />;
+      case 'contractor-finder':
+        return <ContractorFinder {...commonProps} />;
       default:
         return null;
     }

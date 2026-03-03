@@ -24,6 +24,7 @@ import {
   LiveTrafficWidget,
   CustomRouteWidget,
   ConstructionHeatmap,
+  ContractorFinder,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -48,6 +49,7 @@ const VALID_WIDGETS = [
   'traffic',
   'custom-route',
   'construction',
+  'contractor-finder',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -279,6 +281,8 @@ export default function WidgetPage() {
         return <IsolineOverlapWidget {...commonProps} />;
       case 'construction':
         return <ConstructionHeatmap {...commonProps} />;
+      case 'contractor-finder':
+        return <ContractorFinder {...commonProps} />;
       default:
         return null;
     }

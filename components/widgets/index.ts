@@ -23,6 +23,7 @@ export { default as LiveTrafficWidget } from './LiveTrafficWidget';
 export { default as CustomRouteWidget } from './CustomRouteWidget';
 export { default as PublicTransitDepartures } from './PublicTransitDepartures';
 export { default as ParkingFinder } from './ParkingFinder';
+export { default as ContractorFinder } from './ContractorFinder';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';
