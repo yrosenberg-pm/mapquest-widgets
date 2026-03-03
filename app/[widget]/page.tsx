@@ -4,6 +4,7 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
+import { setApiKey } from '@/lib/mapquest';
 import { 
   SmartAddressInput,
   StarbucksFinder,
@@ -27,7 +28,7 @@ import {
   ContractorFinder,
 } from '@/components/widgets';
 
-const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
+const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
 // Valid widget IDs
 const VALID_WIDGETS = [
@@ -66,6 +67,7 @@ export default function WidgetPage() {
   const [showBranding, setShowBranding] = useState(true);
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
+  const [effectiveApiKey, setEffectiveApiKey] = useState(ENV_API_KEY);
   const [mounted, setMounted] = useState(false);
 
   // Auto-scale widgets to fit on iPad/tablet (prevents horizontal clipping for wide widgets).
@@ -76,6 +78,13 @@ export default function WidgetPage() {
 
   // Load dark mode preference
   useEffect(() => {
+    // Customer-provided API key flows to MapQuestMap (tiles) and lib/mapquest.ts (proxy calls)
+    const urlApiKey = searchParams.get('apiKey');
+    if (urlApiKey) {
+      setApiKey(urlApiKey);
+      setEffectiveApiKey(urlApiKey);
+    }
+
     // URL params take priority (so iframe embeds are self-contained)
     try {
       const pDark = searchParams.get('darkMode');
@@ -186,7 +195,7 @@ export default function WidgetPage() {
   }
 
   const commonProps = {
-    apiKey: API_KEY,
+    apiKey: effectiveApiKey,
     darkMode,
     accentColor,
     fontFamily,
@@ -227,7 +236,7 @@ export default function WidgetPage() {
       case 'traffic':
         return (
           <LiveTrafficWidget
-            apiKey={API_KEY}
+            apiKey={effectiveApiKey}
             center={{ lat: 34.0522, lng: -118.2437 }}
             title="Downtown Los Angeles"
             theme={darkMode ? 'dark' : 'light'}
@@ -244,7 +253,7 @@ export default function WidgetPage() {
         return (
           <CustomRouteWidget
             mode="builder"
-            apiKey={API_KEY}
+            apiKey={effectiveApiKey}
             theme={darkMode ? 'dark' : 'light'}
             darkMode={darkMode}
             accentColor={accentColor}

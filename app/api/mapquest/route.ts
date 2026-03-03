@@ -21,18 +21,23 @@ const ENDPOINTS: Record<string, string> = {
 };
 
 export async function GET(request: NextRequest) {
-  if (!MAPQUEST_KEY) {
+  const { searchParams } = new URL(request.url);
+
+  // Customer-provided key (via embed URL) takes precedence over server env key
+  const clientKey = searchParams.get('apiKey');
+  const apiKey = clientKey || MAPQUEST_KEY;
+
+  if (!apiKey) {
     return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
   }
 
-  const { searchParams } = new URL(request.url);
   const endpoint = searchParams.get('endpoint');
 
   if (!endpoint || !ENDPOINTS[endpoint]) {
     return NextResponse.json({ error: 'Invalid endpoint' }, { status: 400 });
   }
 
-  console.log('API Key loaded:', MAPQUEST_KEY ? 'Yes' : 'No');
+  console.log('API Key loaded:', apiKey ? 'Yes (client-provided: ' + !!clientKey + ')' : 'No');
 
   try {
     let url: string;
@@ -43,14 +48,14 @@ export async function GET(request: NextRequest) {
         const location = searchParams.get('location');
         const maxResults = searchParams.get('maxResults') || '5';
         const usBounds = '24.396308,-124.848974,49.384358,-66.885444';
-        url = `${ENDPOINTS.geocoding}?key=${MAPQUEST_KEY}&location=${encodeURIComponent(location || '')}&maxResults=${maxResults}&boundingBox=${usBounds}`;
+        url = `${ENDPOINTS.geocoding}?key=${apiKey}&location=${encodeURIComponent(location || '')}&maxResults=${maxResults}&boundingBox=${usBounds}`;
         break;
       }
 
       case 'searchahead': {
         const q = searchParams.get('q');
         const limit = searchParams.get('limit') || '6';
-        url = `${ENDPOINTS.searchahead}?key=${MAPQUEST_KEY}&q=${encodeURIComponent(q || '')}&limit=${limit}&collection=address,adminArea,poi&countryCode=US`;
+        url = `${ENDPOINTS.searchahead}?key=${apiKey}&q=${encodeURIComponent(q || '')}&limit=${limit}&collection=address,adminArea,poi&countryCode=US`;
         break;
       }
 
@@ -78,7 +83,7 @@ export async function GET(request: NextRequest) {
           searchParam = `&category=${encodeURIComponent(category)}`;
         }
         
-        url = `${ENDPOINTS.search}?key=${MAPQUEST_KEY}&location=${lng},${lat}&radius=${radiusMeters}${searchParam}&pageSize=${pageSize}&sort=${sort}`;
+        url = `${ENDPOINTS.search}?key=${apiKey}&location=${lng},${lat}&radius=${radiusMeters}${searchParam}&pageSize=${pageSize}&sort=${sort}`;
         
         console.log('[API] Search request:', { lat, lng, location: `${lng},${lat}`, category, q, radius, radiusMeters, pageSize, sort });
         break;
@@ -102,7 +107,7 @@ export async function GET(request: NextRequest) {
         const vehicleWidth = searchParams.get('vehicleWidth');
         const vehicleAxles = searchParams.get('vehicleAxles');
         
-        let directionsUrl = `${ENDPOINTS.directions}?key=${MAPQUEST_KEY}&from=${from}&routeType=${routeType}&narrativeType=text&unit=m&fullShape=true`;
+        let directionsUrl = `${ENDPOINTS.directions}?key=${apiKey}&from=${from}&routeType=${routeType}&narrativeType=text&unit=m&fullShape=true`;
         
         // Add all waypoints as 'to' parameters
         allToParams.forEach(to => {
@@ -142,7 +147,7 @@ export async function GET(request: NextRequest) {
         const allToAll = searchParams.get('allToAll') === 'true';
         
         // Route matrix uses POST with JSON body
-        url = `${ENDPOINTS.routematrix}?key=${MAPQUEST_KEY}`;
+        url = `${ENDPOINTS.routematrix}?key=${apiKey}`;
         options = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -180,7 +185,7 @@ export async function GET(request: NextRequest) {
         
         console.log('[optimizedroute] Request body:', JSON.stringify(requestBody, null, 2));
         
-        url = `${ENDPOINTS.optimizedroute}?key=${MAPQUEST_KEY}`;
+        url = `${ENDPOINTS.optimizedroute}?key=${apiKey}`;
         options = {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -191,7 +196,7 @@ export async function GET(request: NextRequest) {
 
       case 'traffic': {
         const boundingBox = searchParams.get('boundingBox');
-        url = `${ENDPOINTS.traffic}?key=${MAPQUEST_KEY}&boundingBox=${boundingBox}&filters=incidents,construction`;
+        url = `${ENDPOINTS.traffic}?key=${apiKey}&boundingBox=${boundingBox}&filters=incidents,construction`;
         break;
       }
 
@@ -210,7 +215,7 @@ export async function GET(request: NextRequest) {
 
         // Note: MapQuest Isoline API supports `origin` and `contours` (minutes) for time-based isolines.
         // We keep this proxy permissive and pass through common parameters.
-        url = `${isolineEndpoint}?key=${MAPQUEST_KEY}`
+        url = `${isolineEndpoint}?key=${apiKey}`
           + `&origin=${encodeURIComponent(origin || '')}`
           + (timeMinutes ? `&contours=${encodeURIComponent(timeMinutes)}` : '')
           + `&generalize=${encodeURIComponent(generalize)}`

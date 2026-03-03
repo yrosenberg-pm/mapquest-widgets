@@ -3,6 +3,19 @@
 
 const API_BASE = '/api/mapquest';
 
+// Customer API key for embedded widgets.
+// When set, all proxy calls include this key so the MapQuest API bills the customer.
+let _customerApiKey: string | null = null;
+
+export function setApiKey(key: string | null) { _customerApiKey = key; }
+export function getApiKey(): string | null { return _customerApiKey; }
+
+function buildUrl(query: string | URLSearchParams): string {
+  const qs = query instanceof URLSearchParams ? query.toString() : query;
+  const base = `${API_BASE}?${qs}`;
+  return _customerApiKey ? `${base}&apiKey=${encodeURIComponent(_customerApiKey)}` : base;
+}
+
 interface Location {
   lat: number;
   lng: number;
@@ -24,7 +37,7 @@ interface GeocodedLocation {
 
 export async function geocode(query: string, maxResults: number = 5): Promise<GeocodedLocation | null> {
   try {
-    const res = await fetch(`${API_BASE}?endpoint=geocoding&location=${encodeURIComponent(query)}&maxResults=${maxResults}`);
+    const res = await fetch(buildUrl(`endpoint=geocoding&location=${encodeURIComponent(query)}&maxResults=${maxResults}`));
     if (!res.ok) return null;
     const data = await res.json();
     const loc = data.results?.[0]?.locations?.[0];
@@ -42,7 +55,7 @@ export async function geocode(query: string, maxResults: number = 5): Promise<Ge
 
 export async function reverseGeocode(lat: number, lng: number): Promise<GeocodedLocation | null> {
   try {
-    const res = await fetch(`${API_BASE}?endpoint=geocoding&location=${lat},${lng}&maxResults=1`);
+    const res = await fetch(buildUrl(`endpoint=geocoding&location=${lat},${lng}&maxResults=1`));
     if (!res.ok) return null;
     const data = await res.json();
     const loc = data.results?.[0]?.locations?.[0];
@@ -80,7 +93,7 @@ export async function getIsoline(
       mode,
     });
 
-    const res = await fetch(`${API_BASE}?${params.toString()}`);
+    const res = await fetch(buildUrl(params));
     if (!res.ok) {
       const errorText = await res.text().catch(() => '');
       console.error('Isoline API error:', res.status, res.statusText, errorText);
@@ -145,7 +158,7 @@ interface SearchAheadResult {
 
 export async function searchAhead(query: string, limit: number = 6): Promise<SearchAheadResult[]> {
   try {
-    const url = `${API_BASE}?endpoint=searchahead&q=${encodeURIComponent(query)}&limit=${limit}`;
+    const url = buildUrl(`endpoint=searchahead&q=${encodeURIComponent(query)}&limit=${limit}`);
     const res = await fetch(url);
     
     if (!res.ok) {
@@ -297,7 +310,7 @@ async function searchPlacesSingle(
     
     console.log(`[searchPlaces] Requesting: ${category.startsWith('q:') ? 'q=' + category.substring(2) : 'category=' + category}, location=${lat},${lng}, radius=${radiusMiles}mi`);
     
-    const res = await fetch(`${API_BASE}?${params}`);
+    const res = await fetch(buildUrl(params));
     if (!res.ok) {
       const errorText = await res.text();
       console.error('Place search API error:', res.status, res.statusText, errorText);
@@ -406,7 +419,7 @@ export async function getDirections(
       params.set('dateTime', dateStr);
     }
     
-    const res = await fetch(`${API_BASE}?${params}`);
+    const res = await fetch(buildUrl(params));
     if (!res.ok) {
       console.error('Directions API error:', res.status);
       return null;
@@ -459,7 +472,7 @@ export async function getRouteMatrix(
       allToAll: (options.allToAll ?? false).toString(),
     });
     
-    const res = await fetch(`${API_BASE}?${params}`);
+    const res = await fetch(buildUrl(params));
     if (!res.ok) return { distance: [], time: [] };
     const data = await res.json();
     
@@ -489,7 +502,7 @@ export async function optimizeRoute(locations: Location[]): Promise<OptimizeRout
     });
     
     console.log('[optimizeRoute] Calling API with', locations.length, 'locations');
-    const res = await fetch(`${API_BASE}?${params}`);
+    const res = await fetch(buildUrl(params));
     
     if (!res.ok) {
       const errorText = await res.text();
@@ -544,7 +557,7 @@ export async function getTrafficIncidents(
       boundingBox: `${boundingBox.north},${boundingBox.west},${boundingBox.south},${boundingBox.east}`,
     });
     
-    const res = await fetch(`${API_BASE}?${params}`);
+    const res = await fetch(buildUrl(params));
     if (!res.ok) return [];
     const data = await res.json();
     

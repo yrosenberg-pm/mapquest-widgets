@@ -301,6 +301,7 @@ function HomeContent() {
       cfg.companyLogo = brandingMode === 'cobranded' ? companyLogo : undefined;
 
       const url = new URL(`${baseUrl}/embed/route`);
+      url.searchParams.set('apiKey', 'YOUR_MAPQUEST_API_KEY');
       url.searchParams.set('config', encodeEmbedConfig(cfg));
       const safeSrc = url.toString();
       const iframeHeight = 820;
@@ -316,6 +317,9 @@ function HomeContent() {
     }
 
     const url = new URL(`${baseUrl}/${activeWidget}`);
+
+    // Customer API key — placeholder for the embedding customer to replace
+    url.searchParams.set('apiKey', 'YOUR_MAPQUEST_API_KEY');
 
     // Make embed self-contained via URL params
     url.searchParams.set('darkMode', darkMode ? '1' : '0');
@@ -832,7 +836,7 @@ function HomeContent() {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-          <div className={`w-full max-w-4xl rounded-2xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
+          <div className={`w-full max-w-5xl rounded-2xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
             {/* Modal Header */}
             <div className={`flex items-center justify-between p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <h2 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -1167,6 +1171,18 @@ function HomeContent() {
                         {copied ? 'Copied!' : 'Copy'}
                       </button>
                     </div>
+                    <p className={`mt-3 text-xs leading-relaxed ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Replace <code className="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-xs font-mono">YOUR_MAPQUEST_API_KEY</code> with
+                      your own key from{' '}
+                      <a
+                        href="https://developer.mapquest.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-blue-500"
+                      >
+                        developer.mapquest.com
+                      </a>. All MapQuest API calls (geocoding, directions, map tiles, etc.) will be billed to the provided key.
+                    </p>
                   </div>
                 )}
               </div>

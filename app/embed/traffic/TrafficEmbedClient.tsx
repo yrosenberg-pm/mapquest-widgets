@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import LiveTrafficWidget from '@/components/widgets/LiveTrafficWidget';
+import { setApiKey } from '@/lib/mapquest';
 
 function parseNum(v: string | null) {
   if (v == null || v.trim() === '') return undefined;
@@ -16,6 +17,7 @@ export default function TrafficEmbedClient() {
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   const apiKey = searchParams.get('apiKey') || '';
+  if (apiKey) setApiKey(apiKey);
   const title = searchParams.get('title') || 'Live Traffic';
   const theme = (searchParams.get('theme') === 'light' ? 'light' : 'dark') as 'light' | 'dark';
   const zoom = parseNum(searchParams.get('zoom'));

@@ -4,16 +4,23 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import CustomRouteWidget, { decodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
+import { setApiKey } from '@/lib/mapquest';
 
 export default function RouteEmbedClient() {
   const searchParams = useSearchParams();
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  const urlApiKey = searchParams.get('apiKey');
 
   const cfg = useMemo(() => {
     const raw = searchParams.get('config') || '';
     if (!raw) return null;
     return decodeEmbedConfig(raw);
   }, [searchParams]);
+
+  useEffect(() => {
+    if (urlApiKey) setApiKey(urlApiKey);
+  }, [urlApiKey]);
 
   // Auto-resize: post height to parent so the embed script can size the iframe.
   useEffect(() => {
@@ -53,7 +60,7 @@ export default function RouteEmbedClient() {
     <div className="min-h-[1px] w-full" ref={rootRef}>
       <CustomRouteWidget
         mode="viewer"
-        apiKey={String(cfg.apiKey || '')}
+        apiKey={urlApiKey || String(cfg.apiKey || '')}
         waypoints={Array.isArray(cfg.waypoints) ? cfg.waypoints : []}
         title={cfg.title}
         description={cfg.description}
