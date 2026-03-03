@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Embed Sample Site</title>
+    <title>Widget Embed Tester</title>
     <style>
       :root {
         color-scheme: light;
@@ -17,40 +17,48 @@
       header {
         position: sticky;
         top: 0;
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(12px);
         border-bottom: 1px solid #e5e7eb;
-        padding: 14px 18px;
+        padding: 16px 0;
         z-index: 10;
       }
       .wrap {
-        max-width: 1100px;
+        max-width: 1200px;
         margin: 0 auto;
-        padding: 0 18px;
+        padding: 0 20px;
       }
       h1 {
-        margin: 0;
-        font-size: 14px;
+        margin: 0 0 12px;
+        font-size: 15px;
         letter-spacing: 0.02em;
         text-transform: uppercase;
         color: #475569;
       }
-      .controls {
-        margin-top: 10px;
+      .row {
         display: flex;
         gap: 10px;
         align-items: center;
+        flex-wrap: wrap;
       }
-      input[type="text"] {
-        flex: 1;
-        padding: 10px 12px;
+      .row + .row { margin-top: 10px; }
+      label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #64748b;
+        white-space: nowrap;
+      }
+      input[type="text"], select {
+        padding: 9px 12px;
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         font-size: 13px;
         background: #fff;
       }
+      input[type="text"] { flex: 1; min-width: 200px; }
+      select { min-width: 160px; }
       button {
-        padding: 10px 12px;
+        padding: 9px 16px;
         border-radius: 10px;
         border: 1px solid #e5e7eb;
         background: #0f172a;
@@ -58,13 +66,15 @@
         font-weight: 600;
         font-size: 13px;
         cursor: pointer;
+        white-space: nowrap;
       }
       button.secondary {
         background: #fff;
         color: #0f172a;
       }
+      button:hover { opacity: 0.85; }
       main {
-        padding: 18px 0 40px;
+        padding: 20px 0 48px;
       }
       .card {
         background: #fff;
@@ -82,97 +92,175 @@
         margin-top: 10px;
         font-size: 12px;
         color: #64748b;
+        line-height: 1.5;
       }
       code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         font-size: 12px;
         background: #f1f5f9;
         padding: 2px 6px;
+        border-radius: 6px;
+      }
+      .status {
+        display: inline-block;
+        padding: 4px 10px;
         border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .status.ok { background: #dcfce7; color: #166534; }
+      .status.warn { background: #fef9c3; color: #854d0e; }
+      .or-divider {
+        font-size: 12px;
+        color: #94a3b8;
+        padding: 0 4px;
+      }
+      .section-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #94a3b8;
+        font-weight: 700;
+        margin-bottom: 6px;
       }
     </style>
   </head>
   <body>
     <header>
       <div class="wrap">
-        <h1>Sample Website (Embed Tester)</h1>
-        <div class="controls">
-          <input id="src" type="text" placeholder="Paste iframe src URL here (e.g. http://localhost:3000/isoline-overlap?...)" />
-          <button id="apply">Apply</button>
-          <button id="copy" class="secondary">Copy Link</button>
+        <h1>Widget Embed Tester</h1>
+
+        <div class="section-label">Quick Test — pick a widget and enter your API key</div>
+        <div class="row">
+          <label for="apikey">API Key</label>
+          <input id="apikey" type="text" placeholder="Paste your MapQuest API key" style="flex:2" />
+          <label for="widget">Widget</label>
+          <select id="widget">
+            <option value="directions">Directions</option>
+            <option value="starbucks">Starbucks Finder</option>
+            <option value="citibike">Citi Bike Finder</option>
+            <option value="nhl">NHL Arena Explorer</option>
+            <option value="truck">Truck Routing</option>
+            <option value="service">Service Area</option>
+            <option value="neighborhood">Neighborhood Score</option>
+            <option value="multistop">Multi-Stop Planner</option>
+            <option value="delivery">Delivery ETA</option>
+            <option value="instacart">Instacart ETA</option>
+            <option value="isoline">Isoline Visualizer</option>
+            <option value="isoline-overlap">Isoline Overlap</option>
+            <option value="checkout">Checkout Flow</option>
+            <option value="ev-charging">EV Charging Planner</option>
+            <option value="traffic">Live Traffic</option>
+            <option value="construction">Construction Heatmap</option>
+            <option value="contractor-finder">Contractor Finder</option>
+          </select>
+          <button id="load">Load Widget</button>
+          <span id="status"></span>
         </div>
+
+        <div style="margin-top:14px">
+          <div class="section-label">Or paste a full iframe src URL</div>
+          <div class="row">
+            <input id="src" type="text" placeholder="e.g. http://localhost:3000/directions?apiKey=abc123&darkMode=0" />
+            <button id="apply">Apply</button>
+            <button id="copy" class="secondary">Copy Page Link</button>
+          </div>
+        </div>
+
         <div class="hint">
-          Tip: open the app, go to <strong>Customize → Embed Code</strong>, copy the iframe snippet, then paste the <code>src</code> URL here.
+          Get your API key at <a href="https://developer.mapquest.com" target="_blank">developer.mapquest.com</a>.
+          The key is passed as <code>?apiKey=…</code> in the iframe URL — map tiles and all API calls will bill to it.
         </div>
       </div>
     </header>
+
     <main>
       <div class="wrap">
         <div class="card">
-          <iframe id="frame" title="Embedded widget preview" height="720"></iframe>
+          <iframe id="frame" title="Embedded widget preview" height="760"></iframe>
         </div>
       </div>
     </main>
+
     <script>
-      const input = document.getElementById('src');
-      const frame = document.getElementById('frame');
-      const btnApply = document.getElementById('apply');
-      const btnCopy = document.getElementById('copy');
+      const $ = (id) => document.getElementById(id);
+      const input = $('src');
+      const frame = $('frame');
+      const keyInput = $('apikey');
+      const widgetSelect = $('widget');
+      const statusEl = $('status');
 
       function getParam(name) {
-        const u = new URL(window.location.href);
-        return u.searchParams.get(name);
+        return new URL(location.href).searchParams.get(name);
       }
-
       function setParam(name, value) {
-        const u = new URL(window.location.href);
-        if (value) u.searchParams.set(name, value);
-        else u.searchParams.delete(name);
+        const u = new URL(location.href);
+        if (value) u.searchParams.set(name, value); else u.searchParams.delete(name);
         history.replaceState({}, '', u.toString());
       }
 
-      function extractUrl(maybeIframeOrUrl) {
-        const raw = (maybeIframeOrUrl || '').trim();
+      function extractUrl(raw) {
+        raw = (raw || '').trim();
         if (!raw) return '';
-
-        // If user pasted the full iframe snippet, extract src="..."
         if (raw.includes('<iframe')) {
           const m = raw.match(/src\s*=\s*["']([^"']+)["']/i);
           if (m && m[1]) return m[1].trim();
         }
-
-        // If user pasted something like: src="..."; or just "...", normalize
         const m2 = raw.match(/^src\s*=\s*["']([^"']+)["']\s*$/i);
         if (m2 && m2[1]) return m2[1].trim();
-
         return raw;
       }
 
-      function applySrc(maybeIframeOrUrl) {
-        const src = extractUrl(maybeIframeOrUrl);
-        if (!src) return;
-        input.value = src;
-        frame.src = src;
-        setParam('src', src);
+      function showStatus(ok) {
+        statusEl.className = 'status ' + (ok ? 'ok' : 'warn');
+        statusEl.textContent = ok ? 'Loaded' : 'No key';
       }
 
-      btnApply.addEventListener('click', () => applySrc(input.value));
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') applySrc(input.value);
+      function buildQuickUrl() {
+        const key = keyInput.value.trim();
+        const widget = widgetSelect.value;
+        const base = location.origin || 'http://localhost:3000';
+        const url = new URL(`${base}/${widget}`);
+        if (key) url.searchParams.set('apiKey', key);
+        url.searchParams.set('darkMode', '0');
+        url.searchParams.set('showBranding', '1');
+        return url.toString();
+      }
+
+      function loadFrame(src) {
+        if (!src) return;
+        frame.src = src;
+        input.value = src;
+        setParam('src', src);
+        const hasKey = src.includes('apiKey=') && !src.includes('apiKey=YOUR');
+        showStatus(hasKey);
+      }
+
+      $('load').addEventListener('click', () => {
+        const src = buildQuickUrl();
+        loadFrame(src);
+        setParam('key', keyInput.value.trim());
+        setParam('widget', widgetSelect.value);
       });
 
-      btnCopy.addEventListener('click', async () => {
+      $('apply').addEventListener('click', () => loadFrame(extractUrl(input.value)));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadFrame(extractUrl(input.value)); });
+
+      $('copy').addEventListener('click', async () => {
         try {
-          await navigator.clipboard.writeText(window.location.href);
-          btnCopy.textContent = 'Copied!';
-          setTimeout(() => (btnCopy.textContent = 'Copy Link'), 1200);
+          await navigator.clipboard.writeText(location.href);
+          $('copy').textContent = 'Copied!';
+          setTimeout(() => ($('copy').textContent = 'Copy Page Link'), 1200);
         } catch (_) {}
       });
 
-      // Initialize from URL param
-      const initial = getParam('src');
-      if (initial) applySrc(initial);
+      // Restore state from URL params
+      const initKey = getParam('key');
+      const initWidget = getParam('widget');
+      const initSrc = getParam('src');
+      if (initKey) keyInput.value = initKey;
+      if (initWidget) widgetSelect.value = initWidget;
+      if (initSrc) loadFrame(initSrc);
     </script>
   </body>
 </html>
-
