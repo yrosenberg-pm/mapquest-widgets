@@ -890,6 +890,25 @@ export default function ContractorFinder({
           />
         </div>
       </div>
+
+      {showBranding && (
+        <div className="prism-footer">
+          {companyLogo && (
+            <img
+              src={companyLogo}
+              alt={companyName || 'Company logo'}
+              className="prism-footer-logo"
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+          )}
+          <span aria-label="Powered by MapQuest">
+            {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
+            Powered by
+          </span>
+          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
+          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+        </div>
+      )}
     </div>
   );
 }
