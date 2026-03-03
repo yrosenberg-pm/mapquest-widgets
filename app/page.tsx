@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -781,6 +781,16 @@ function HomeContent() {
                 >
                   {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                 </button>
+                <a
+                  href="/embed-guide.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all no-underline"
+                  title="Embedding guide for customers"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span className="hidden sm:inline">Embed Guide</span>
+                </a>
                 <button
                   onClick={() => setShowSettings(true)}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
