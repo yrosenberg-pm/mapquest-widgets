@@ -466,9 +466,12 @@ export default function MapQuestMap({
       mapDiv.style.height = '100%';
       containerRef.current.appendChild(mapDiv);
 
-      // Create map without initial tile layer - we'll add it in the darkMode useEffect
+      const safeCenter = (center && Number.isFinite(center.lat) && Number.isFinite(center.lng))
+        ? [center.lat, center.lng]
+        : [40.7128, -74.006];
+
       const map = L.mapquest.map(mapIdRef.current, {
-        center: [center.lat, center.lng],
+        center: safeCenter,
         zoom: zoom,
         minZoom: minZoom,
         zoomControl: showZoomControls,
@@ -606,12 +609,11 @@ export default function MapQuestMap({
   // Update center and zoom
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
-    // Don't setView if fitBounds is provided (fitBounds takes precedence)
+    if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return;
     if (fitBounds) return;
-    // Don't setView if transit segments are present (they handle their own bounds)
     if (transitSegments && transitSegments.length > 0) return;
     mapRef.current.setView([center.lat, center.lng], zoom);
-  }, [center.lat, center.lng, zoom, mapReady, fitBounds, transitSegments]);
+  }, [center?.lat, center?.lng, zoom, mapReady, fitBounds, transitSegments]);
 
   // Fit bounds (for showing all markers)
   useEffect(() => {
@@ -795,6 +797,7 @@ export default function MapQuestMap({
         popupAnchor: popupAnchor,
       });
 
+      if (marker.lat == null || marker.lng == null || !Number.isFinite(marker.lat) || !Number.isFinite(marker.lng)) return;
       const m = L.marker([marker.lat, marker.lng], { icon, zIndexOffset, draggable: !!marker.draggable }).addTo(markersLayerRef.current);
       
       if (marker.label) {
@@ -934,6 +937,7 @@ export default function MapQuestMap({
     circlesLayerRef.current.clearLayers();
 
     circles.forEach((circle) => {
+      if (circle.lat == null || circle.lng == null || !Number.isFinite(circle.lat) || !Number.isFinite(circle.lng)) return;
       L.circle([circle.lat, circle.lng], {
         radius: circle.radius,
         color: circle.color || accentColor,

@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, Flame, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -21,12 +21,12 @@ import {
   TruckRouting,
   RouteWeatherAlerts,
   CheckoutFlowWidget,
-  HeatmapDensity,
   EVChargingPlanner,
   LiveTrafficWidget,
   CustomRouteWidget,
   PublicTransitDepartures,
   ParkingFinder,
+  ConstructionHeatmap,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -48,12 +48,12 @@ type WidgetId =
   | 'isoline'
   | 'isoline-overlap'
   | 'checkout'
-  | 'heatmap'
   | 'ev-charging'
   | 'traffic'
   | 'custom-route'
   | 'transit'
-  | 'parking';
+  | 'parking'
+  | 'construction';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
 
@@ -76,9 +76,9 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', section: 'other', menuLucide: Package },
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', section: 'other', menuLucide: ShoppingBag },
-  { id: 'heatmap' as WidgetId, name: 'Heatmap Density', description: 'Heat layer for traffic, weather, or custom data', section: 'other', menuLucide: Flame },
   { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', section: 'other', menuLucide: BatteryCharging },
   { id: 'parking' as WidgetId, name: 'Parking Finder', description: 'Find on-street and off-street parking near a destination', section: 'other', menuLucide: ParkingCircle },
+  { id: 'construction' as WidgetId, name: 'Construction Heatmap', description: 'Building permit activity heat map powered by Shovels.ai', section: 'other', menuLucide: Hammer },
   // — Branded / partner demos ————————————————————————————————
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuIcon: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png' },
@@ -150,7 +150,7 @@ function HomeContent() {
   const [brandingMode, setBrandingMode] = useState<'mapquest' | 'cobranded' | 'whitelabel'>('mapquest');
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
-  const [hideBranded, setHideBranded] = useState(false);
+  const [hideBranded, setHideBranded] = useState(true);
 
   // Custom Route: keep the latest builder config so the Customize → Embed Code tab can generate a real embed.
   const [customRouteConfig, setCustomRouteConfig] = useState<any>(null);
@@ -393,8 +393,6 @@ function HomeContent() {
         return <RouteWeatherAlerts {...commonProps} />;
       case 'checkout':
         return <CheckoutFlowWidget {...commonProps} />;
-      case 'heatmap':
-        return <HeatmapDensity {...commonProps} />;
       case 'ev-charging':
         return <EVChargingPlanner {...commonProps} />;
       case 'service':
@@ -459,6 +457,8 @@ function HomeContent() {
         return <PublicTransitDepartures {...commonProps} />;
       case 'parking':
         return <ParkingFinder {...commonProps} />;
+      case 'construction':
+        return <ConstructionHeatmap {...commonProps} />;
       default:
         return null;
     }

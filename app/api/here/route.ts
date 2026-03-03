@@ -194,7 +194,8 @@ export async function GET(request: NextRequest) {
         {
           const u = new URL(ENDPOINTS.discover);
           u.searchParams.set('apiKey', HERE_API_KEY!);
-          u.searchParams.set('in', `circle:${lat},${lng};r=${rMeters},countryCode:USA`);
+          u.searchParams.set('in', `circle:${lat},${lng};r=${rMeters}`);
+          u.searchParams.append('in', 'countryCode:USA');
           u.searchParams.set('q', q);
           u.searchParams.set('limit', limit);
           u.searchParams.set('lang', 'en-US');
@@ -350,7 +351,8 @@ export async function GET(request: NextRequest) {
         u.searchParams.set('lang', lang);
 
         if (inParam) {
-          u.searchParams.set('in', inParam + ',countryCode:USA');
+          u.searchParams.set('in', inParam);
+          u.searchParams.append('in', 'countryCode:USA');
         } else if (at) {
           u.searchParams.set('at', at);
           u.searchParams.set('in', 'countryCode:USA');
@@ -376,7 +378,8 @@ export async function GET(request: NextRequest) {
         u.searchParams.set('limit', String(limitNum));
         if (categories) u.searchParams.set('categories', categories);
         if (inParam) {
-          u.searchParams.set('in', inParam + ',countryCode:USA');
+          u.searchParams.set('in', inParam);
+          u.searchParams.append('in', 'countryCode:USA');
         } else if (at) {
           u.searchParams.set('at', at);
           u.searchParams.set('in', 'countryCode:USA');

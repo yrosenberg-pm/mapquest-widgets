@@ -21,9 +21,9 @@ import {
   RouteWeatherAlerts,
   CheckoutFlowWidget,
   EVChargingPlanner,
-  HeatmapDensity,
   LiveTrafficWidget,
   CustomRouteWidget,
+  ConstructionHeatmap,
 } from '@/components/widgets';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -43,11 +43,11 @@ const VALID_WIDGETS = [
   'instacart',
   'isoline',
   'isoline-overlap',
-  'heatmap',
   'checkout',
   'ev-charging',
   'traffic',
   'custom-route',
+  'construction',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -216,8 +216,6 @@ export default function WidgetPage() {
         return <TruckRouting {...commonProps} defaultMaxElevationFt={truckMaxElevationFtNum} />;
       case 'route-weather':
         return <RouteWeatherAlerts {...commonProps} />;
-      case 'heatmap':
-        return <HeatmapDensity {...commonProps} />;
       case 'checkout':
         return <CheckoutFlowWidget {...commonProps} />;
       case 'ev-charging':
@@ -279,6 +277,8 @@ export default function WidgetPage() {
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
       case 'isoline-overlap':
         return <IsolineOverlapWidget {...commonProps} />;
+      case 'construction':
+        return <ConstructionHeatmap {...commonProps} />;
       default:
         return null;
     }

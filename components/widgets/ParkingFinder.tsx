@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Car,
   ChevronRight,
   Clock,
   DollarSign,
@@ -17,7 +16,6 @@ import {
   Search,
   Accessibility,
   Zap,
-  Building2,
   AlertTriangle,
   X,
 } from 'lucide-react';
@@ -36,8 +34,7 @@ interface ParkingFinderProps {
   borderRadius?: string;
 }
 
-type ParkingType = 'on-street' | 'off-street';
-type FacilityType = 'garage' | 'lot' | 'meter' | 'other';
+type FacilityType = 'garage' | 'lot' | 'other';
 
 interface ParkingSpot {
   id: string;
@@ -45,7 +42,6 @@ interface ParkingSpot {
   lat: number;
   lng: number;
   distance: number; // miles
-  type: ParkingType;
   facilityType: FacilityType;
   address?: string;
   pricePerHour?: number;
@@ -58,22 +54,24 @@ interface ParkingSpot {
   categories: string[];
 }
 
-function classifyParking(item: any): { type: ParkingType; facilityType: FacilityType } {
-  const cats = (item.categories || []).map((c: any) => (c.name || c.id || '').toLowerCase());
+function classifyParking(item: any, queryHint?: 'garage' | 'lot'): FacilityType {
+  const cats = (item.categories || []).map((c: any) => ({
+    name: (c.name || '').toLowerCase(),
+    id: (c.id || '').toLowerCase(),
+  }));
   const title = (item.title || '').toLowerCase();
+  const catNames = cats.map((c: { name: string }) => c.name);
+  const catIds = cats.map((c: { id: string }) => c.id);
 
-  const isGarage = cats.some((c: string) => c.includes('garage')) || title.includes('garage') || title.includes('structure') || title.includes('deck');
-  const isLot = cats.some((c: string) => c.includes('lot') || c.includes('open parking')) || title.includes('lot') || title.includes('surface');
-  const isMeter = title.includes('meter') || title.includes('metered') || title.includes('on-street') || title.includes('curbside');
+  const hasGarageCat = catIds.some((id: string) => id.includes('700-7600-0116'));
+  const hasLotCat = catIds.some((id: string) => id.includes('700-7600-0322') || id.includes('700-7600-0202'));
 
-  if (isMeter) return { type: 'on-street', facilityType: 'meter' };
-  if (isGarage) return { type: 'off-street', facilityType: 'garage' };
-  if (isLot) return { type: 'off-street', facilityType: 'lot' };
+  const isGarage = hasGarageCat || catNames.some((c: string) => c.includes('garage')) || title.includes('garage') || title.includes('structure') || title.includes('deck') || title.includes('ramp');
+  const isLot = hasLotCat || catNames.some((c: string) => c.includes('lot') || c.includes('open parking')) || title.includes('lot') || title.includes('surface');
 
-  const isOnStreet = cats.some((c: string) => c.includes('street') || c.includes('curb') || c.includes('meter'));
-  if (isOnStreet) return { type: 'on-street', facilityType: 'meter' };
-
-  return { type: 'off-street', facilityType: 'other' };
+  if (isGarage || queryHint === 'garage') return 'garage';
+  if (isLot || queryHint === 'lot') return 'lot';
+  return 'other';
 }
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -94,8 +92,8 @@ function estimatePrice(item: any): number | undefined {
   return undefined;
 }
 
-function parkingMarkerSvg(type: ParkingType, selected: boolean): string {
-  const color = type === 'on-street' ? '#3B82F6' : '#8B5CF6';
+function parkingMarkerSvg(selected: boolean): string {
+  const color = '#8B5CF6';
   const bg = selected ? color : '#FFFFFF';
   const fg = selected ? '#FFFFFF' : color;
   const borderColor = selected ? 'white' : color;
@@ -104,9 +102,7 @@ function parkingMarkerSvg(type: ParkingType, selected: boolean): string {
   const half = s / 2;
   const r = half - 2;
 
-  const icon = type === 'on-street'
-    ? `<text x="${half}" y="${half + 1}" text-anchor="middle" dominant-baseline="central" font-family="system-ui,sans-serif" font-weight="700" font-size="${s * 0.36}" fill="${fg}">P</text>`
-    : `<g transform="translate(${half - s * 0.22},${half - s * 0.22}) scale(${s * 0.018})" fill="none" stroke="${fg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><text x="12" y="16" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="14" fill="${fg}" stroke="none">P</text></g>`;
+  const icon = `<g transform="translate(${half - s * 0.22},${half - s * 0.22}) scale(${s * 0.018})" fill="none" stroke="${fg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><text x="12" y="16" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="14" fill="${fg}" stroke="none">P</text></g>`;
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${s}" height="${s}" viewBox="0 0 ${s} ${s}" fill="none">` +
@@ -135,7 +131,6 @@ export default function ParkingFinder({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<ParkingType>('off-street');
   const [selectedSpot, setSelectedSpot] = useState<ParkingSpot | null>(null);
 
   // Filters
@@ -178,16 +173,20 @@ export default function ParkingFinder({
       const radiusM = Math.round(MAX_SEARCH_RADIUS_MI * 1609.34);
       const inParam = `circle:${lat},${lng};r=${radiusM}`;
 
-      // Parallel queries for parking garages/lots and street parking
-      const [garageRes, streetRes] = await Promise.all([
-        fetch(`/api/here?endpoint=discover&q=parking+garage+lot&in=${encodeURIComponent(inParam)}&limit=40`),
-        fetch(`/api/here?endpoint=discover&q=parking+meter+street+parking&in=${encodeURIComponent(inParam)}&limit=20`),
+      const [garageRes, lotRes] = await Promise.all([
+        fetch(`/api/here?endpoint=discover&q=${encodeURIComponent('parking garage')}&in=${encodeURIComponent(inParam)}&limit=40`),
+        fetch(`/api/here?endpoint=discover&q=${encodeURIComponent('parking lot')}&in=${encodeURIComponent(inParam)}&limit=40`),
       ]);
 
       const allItems: ParkingSpot[] = [];
       const seenIds = new Set<string>();
 
-      for (const res of [garageRes, streetRes]) {
+      const sources: { res: Response; hint: 'garage' | 'lot' }[] = [
+        { res: garageRes, hint: 'garage' },
+        { res: lotRes, hint: 'lot' },
+      ];
+
+      for (const { res, hint } of sources) {
         if (!res.ok) continue;
         const data = await res.json();
         const items = data.items || [];
@@ -201,7 +200,7 @@ export default function ParkingFinder({
           if (!pos.lat || !pos.lng) continue;
 
           const dist = haversine(lat, lng, pos.lat, pos.lng);
-          const { type, facilityType } = classifyParking(item);
+          const facilityType = classifyParking(item, hint);
           const cats = (item.categories || []).map((c: any) => (c.name || '').toLowerCase());
 
           allItems.push({
@@ -210,7 +209,6 @@ export default function ParkingFinder({
             lat: pos.lat,
             lng: pos.lng,
             distance: Math.round(dist * 100) / 100,
-            type,
             facilityType,
             address: item.address?.label || [item.address?.street, item.address?.city].filter(Boolean).join(', ') || undefined,
             pricePerHour: estimatePrice(item),
@@ -245,20 +243,16 @@ export default function ParkingFinder({
   }, [destCoords, searchParking]);
 
   const spotsInRadius = useMemo(() => spots.filter(s => s.distance <= maxDistance), [spots, maxDistance]);
-  const onStreet = useMemo(() => spotsInRadius.filter(s => s.type === 'on-street'), [spotsInRadius]);
-  const offStreet = useMemo(() => spotsInRadius.filter(s => s.type === 'off-street'), [spotsInRadius]);
-
-  const currentList = activeTab === 'on-street' ? onStreet : offStreet;
 
   const filtered = useMemo(() => {
-    let list = currentList;
+    let list = spotsInRadius;
     if (facilityFilter.size > 0) {
       list = list.filter(s => facilityFilter.has(s.facilityType));
     }
     if (showHandicapOnly) list = list.filter(s => s.hasHandicap);
     if (showEVOnly) list = list.filter(s => s.hasEVCharging);
     return list;
-  }, [currentList, facilityFilter, showHandicapOnly, showEVOnly]);
+  }, [spotsInRadius, facilityFilter, showHandicapOnly, showEVOnly]);
 
   const toggleFacility = (f: FacilityType) => {
     setFacilityFilter(prev => {
@@ -288,8 +282,8 @@ export default function ParkingFinder({
         lat: s.lat,
         lng: s.lng,
         label: s.name,
-        color: s.type === 'on-street' ? '#3B82F6' : '#8B5CF6',
-        iconUrl: parkingMarkerSvg(s.type, isSelected),
+        color: brandColor,
+        iconUrl: parkingMarkerSvg(isSelected),
         iconSize: [sz, sz] as [number, number],
         iconCircular: false,
         zIndexOffset: isSelected ? 100 : 0,
@@ -303,9 +297,7 @@ export default function ParkingFinder({
     window.open(`https://www.mapquest.com/directions/to/${destName}/${spot.lat},${spot.lng}`, '_blank');
   };
 
-  const onColor = '#3B82F6';
-  const offColor = '#8B5CF6';
-  const tabColor = activeTab === 'on-street' ? onColor : offColor;
+  const brandColor = '#8B5CF6';
 
   return (
     <div
@@ -315,7 +307,7 @@ export default function ParkingFinder({
     >
       <WidgetHeader
         title="Parking Finder"
-        subtitle={destCoords ? `${onStreet.length + offStreet.length} options found` : 'Find parking near your destination'}
+        subtitle={destCoords ? `${spotsInRadius.length} options found` : 'Find parking near your destination'}
         variant="impressive"
         layout="inline"
         icon={<ParkingCircle className="w-4 h-4" />}
@@ -419,43 +411,6 @@ export default function ParkingFinder({
             )}
           </div>
 
-          {/* Tabs */}
-          <div
-            className="flex"
-            style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
-          >
-            {(['off-street', 'on-street'] as ParkingType[]).map(tab => {
-              const active = activeTab === tab;
-              const c = tab === 'on-street' ? onColor : offColor;
-              const count = tab === 'on-street' ? onStreet.length : offStreet.length;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => { setActiveTab(tab); setSelectedSpot(null); }}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold transition-colors relative"
-                  style={{ color: active ? c : 'var(--text-muted)' }}
-                >
-                  {tab === 'off-street' ? <Building2 className="w-3.5 h-3.5" /> : <Car className="w-3.5 h-3.5" />}
-                  {tab === 'off-street' ? 'Garages & Lots' : 'On-Street'}
-                  {count > 0 && (
-                    <span
-                      className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                      style={{ background: active ? `${c}18` : 'var(--bg-input)', color: active ? c : 'var(--text-muted)' }}
-                    >
-                      {count}
-                    </span>
-                  )}
-                  {active && (
-                    <div
-                      className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full"
-                      style={{ background: c }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
           {/* Filters row */}
           {filtered.length > 0 && !loading && (
             <div
@@ -463,34 +418,30 @@ export default function ParkingFinder({
               style={{ borderBottom: '1px solid var(--border-subtle)' }}
             >
               <Filter className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
-              {activeTab === 'off-street' && (
-                <>
-                  {(['garage', 'lot', 'other'] as FacilityType[]).map(f => {
-                    const active = facilityFilter.has(f);
-                    return (
-                      <button
-                        key={f}
-                        onClick={() => toggleFacility(f)}
-                        className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors"
-                        style={{
-                          background: active ? `${offColor}18` : 'var(--bg-input)',
-                          color: active ? offColor : 'var(--text-muted)',
-                          border: `1px solid ${active ? `${offColor}40` : 'transparent'}`,
-                        }}
-                      >
-                        {f === 'garage' ? 'Garage' : f === 'lot' ? 'Lot' : 'Other'}
-                      </button>
-                    );
-                  })}
-                </>
-              )}
+              {(['garage', 'lot', 'other'] as FacilityType[]).map(f => {
+                const active = facilityFilter.has(f);
+                return (
+                  <button
+                    key={f}
+                    onClick={() => toggleFacility(f)}
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors"
+                    style={{
+                      background: active ? `${brandColor}18` : 'var(--bg-input)',
+                      color: active ? brandColor : 'var(--text-muted)',
+                      border: `1px solid ${active ? `${brandColor}40` : 'transparent'}`,
+                    }}
+                  >
+                    {f === 'garage' ? 'Garage' : f === 'lot' ? 'Lot' : 'Other'}
+                  </button>
+                );
+              })}
               <button
                 onClick={() => setShowHandicapOnly(p => !p)}
                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1"
                 style={{
-                  background: showHandicapOnly ? `${tabColor}18` : 'var(--bg-input)',
-                  color: showHandicapOnly ? tabColor : 'var(--text-muted)',
-                  border: `1px solid ${showHandicapOnly ? `${tabColor}40` : 'transparent'}`,
+                  background: showHandicapOnly ? `${brandColor}18` : 'var(--bg-input)',
+                  color: showHandicapOnly ? brandColor : 'var(--text-muted)',
+                  border: `1px solid ${showHandicapOnly ? `${brandColor}40` : 'transparent'}`,
                 }}
               >
                 <Accessibility className="w-3 h-3" /> ADA
@@ -499,9 +450,9 @@ export default function ParkingFinder({
                 onClick={() => setShowEVOnly(p => !p)}
                 className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1"
                 style={{
-                  background: showEVOnly ? `${tabColor}18` : 'var(--bg-input)',
-                  color: showEVOnly ? tabColor : 'var(--text-muted)',
-                  border: `1px solid ${showEVOnly ? `${tabColor}40` : 'transparent'}`,
+                  background: showEVOnly ? `${brandColor}18` : 'var(--bg-input)',
+                  color: showEVOnly ? brandColor : 'var(--text-muted)',
+                  border: `1px solid ${showEVOnly ? `${brandColor}40` : 'transparent'}`,
                 }}
               >
                 <Zap className="w-3 h-3" /> EV
@@ -540,8 +491,8 @@ export default function ParkingFinder({
 
             {/* Selected spot detail */}
             {selectedSpot && !loading && (() => {
-              const sc = selectedSpot.type === 'on-street' ? onColor : offColor;
-              const facilityLabel = selectedSpot.facilityType === 'garage' ? 'Garage' : selectedSpot.facilityType === 'lot' ? 'Parking Lot' : selectedSpot.facilityType === 'meter' ? 'Metered Parking' : 'Parking';
+              const sc = brandColor;
+              const facilityLabel = selectedSpot.facilityType === 'garage' ? 'Garage' : selectedSpot.facilityType === 'lot' ? 'Parking Lot' : 'Parking';
               return (
                 <div className="p-3">
                   <button
@@ -652,7 +603,7 @@ export default function ParkingFinder({
             {!selectedSpot && !loading && filtered.length > 0 && (
               <div className="p-3 space-y-2">
                 {filtered.map(spot => {
-                  const c = spot.type === 'on-street' ? onColor : offColor;
+                  const c = brandColor;
                   return (
                     <button
                       key={spot.id}
@@ -682,7 +633,7 @@ export default function ParkingFinder({
                               className="text-[9px] font-semibold px-1.5 py-px rounded"
                               style={{ background: `${c}12`, color: c }}
                             >
-                              {spot.facilityType === 'garage' ? 'Garage' : spot.facilityType === 'lot' ? 'Lot' : spot.facilityType === 'meter' ? 'Metered' : 'Parking'}
+                              {spot.facilityType === 'garage' ? 'Garage' : spot.facilityType === 'lot' ? 'Lot' : 'Parking'}
                             </span>
                             {spot.hasHandicap && <Accessibility className="w-3 h-3" style={{ color: '#3B82F6' }} />}
                             {spot.hasEVCharging && <Zap className="w-3 h-3" style={{ color: '#16A34A' }} />}
@@ -718,12 +669,12 @@ export default function ParkingFinder({
               <div className="text-center py-8 px-4">
                 <Filter className="w-7 h-7 mx-auto mb-2" style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  No {activeTab} parking matches your filters.
+                  No parking matches your filters.
                 </p>
                 <button
                   onClick={() => { setFacilityFilter(new Set()); setShowHandicapOnly(false); setShowEVOnly(false); }}
                   className="text-[10px] font-semibold mt-2 px-3 py-1 rounded-full"
-                  style={{ color: tabColor, background: `${tabColor}10` }}
+                  style={{ color: brandColor, background: `${brandColor}10` }}
                 >
                   Clear filters
                 </button>
