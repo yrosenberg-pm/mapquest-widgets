@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2 } from 'lucide-react';
-import { geocode } from '@/lib/mapquest';
+import { geocode, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
@@ -628,6 +628,17 @@ export default function TruckRouting({
     }
 
     const routeData = data.route;
+
+    // Parse flat shapePoints array [lat, lng, lat, lng, ...] into coordinate objects
+    let polyline: { lat: number; lng: number }[] | undefined;
+    const rawShape = routeData.shape?.shapePoints;
+    if (Array.isArray(rawShape) && rawShape.length >= 2) {
+      polyline = [];
+      for (let i = 0; i < rawShape.length - 1; i += 2) {
+        polyline.push({ lat: rawShape[i], lng: rawShape[i + 1] });
+      }
+    }
+
     return {
       distance: routeData.distance,
       time: routeData.time / 60, // Convert seconds to minutes
@@ -639,7 +650,7 @@ export default function TruckRouting({
         distance: m.distance,
         time: m.time / 60,
       })) || [],
-      polyline: undefined, // MapQuest uses different polyline format
+      polyline,
     };
   };
 
@@ -731,26 +742,32 @@ export default function TruckRouting({
             setRoutePolyline(undefined);
           }
         } catch (hereErr) {
-          console.warn('[TruckRouting] Routing failed, falling back to MapQuest:', hereErr);
+          console.warn('[TruckRouting] HERE truck routing failed, falling back to MapQuest:', hereErr);
           setRoutePolyline(undefined);
-          // Fallback to MapQuest
           directions = await getMapQuestTruckDirections(
-            `${fromLoc!.lat},${fromLoc!.lng}`, 
-            `${toLoc!.lat},${toLoc!.lng}`, 
-        vehicle,
-        departureTime
-      );
+            `${fromLoc!.lat},${fromLoc!.lng}`,
+            `${toLoc!.lat},${toLoc!.lng}`,
+            vehicle,
+            departureTime,
+          );
+          if (directions.polyline && directions.polyline.length > 0) {
+            setRoutePolyline(directions.polyline);
+          }
           setElevationNote(null);
           setRouteMaxElevationFt(null);
         }
       } else {
-        setRoutePolyline(undefined);
         directions = await getMapQuestTruckDirections(
-          `${fromLoc!.lat},${fromLoc!.lng}`, 
-          `${toLoc!.lat},${toLoc!.lng}`, 
+          `${fromLoc!.lat},${fromLoc!.lng}`,
+          `${toLoc!.lat},${toLoc!.lng}`,
           vehicle,
-          departureTime
+          departureTime,
         );
+        if (directions.polyline && directions.polyline.length > 0) {
+          setRoutePolyline(directions.polyline);
+        } else {
+          setRoutePolyline(undefined);
+        }
         setElevationNote(null);
         setRouteMaxElevationFt(null);
       }
@@ -901,35 +918,24 @@ export default function TruckRouting({
         const r = 20000;
         let firstErr: string | null = null;
 
+        const radiusMi = r / 1609.34;
         for (const pt of sampled) {
           for (const q of queries) {
-            const params = new URLSearchParams({
-              endpoint: 'discover',
-              q,
-              in: `circle:${pt.lat},${pt.lng};r=${r}`,
-              limit: '30',
-              lang: 'en-US',
-            });
-            const resp = await fetch(`/api/here?${params.toString()}`);
-            if (!resp.ok) {
-              if (!firstErr) {
-                const text = await resp.text().catch(() => '');
-                firstErr = text || `HERE Discover error (${resp.status})`;
+            try {
+              const results = await searchPlaces(pt.lat, pt.lng, `q:${q}`, radiusMi, 30);
+              for (const item of results) {
+                const coords = item.place?.geometry?.coordinates;
+                const latVal = coords?.[1];
+                const lngVal = coords?.[0];
+                const title = String(item.name || '').trim();
+                if (typeof latVal !== 'number' || typeof lngVal !== 'number' || !Number.isFinite(latVal) || !Number.isFinite(lngVal) || !title) continue;
+                const key = stablePoiKey({ position: { lat: latVal, lng: lngVal }, title });
+                if (seen.has(key)) continue;
+                seen.add(key);
+                out.push({ lat: latVal, lng: lngVal, title });
               }
-              continue;
-            }
-            const data = await resp.json();
-            const items = Array.isArray((data as any)?.items) ? (data as any).items : [];
-
-            for (const item of items) {
-              const lat = item?.position?.lat;
-              const lng = item?.position?.lng;
-              const title = String(item?.title || item?.name || '').trim();
-              if (!Number.isFinite(lat) || !Number.isFinite(lng) || !title) continue;
-              const key = stablePoiKey(item);
-              if (seen.has(key)) continue;
-              seen.add(key);
-              out.push({ lat, lng, title });
+            } catch (err) {
+              if (!firstErr) firstErr = String(err);
             }
           }
         }

@@ -8,7 +8,7 @@ import CollapsibleSection from './CollapsibleSection';
 import * as turf from '@turf/turf';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
-import { reverseGeocode } from '@/lib/mapquest';
+import { reverseGeocode, geocode, searchAhead } from '@/lib/mapquest';
 
 export interface TrafficWidgetProps {
   apiKey: string;
@@ -854,48 +854,39 @@ export default function LiveTrafficWidget({
     setExitResults([]);
 
     try {
-      // Use HERE geocode with the raw natural-language query first.
-      // HERE handles highway-related queries like "exit 9 I-405" reasonably well.
-      const contextAt = `${areaCenter.lat},${areaCenter.lng}`;
-      const geoRes = await fetch(`/api/here?endpoint=geocode&q=${encodeURIComponent(q)}`);
-      const geoData = await geoRes.json();
-
-      // Also try autosuggest for additional fuzzy results
-      const suggestRes = await fetch(
-        `/api/here?endpoint=autosuggest&q=${encodeURIComponent(q)}&at=${contextAt}&limit=6`
-      );
-      const suggestData = await suggestRes.json();
+      const [geoResult, suggestResults] = await Promise.all([
+        geocode(q, 5),
+        searchAhead(q, 6),
+      ]);
 
       const seen = new Set<string>();
       const results: ExitSearchResult[] = [];
 
-      // Merge geocode results
-      for (const item of geoData?.items || []) {
-        const lat = item.position?.lat;
-        const lng = item.position?.lng;
-        if (lat == null || lng == null) continue;
-        const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
-        if (seen.has(key)) continue;
+      // Merge geocode result
+      if (geoResult?.lat != null && geoResult?.lng != null) {
+        const key = `${geoResult.lat.toFixed(5)},${geoResult.lng.toFixed(5)}`;
         seen.add(key);
+        const label = [geoResult.street, geoResult.adminArea5, geoResult.adminArea3].filter(Boolean).join(', ');
         results.push({
-          title: item.title || item.address?.label || 'Unknown',
-          address: item.address?.label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-          lat,
-          lng,
+          title: label || `${geoResult.lat.toFixed(5)}, ${geoResult.lng.toFixed(5)}`,
+          address: label || `${geoResult.lat.toFixed(5)}, ${geoResult.lng.toFixed(5)}`,
+          lat: geoResult.lat,
+          lng: geoResult.lng,
         });
       }
 
-      // Merge autosuggest results (only those with positions)
-      for (const item of suggestData?.items || []) {
-        const lat = item.position?.lat;
-        const lng = item.position?.lng;
+      // Merge searchahead results
+      for (const item of suggestResults || []) {
+        const coords = (item as any).place?.geometry?.coordinates;
+        const lat = (item as any).lat ?? (coords ? coords[1] : undefined);
+        const lng = (item as any).lng ?? (coords ? coords[0] : undefined);
         if (lat == null || lng == null) continue;
         const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
         if (seen.has(key)) continue;
         seen.add(key);
         results.push({
-          title: item.title || 'Unknown',
-          address: item.address?.label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          title: item.displayString || item.name || 'Unknown',
+          address: item.displayString || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
           lat,
           lng,
         });

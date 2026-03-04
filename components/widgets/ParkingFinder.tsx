@@ -22,7 +22,7 @@ import {
 import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import MapQuestMap from './MapQuestMap';
-import { geocode } from '@/lib/mapquest';
+import { geocode, searchPlaces } from '@/lib/mapquest';
 
 interface ParkingFinderProps {
   accentColor?: string;
@@ -170,54 +170,49 @@ export default function ParkingFinder({
 
     try {
       const MAX_SEARCH_RADIUS_MI = 5;
-      const radiusM = Math.round(MAX_SEARCH_RADIUS_MI * 1609.34);
-      const inParam = `circle:${lat},${lng};r=${radiusM}`;
 
-      const [garageRes, lotRes] = await Promise.all([
-        fetch(`/api/here?endpoint=discover&q=${encodeURIComponent('parking garage')}&in=${encodeURIComponent(inParam)}&limit=40`),
-        fetch(`/api/here?endpoint=discover&q=${encodeURIComponent('parking lot')}&in=${encodeURIComponent(inParam)}&limit=40`),
+      const [garageResults, lotResults] = await Promise.all([
+        searchPlaces(lat, lng, 'q:parking garage', MAX_SEARCH_RADIUS_MI, 40),
+        searchPlaces(lat, lng, 'q:parking lot', MAX_SEARCH_RADIUS_MI, 40),
       ]);
 
       const allItems: ParkingSpot[] = [];
       const seenIds = new Set<string>();
 
-      const sources: { res: Response; hint: 'garage' | 'lot' }[] = [
-        { res: garageRes, hint: 'garage' },
-        { res: lotRes, hint: 'lot' },
+      const sources: { items: typeof garageResults; hint: 'garage' | 'lot' }[] = [
+        { items: garageResults, hint: 'garage' },
+        { items: lotResults, hint: 'lot' },
       ];
 
-      for (const { res, hint } of sources) {
-        if (!res.ok) continue;
-        const data = await res.json();
-        const items = data.items || [];
-
+      for (const { items, hint } of sources) {
         for (const item of items) {
-          const id = item.id || `${item.position?.lat}-${item.position?.lng}`;
+          const coords = item.place?.geometry?.coordinates;
+          const posLat = coords?.[1];
+          const posLng = coords?.[0];
+          if (!posLat || !posLng) continue;
+
+          const id = `${posLat}-${posLng}`;
           if (seenIds.has(id)) continue;
           seenIds.add(id);
 
-          const pos = item.position || {};
-          if (!pos.lat || !pos.lng) continue;
-
-          const dist = haversine(lat, lng, pos.lat, pos.lng);
-          const facilityType = classifyParking(item, hint);
-          const cats = (item.categories || []).map((c: any) => (c.name || '').toLowerCase());
+          const dist = haversine(lat, lng, posLat, posLng);
+          const facilityType = classifyParking({ title: item.name, categories: [] }, hint);
 
           allItems.push({
             id,
-            name: item.title || 'Parking',
-            lat: pos.lat,
-            lng: pos.lng,
+            name: item.name || 'Parking',
+            lat: posLat,
+            lng: posLng,
             distance: Math.round(dist * 100) / 100,
             facilityType,
-            address: item.address?.label || [item.address?.street, item.address?.city].filter(Boolean).join(', ') || undefined,
-            pricePerHour: estimatePrice(item),
+            address: item.displayString || [item.place?.properties?.street, item.place?.properties?.city].filter(Boolean).join(', ') || undefined,
+            pricePerHour: undefined,
             spotsAvailable: undefined,
             spotsTotal: undefined,
-            hasHandicap: cats.some((c: string) => c.includes('handicap') || c.includes('accessible') || c.includes('disability')),
-            hasEVCharging: cats.some((c: string) => c.includes('ev') || c.includes('electric') || c.includes('charging')),
-            hours: item.openingHours?.[0]?.text?.[0] || undefined,
-            categories: (item.categories || []).map((c: any) => c.name || ''),
+            hasHandicap: false,
+            hasEVCharging: false,
+            hours: undefined,
+            categories: [],
           });
         }
       }
@@ -263,6 +258,8 @@ export default function ParkingFinder({
     });
   };
 
+  const brandColor = '#8B5CF6';
+
   const mapCenter = selectedSpot
     ? { lat: selectedSpot.lat, lng: selectedSpot.lng }
     : destCoords || { lat: 40.7128, lng: -74.006 };
@@ -296,8 +293,6 @@ export default function ParkingFinder({
     const destName = encodeURIComponent(spot.name);
     window.open(`https://www.mapquest.com/directions/to/${destName}/${spot.lat},${spot.lng}`, '_blank');
   };
-
-  const brandColor = '#8B5CF6';
 
   return (
     <div

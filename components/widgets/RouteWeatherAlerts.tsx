@@ -29,6 +29,7 @@ import {
 import MapQuestMap from './MapQuestMap';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
+import { geocode as mqGeocode, searchAhead, getDirections } from '@/lib/mapquest';
 
 type Severity = 'warning' | 'watch' | 'advisory';
 
@@ -825,44 +826,34 @@ function AutosuggestInput({
     debounceRef.current = window.setTimeout(async () => {
       setLoading(true);
       try {
-        const atParam = at ? `${at.lat},${at.lng}` : '39.8283,-98.5795';
-        // Try HERE Autosuggest first
-        const res = await fetch(
-          `/api/here?endpoint=autosuggest&q=${encodeURIComponent(query)}&at=${encodeURIComponent(atParam)}&limit=6`
-        );
-
+        const results = await searchAhead(query, 6);
         let normalized: HereAutosuggestItem[] = [];
 
-        if (res.ok) {
-          const data = await res.json();
-          const list: HereAutosuggestItem[] = Array.isArray(data.items) ? data.items : [];
-          // HERE autosuggest items may provide coordinates in `position` OR `access[0]` depending on resultType
-          normalized = list.filter(i => {
-            const p = i.position || i.access?.[0];
-            return !!(p && typeof p.lat === 'number' && typeof p.lng === 'number');
-          });
-        } else {
-          // Many HERE keys don't have Autosuggest enabled; fall back gracefully.
-          const txt = await res.text().catch(() => '');
-          console.warn('[RouteWeatherAlerts] Autosuggest failed, falling back to geocode:', res.status, txt);
+        for (const r of results || []) {
+          const coords = (r as any).place?.geometry?.coordinates;
+          const lat = (r as any).lat ?? (coords ? coords[1] : undefined);
+          const lng = (r as any).lng ?? (coords ? coords[0] : undefined);
+          if (lat != null && lng != null) {
+            normalized.push({
+              title: r.displayString || r.name,
+              address: { label: r.displayString || r.name },
+              position: { lat, lng },
+              resultType: 'address',
+            });
+          }
         }
 
-        // Fallback to geocode when autosuggest returns nothing (or failed)
+        // Fallback to geocode when searchahead returns nothing
         if (normalized.length === 0) {
-          const gRes = await fetch(`/api/here?endpoint=geocode&q=${encodeURIComponent(query)}`);
-          if (gRes.ok) {
-            const g = await gRes.json();
-            const gItems = Array.isArray(g.items) ? g.items : [];
-            normalized = gItems
-              .slice(0, 6)
-              .map((it: any) => ({
-                id: it.id,
-                title: it.title,
-                address: it.address,
-                position: it.position,
-                resultType: it.resultType || 'address',
-              }))
-              .filter((i: HereAutosuggestItem) => !!(i.position?.lat && i.position?.lng));
+          const gResult = await mqGeocode(query);
+          if (gResult?.lat && gResult?.lng) {
+            const label = [gResult.street, gResult.adminArea5, gResult.adminArea3].filter(Boolean).join(', ') || query;
+            normalized = [{
+              title: label,
+              address: { label },
+              position: { lat: gResult.lat, lng: gResult.lng },
+              resultType: 'address',
+            }];
           }
         }
 
@@ -1185,13 +1176,10 @@ export default function RouteWeatherAlerts({
   const geocodeOne = async (q: string): Promise<PlaceSelection | null> => {
     const query = q.trim();
     if (!query) return null;
-    const res = await fetch(`/api/here?endpoint=geocode&q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    const item = data?.items?.[0];
-    const pos = item?.position;
-    const label = item?.title || item?.address?.label || query;
-    if (!pos?.lat || !pos?.lng) return null;
-    return { label, lat: pos.lat, lng: pos.lng };
+    const result = await mqGeocode(query);
+    if (!result?.lat || !result?.lng) return null;
+    const label = [result.street, result.adminArea5, result.adminArea3].filter(Boolean).join(', ') || query;
+    return { label, lat: result.lat, lng: result.lng };
   };
 
   const runAll = async () => {
@@ -1365,20 +1353,17 @@ export default function RouteWeatherAlerts({
       setLoadingWeather(false);
 
       // Route polyline
-      const rRes = await fetch(`/api/here?endpoint=routes&transportMode=car&origin=${s.lat},${s.lng}&destination=${d.lat},${d.lng}`);
-      const rJson: HereRouteResponse = await rRes.json();
-      const poly = rJson?.routes?.[0]?.sections?.[0]?.polyline;
-      const lengthMeters = rJson?.routes?.[0]?.sections?.[0]?.summary?.length;
-      if (!poly) throw new Error('Could not calculate a route for those locations.');
-      const coords = decodeHerePolyline(poly);
-      setRoutePolyline(coords);
-      const miles = typeof lengthMeters === 'number' ? lengthMeters / 1609.34 : null;
-      setRouteMiles(miles);
+      const routeResult = await getDirections(`${s.lat},${s.lng}`, `${d.lat},${d.lng}`, 'fastest');
+      if (!routeResult?.shapePoints || routeResult.shapePoints.length < 2) {
+        throw new Error('Could not calculate a route for those locations.');
+      }
+      setRoutePolyline(routeResult.shapePoints);
+      setRouteMiles(routeResult.distance ?? null);
       setLoadingRoute(false);
 
       // Sample points & fetch conditions/alerts.
       // Tahoe → Reno is ~60mi; sample more densely for shorter routes.
-      const estMiles = miles ?? undefined;
+      const estMiles = routeResult.distance ?? undefined;
       const sampleEveryMiles =
         typeof estMiles === 'number'
           ? estMiles <= 80
@@ -1391,16 +1376,17 @@ export default function RouteWeatherAlerts({
       const samples: Array<{ lat: number; lng: number; milesAt: number }> = [{ lat: s.lat, lng: s.lng, milesAt: 0 }];
       let acc = 0;
       let nextTarget = sampleEveryMiles;
-      for (let i = 1; i < coords.length; i++) {
-        const seg = milesBetween(coords[i - 1], coords[i]);
+      const routeShape = routeResult.shapePoints!;
+      for (let i = 1; i < routeShape.length; i++) {
+        const seg = milesBetween(routeShape[i - 1], routeShape[i]);
         acc += seg;
         if (acc >= nextTarget) {
-          samples.push({ lat: coords[i].lat, lng: coords[i].lng, milesAt: Math.round(acc) });
+          samples.push({ lat: routeShape[i].lat, lng: routeShape[i].lng, milesAt: Math.round(acc) });
           nextTarget += sampleEveryMiles;
           if (samples.length >= 10) break;
         }
       }
-      samples.push({ lat: d.lat, lng: d.lng, milesAt: miles ? Math.round(miles) : Math.round(acc) });
+      samples.push({ lat: d.lat, lng: d.lng, milesAt: routeResult.distance ? Math.round(routeResult.distance) : Math.round(acc) });
 
       // Along-route "road condition" proxy from weather observations at varying distances.
       try {

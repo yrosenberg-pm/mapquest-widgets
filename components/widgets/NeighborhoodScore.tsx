@@ -8,7 +8,7 @@ import {
   Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft,
   HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase
 } from 'lucide-react';
-import { geocode, searchPlaces } from '@/lib/mapquest';
+import { geocode, searchPlaces, getDirections } from '@/lib/mapquest';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -367,17 +367,11 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     if (!location || !workLocation) return;
     setCommuteLoading(true);
     try {
-      const driveParams = new URLSearchParams({
-        endpoint: 'routes',
-        origin: `${location.lat},${location.lng}`,
-        destination: `${workLocation.lat},${workLocation.lng}`,
-        transportMode: 'car',
-      });
-      const driveRes = await fetch(`/api/here?${driveParams}`);
-      const driveData = await driveRes.json();
-      const driveRoute = driveData.routes?.[0]?.sections?.[0];
-      const driveSec = driveRoute?.summary?.duration || 0;
-      const driveDist = (driveRoute?.summary?.length || 0) / 1609.34;
+      const fromStr = `${location.lat},${location.lng}`;
+      const toStr = `${workLocation.lat},${workLocation.lng}`;
+      const driveResult = await getDirections(fromStr, toStr, 'fastest');
+      const driveSec = (driveResult?.time || 0) * 60; // getDirections returns minutes
+      const driveDist = driveResult?.distance || 0;
 
       let transitMin: number | null = null;
       try {

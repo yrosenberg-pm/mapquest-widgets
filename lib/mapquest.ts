@@ -393,6 +393,7 @@ interface DirectionsResult {
   hasHighway?: boolean;
   legs?: any[];
   steps?: any[];
+  shapePoints?: { lat: number; lng: number }[];
 }
 
 export async function getDirections(
@@ -433,6 +434,16 @@ export async function getDirections(
       return null;
     }
     
+    // Parse flat shapePoints array [lat, lng, lat, lng, ...] into coordinate objects
+    let shapePoints: { lat: number; lng: number }[] | undefined;
+    const rawShape = route.shape?.shapePoints;
+    if (Array.isArray(rawShape) && rawShape.length >= 2) {
+      shapePoints = [];
+      for (let i = 0; i < rawShape.length - 1; i += 2) {
+        shapePoints.push({ lat: rawShape[i], lng: rawShape[i + 1] });
+      }
+    }
+
     return {
       distance: route.distance,
       time: route.time / 60, // Convert seconds to minutes
@@ -441,6 +452,7 @@ export async function getDirections(
       hasHighway: route.hasHighway,
       legs: route.legs || [],
       steps: route.legs?.[0]?.maneuvers || [],
+      shapePoints,
     };
   } catch (err) {
     console.error('getDirections failed:', err);

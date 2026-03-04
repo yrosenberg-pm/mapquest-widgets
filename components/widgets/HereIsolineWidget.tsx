@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Clock, Car, Bike, PersonStanding, Loader2, MapPin, AlertCircle } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
+import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
@@ -154,11 +155,11 @@ export default function HereIsolineWidget({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        
+
         if (response.status === 429) {
           throw new Error('Too many requests. Please wait a moment and try again.');
         }
-        
+
         if (response.status === 500 && errorData.error?.includes('not configured')) {
           throw new Error('Isoline service is not configured. Please add the required server API key.');
         }
@@ -181,7 +182,8 @@ export default function HereIsolineWidget({
       let coordinates: { lat: number; lng: number }[] = [];
 
       if (polygonData.outer) {
-        coordinates = decodeFlexiblePolyline(polygonData.outer);
+        const decoded = decodeHereFlexiblePolyline(polygonData.outer);
+        coordinates = decoded.points.map(p => ({ lat: p.lat, lng: p.lng }));
       }
 
       if (coordinates.length === 0) {
@@ -205,88 +207,6 @@ export default function HereIsolineWidget({
     } finally {
       setLoading(false);
     }
-  };
-
-  const decodeFlexiblePolyline = (encoded: string): { lat: number; lng: number }[] => {
-    const coordinates: { lat: number; lng: number }[] = [];
-    
-    let index = 0;
-    const version = decodeUnsignedVarint(encoded, { index: 0 });
-    index = version.newIndex;
-    
-    const header = decodeUnsignedVarint(encoded, { index });
-    index = header.newIndex;
-    
-    const precision = header.value & 0x0F;
-    const thirdDimPrecision = (header.value >> 4) & 0x0F;
-    const thirdDimType = (header.value >> 8) & 0x07;
-    
-    const multiplier = Math.pow(10, precision);
-    
-    let lat = 0;
-    let lng = 0;
-    
-    while (index < encoded.length) {
-      const latResult = decodeSignedVarint(encoded, { index });
-      lat += latResult.value;
-      index = latResult.newIndex;
-      
-      if (index >= encoded.length) break;
-      
-      const lngResult = decodeSignedVarint(encoded, { index });
-      lng += lngResult.value;
-      index = lngResult.newIndex;
-      
-      if (thirdDimType !== 0 && index < encoded.length) {
-        const thirdResult = decodeSignedVarint(encoded, { index });
-        index = thirdResult.newIndex;
-      }
-      
-      coordinates.push({
-        lat: lat / multiplier,
-        lng: lng / multiplier,
-      });
-    }
-    
-    return coordinates;
-  };
-
-  const decodeUnsignedVarint = (encoded: string, pos: { index: number }): { value: number; newIndex: number } => {
-    const DECODING_TABLE: Record<string, number> = {};
-    const ENCODING_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-    for (let i = 0; i < ENCODING_CHARS.length; i++) {
-      DECODING_TABLE[ENCODING_CHARS[i]] = i;
-    }
-    
-    let result = 0;
-    let shift = 0;
-    let index = pos.index;
-    
-    while (index < encoded.length) {
-      const char = encoded[index];
-      const value = DECODING_TABLE[char];
-      if (value === undefined) {
-        throw new Error(`Invalid character: ${char}`);
-      }
-      
-      result |= (value & 0x1F) << shift;
-      
-      if ((value & 0x20) === 0) {
-        return { value: result, newIndex: index + 1 };
-      }
-      
-      shift += 5;
-      index++;
-    }
-    
-    throw new Error('Incomplete varint');
-  };
-
-  const decodeSignedVarint = (encoded: string, pos: { index: number }): { value: number; newIndex: number } => {
-    const unsigned = decodeUnsignedVarint(encoded, pos);
-    const value = unsigned.value;
-    const decoded = (value >> 1) ^ (-(value & 1));
-    return { value: decoded, newIndex: unsigned.newIndex };
   };
 
   const handleTimeChange = (value: string) => {

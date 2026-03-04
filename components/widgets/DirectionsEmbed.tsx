@@ -302,30 +302,21 @@ export default function DirectionsEmbed({
         }
       }
 
-      // Snap pedestrian segments to roads via HERE Routing API
+      // Snap pedestrian segments to roads via MapQuest Pedestrian Routing
       const snappedSegs = await Promise.all(
         segs.map(async (seg) => {
           if (seg.type !== 'pedestrian' || seg.coords.length < 2) return seg;
           const start = seg.coords[0];
           const end = seg.coords[seg.coords.length - 1];
           try {
-            const pedParams = new URLSearchParams({
-              endpoint: 'routes',
-              origin: `${start.lat},${start.lng}`,
-              destination: `${end.lat},${end.lng}`,
-              transportMode: 'pedestrian',
-            });
-            const pedRes = await fetch(`/api/here?${pedParams}`);
-            const pedData = await pedRes.json();
-            const sections = pedData?.routes?.[0]?.sections || [];
-            const { decodeHereFlexiblePolyline } = await import('@/lib/hereFlexiblePolyline');
-            const allPts: { lat: number; lng: number }[] = [];
-            for (const sec of sections) {
-              if (!sec.polyline) continue;
-              const decoded = decodeHereFlexiblePolyline(sec.polyline);
-              allPts.push(...decoded.points.map(p => ({ lat: p.lat, lng: p.lng })));
+            const pedResult = await getDirections(
+              `${start.lat},${start.lng}`,
+              `${end.lat},${end.lng}`,
+              'pedestrian',
+            );
+            if (pedResult?.shapePoints && pedResult.shapePoints.length >= 2) {
+              return { ...seg, coords: pedResult.shapePoints };
             }
-            if (allPts.length >= 2) return { ...seg, coords: allPts };
           } catch { /* keep original straight-line coords */ }
           return seg;
         })
@@ -411,34 +402,19 @@ export default function DirectionsEmbed({
       setRoute(routeInfo);
       onRouteCalculated?.(routeInfo);
 
-      // For pedestrian mode, fetch road-snapped shape from HERE Routing API
-      // (MapQuest pedestrian routing can produce straight lines over water).
-      // Combine ALL sections since the route may be split across multiple segments.
+      // For pedestrian mode, get road-snapped shape from MapQuest Pedestrian Routing
       if (routeType === 'pedestrian') {
         try {
-          const pedParams = new URLSearchParams({
-            endpoint: 'routes',
-            origin: `${fromLoc.lat},${fromLoc.lng}`,
-            destination: `${toLoc.lat},${toLoc.lng}`,
-            transportMode: 'pedestrian',
-            return: 'polyline',
-          });
-          const pedRes = await fetch(`/api/here?${pedParams}`);
-          const pedData = await pedRes.json();
-          const sections = pedData?.routes?.[0]?.sections || [];
-          const { decodeHereFlexiblePolyline } = await import('@/lib/hereFlexiblePolyline');
-          const allPts: { lat: number; lng: number }[] = [];
-          for (const sec of sections) {
-            if (!sec.polyline) continue;
-            const decoded = decodeHereFlexiblePolyline(sec.polyline);
-            const pts = decoded.points.map((p: any) => ({ lat: p.lat, lng: p.lng }));
-            if (pts.length > 0) allPts.push(...pts);
-          }
-          if (allPts.length >= 2) {
-            const dLat = Math.abs(allPts[0].lat - fromLoc.lat);
-            const dLng = Math.abs(allPts[0].lng - fromLoc.lng);
+          const pedResult = await getDirections(
+            `${fromLoc.lat},${fromLoc.lng}`,
+            `${toLoc.lat},${toLoc.lng}`,
+            'pedestrian',
+          );
+          if (pedResult?.shapePoints && pedResult.shapePoints.length >= 2) {
+            const dLat = Math.abs(pedResult.shapePoints[0].lat - fromLoc.lat);
+            const dLng = Math.abs(pedResult.shapePoints[0].lng - fromLoc.lng);
             if (dLat < 2 && dLng < 2) {
-              setPedestrianShape(allPts);
+              setPedestrianShape(pedResult.shapePoints);
             }
           }
         } catch { /* fall back to MapQuest rendering */ }
