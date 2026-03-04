@@ -994,7 +994,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
             <button
               type="button"
               onClick={() => setManeuversOpen((v) => !v)}
-              className="w-full flex items-center justify-between rounded-xl border px-4 py-3"
+              className="w-full flex items-center justify-between rounded-xl border px-4 py-3 hover:opacity-80"
               style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}
             >
               <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>Turn-by-turn directions</div>
@@ -1018,7 +1018,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                       <button
                         type="button"
                         onClick={() => setOpenLegs((p) => ({ ...p, [legIdx]: !isOpen }))}
-                        className="w-full flex items-center justify-between px-4 py-3"
+                        className="w-full flex items-center justify-between px-4 py-3 hover:opacity-80"
                       >
                         <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
                           Leg {markerLabel(legIdx, effective.markerStyle)} → {markerLabel(legIdx + 1, effective.markerStyle)}
@@ -1133,7 +1133,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
               <div className="p-2 flex items-center gap-2">
                 <button
                   type="button"
-                  className="rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm"
+                  className="rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm hover:opacity-80"
                   style={{ borderColor: 'var(--border-subtle)', background: 'transparent', color: 'var(--text-main)' }}
                   onClick={() => {
                     addWaypointAt(ctxMenu.lat, ctxMenu.lng);
@@ -1144,7 +1144,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg px-3 py-2 text-xs font-semibold"
+                  className="rounded-lg px-3 py-2 text-xs font-semibold hover:opacity-80"
                   style={{ color: 'var(--text-muted)' }}
                   onClick={() => setCtxMenu(null)}
                 >
@@ -1303,7 +1303,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                       role="switch"
                       aria-checked={builder.showWaypoints}
                       onClick={() => dispatch({ type: 'set', key: 'showWaypoints', value: !builder.showWaypoints })}
-                      className="relative inline-flex h-5 w-9 items-center rounded-full border transition-colors"
+                      className="relative inline-flex h-5 w-9 items-center rounded-full border transition-colors hover:opacity-80"
                       style={{
                         borderColor: 'var(--border-subtle)',
                         background: builder.showWaypoints ? accentColor : 'var(--bg-input)',
@@ -1519,7 +1519,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            className="p-2 rounded-lg border"
+                            className="p-2 rounded-lg border hover:opacity-80"
                             style={{ borderColor: 'var(--border-subtle)', background: 'transparent', color: 'var(--text-muted)' }}
                             onClick={() => dispatch({ type: 'removeWaypoint', idx })}
                             aria-label="Remove"
@@ -1578,7 +1578,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
                       });
                       setNewCoord('');
                     }}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold hover:brightness-110 transition-all"
                     style={{ background: 'var(--brand-primary)', color: 'white' }}
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />

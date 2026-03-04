@@ -1527,7 +1527,7 @@ export default function RouteWeatherAlerts({
               type="button"
               onClick={runAll}
               disabled={loadingWeather || loadingRoute || loadingAlerts || (!startText.trim() || !destText.trim())}
-              className="prism-btn prism-btn-primary flex-1 py-3 text-sm"
+              className="prism-btn prism-btn-primary flex-1 py-3 text-sm hover:brightness-110 transition-all"
               style={{
                 background: accentColor,
                 opacity: loadingWeather || loadingRoute || loadingAlerts || (!startText.trim() || !destText.trim()) ? 0.6 : 1,
@@ -1633,14 +1633,14 @@ export default function RouteWeatherAlerts({
                 summary={dest ? `Destination forecast · ${forecastMode === 'daily' ? 'Daily' : 'Hourly'}` : 'Enter a destination to see forecast.'}
                 defaultOpen={false}
                 rightHint={
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 cursor-pointer hover:opacity-80" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setForecastMode('daily');
                       }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-80"
                       style={{
                         background: forecastMode === 'daily' ? `${accentColor}15` : 'var(--bg-panel)',
                         border: `1px solid ${forecastMode === 'daily' ? `${accentColor}35` : 'var(--border-subtle)'}`,
@@ -1655,7 +1655,7 @@ export default function RouteWeatherAlerts({
                         e.stopPropagation();
                         setForecastMode('hourly');
                       }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold hover:opacity-80"
                       style={{
                         background: forecastMode === 'hourly' ? `${accentColor}15` : 'var(--bg-panel)',
                         border: `1px solid ${forecastMode === 'hourly' ? `${accentColor}35` : 'var(--border-subtle)'}`,
@@ -2015,7 +2015,7 @@ export default function RouteWeatherAlerts({
                           <button
                             key={q}
                             onClick={() => sendChatMessage(q)}
-                            className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                            className="text-[10px] px-2 py-1 rounded-full transition-colors hover:opacity-80"
                             style={{
                               background: accentColor + '15',
                               color: accentColor,
@@ -2085,7 +2085,7 @@ export default function RouteWeatherAlerts({
                   <button
                     onClick={() => sendChatMessage()}
                     disabled={!chatInput.trim() || chatLoading}
-                    className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                    className="p-2 rounded-lg transition-all disabled:opacity-30 hover:brightness-110"
                     style={{ background: accentColor, color: 'white' }}
                   >
                     <Send className="w-3.5 h-3.5" />

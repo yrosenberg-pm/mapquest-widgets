@@ -256,7 +256,7 @@ export default function ServiceAreaChecker({
             <button
               type="submit"
               disabled={loading || !address.trim()}
-              className="prism-btn prism-btn-primary w-full"
+              className="prism-btn prism-btn-primary w-full hover:brightness-110 transition-all"
               style={{ 
                 background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
                 boxShadow: `0 4px 12px ${accentColor}40`,
@@ -333,7 +333,7 @@ export default function ServiceAreaChecker({
             {/* Toggle for service area visibility */}
             <button
               onClick={() => setShowServiceArea(!showServiceArea)}
-              className="flex items-center gap-1.5 text-xs mt-1 transition-colors"
+              className="flex items-center gap-1.5 text-xs mt-1 transition-colors hover:opacity-80"
               style={{ 
                 color: showServiceArea ? accentColor : 'var(--text-muted)',
                 opacity: showServiceArea ? 1 : 0.7

@@ -645,7 +645,7 @@ export default function DirectionsEmbed({
                   <button
                     key={type.id}
                     onClick={() => setRouteType(type.id)}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg transition-all text-xs font-medium"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg transition-all text-xs font-medium hover:opacity-80"
                     style={{
                       background: isActive ? accentColor : 'transparent',
                       color: isActive ? 'white' : 'var(--text-muted)',
@@ -664,7 +664,7 @@ export default function DirectionsEmbed({
               <div className="relative flex-1">
                 <button
                   onClick={() => setShowDepartureOptions(!showDepartureOptions)}
-                  className="w-full flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs"
+                  className="w-full flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs hover:brightness-95 transition-all"
                   style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
                 >
                   <Clock className="w-3 h-3 flex-shrink-0" style={{ color: accentColor }} />
@@ -679,7 +679,7 @@ export default function DirectionsEmbed({
                   >
                     <button
                       onClick={() => { setDepartureTime('now'); setShowDepartureOptions(false); }}
-                      className="w-full px-3 py-2 text-left text-xs transition-colors"
+                      className="w-full px-3 py-2 text-left text-xs transition-colors hover:bg-[var(--bg-hover)]"
                       style={{ background: departureTime === 'now' ? `${accentColor}15` : 'transparent', color: departureTime === 'now' ? accentColor : 'var(--text-main)' }}
                     >
                       Leave now
@@ -688,7 +688,7 @@ export default function DirectionsEmbed({
                       <button
                         key={mins}
                         onClick={() => { setDepartureTime(new Date(Date.now() + mins * 60000)); setShowDepartureOptions(false); }}
-                        className="w-full px-3 py-2 text-left text-xs transition-colors"
+                        className="w-full px-3 py-2 text-left text-xs transition-colors hover:bg-[var(--bg-hover)]"
                         style={{ color: 'var(--text-main)' }}
                       >
                         {mins < 60 ? `In ${mins} min` : 'In 1 hour'}
@@ -710,7 +710,7 @@ export default function DirectionsEmbed({
               <button
                 onClick={calculateRoute}
                 disabled={loading || !from.trim() || !to.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0 disabled:opacity-50 hover:brightness-110 transition-all"
                 style={{ background: accentColor }}
               >
                 {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}

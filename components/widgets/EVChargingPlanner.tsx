@@ -1114,7 +1114,7 @@ export default function EVChargingPlanner({
                   key={t.id}
                   type="button"
                   onClick={() => setTab(t.id)}
-                  className="flex-1 px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-2"
+                  className="flex-1 px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-2 hover:opacity-80"
                   style={{
                     background: tab === t.id ? `${accentColor}18` : bgPanel,
                     border: `1px solid ${tab === t.id ? `${accentColor}45` : border}`,
@@ -1127,7 +1127,7 @@ export default function EVChargingPlanner({
               ))}
               <button
                 type="button"
-                className="px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-2"
+                className="px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center gap-2 hover:opacity-80"
                 onClick={() => setShowFilters(v => !v)}
                 style={{ background: bgPanel, border: `1px solid ${border}`, color: 'var(--text-secondary)' }}
                 title="Filters"
@@ -1152,7 +1152,7 @@ export default function EVChargingPlanner({
                       setOnlyAvailable(false);
                       setFilterConnectors({ CCS: true, CHAdeMO: false, J1772: true, NACS: true });
                     }}
-                    className="px-2 py-1 rounded-lg text-[11px] font-semibold"
+                    className="px-2 py-1 rounded-lg text-[11px] font-semibold hover:opacity-80"
                     style={{ background: bgPanel, border: `1px solid ${border}`, color: 'var(--text-secondary)' }}
                   >
                     Reset
@@ -1230,7 +1230,7 @@ export default function EVChargingPlanner({
                         key={c}
                         type="button"
                         onClick={() => setFilterConnectors(prev => ({ ...prev, [c]: !prev[c] }))}
-                        className="px-3 py-2 rounded-xl text-xs font-semibold"
+                        className="px-3 py-2 rounded-xl text-xs font-semibold hover:opacity-80"
                         style={{
                           background: filterConnectors[c] ? `${accentColor}18` : bgPanel,
                           border: `1px solid ${filterConnectors[c] ? `${accentColor}45` : border}`,
@@ -1244,7 +1244,7 @@ export default function EVChargingPlanner({
                     <button
                       type="button"
                       onClick={() => setOnlyAvailable(v => !v)}
-                      className="ml-auto px-3 py-2 rounded-xl text-xs font-semibold"
+                      className="ml-auto px-3 py-2 rounded-xl text-xs font-semibold hover:opacity-80"
                       style={{
                         background: onlyAvailable ? `${accentColor}18` : bgPanel,
                         border: `1px solid ${onlyAvailable ? `${accentColor}45` : border}`,
@@ -1299,7 +1299,7 @@ export default function EVChargingPlanner({
                       <button
                         type="button"
                         onClick={() => setChargeMode('soc')}
-                        className="px-2 py-1 rounded-lg text-[11px] font-semibold"
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold hover:opacity-80"
                         style={{
                           background: chargeMode === 'soc' ? `${accentColor}18` : 'transparent',
                           border: `1px solid ${chargeMode === 'soc' ? `${accentColor}45` : border}`,
@@ -1311,7 +1311,7 @@ export default function EVChargingPlanner({
                       <button
                         type="button"
                         onClick={() => setChargeMode('miles')}
-                        className="px-2 py-1 rounded-lg text-[11px] font-semibold"
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold hover:opacity-80"
                         style={{
                           background: chargeMode === 'miles' ? `${accentColor}18` : 'transparent',
                           border: `1px solid ${chargeMode === 'miles' ? `${accentColor}45` : border}`,
@@ -1398,7 +1398,7 @@ export default function EVChargingPlanner({
                       type="button"
                       onClick={() => getRoute({ autoPlan: true })}
                       disabled={!origin || !dest || checking || planning}
-                      className="prism-btn prism-btn-primary flex-1 py-3 text-sm inline-flex items-center justify-center gap-2"
+                      className="prism-btn prism-btn-primary flex-1 py-3 text-sm inline-flex items-center justify-center gap-2 hover:brightness-110 transition-all"
                       style={{ background: accentColor, opacity: !origin || !dest || checking || planning ? 0.6 : 1 }}
                       title="Build the route and automatically suggest charging stops"
                     >
@@ -1452,7 +1452,7 @@ export default function EVChargingPlanner({
                         role="switch"
                         aria-checked={autoPlanToReserve}
                         onClick={() => setAutoPlanToReserve((v) => !v)}
-                        className="relative inline-flex h-5 w-9 items-center rounded-full border transition-colors"
+                        className="relative inline-flex h-5 w-9 items-center rounded-full border transition-colors hover:opacity-80"
                         style={{
                           borderColor: 'var(--border-subtle)',
                           background: autoPlanToReserve ? accentColor : 'var(--bg-input)',
@@ -1543,7 +1543,7 @@ export default function EVChargingPlanner({
                                       if (next.summary) setPlanSummary(next.summary as any);
                                     }
                                   }}
-                                  className="px-2 py-1 rounded-lg text-[11px] font-semibold"
+                                  className="px-2 py-1 rounded-lg text-[11px] font-semibold hover:opacity-80"
                                   style={{ background: bgPanel, border: `1px solid ${border}`, color: 'var(--text-secondary)' }}
                                 >
                                   Skip
@@ -1554,7 +1554,7 @@ export default function EVChargingPlanner({
                                     setReplacingStopIdx(typeof p.planStopIndex === 'number' ? p.planStopIndex : 0);
                                     setTab('map');
                                   }}
-                                  className="px-2 py-1 rounded-lg text-[11px] font-semibold"
+                                  className="px-2 py-1 rounded-lg text-[11px] font-semibold hover:brightness-110 transition-all"
                                   style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}35`, color: accentColor }}
                                 >
                                   Replace
@@ -1588,7 +1588,7 @@ export default function EVChargingPlanner({
                     <button
                       type="button"
                       onClick={() => setBrowseAllChargers(v => !v)}
-                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold"
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold hover:opacity-80"
                       style={{ background: bgPanel, border: `1px solid ${border}`, color: 'var(--text-secondary)' }}
                     >
                       {browseAllChargers ? 'Show planned stops' : 'Browse all chargers'}
@@ -1604,7 +1604,7 @@ export default function EVChargingPlanner({
                       <button
                         type="button"
                         onClick={() => setReplacingStopIdx(null)}
-                        className="px-2 py-1 rounded-lg text-[11px] font-semibold"
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold hover:opacity-80"
                         style={{ background: bgPanel, border: `1px solid ${border}`, color: 'var(--text-secondary)' }}
                       >
                         Cancel
@@ -1624,7 +1624,7 @@ export default function EVChargingPlanner({
                             planTrip().catch(() => {});
                             setTab('trip');
                           }}
-                          className="w-full px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-2"
+                          className="w-full px-3 py-2 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-2 hover:brightness-110 transition-all"
                           style={{ background: accentColor, color: 'white' }}
                         >
                           <PlugZap className="w-4 h-4" />
@@ -1667,7 +1667,7 @@ export default function EVChargingPlanner({
                                 onClick={() => {
                                   if (s?.id) setSelectedStationId(s.id);
                                 }}
-                                className="w-full text-left rounded-2xl p-3 transition-colors"
+                                className="w-full text-left rounded-2xl p-3 transition-colors hover:bg-[var(--bg-hover)]"
                                 style={{
                                   background: selected ? `${accentColor}12` : bgPanel,
                                   border: `1px solid ${selected ? `${accentColor}35` : border}`,
@@ -1708,7 +1708,7 @@ export default function EVChargingPlanner({
                             key={s.id}
                             type="button"
                             onClick={() => setSelectedStationId(s.id)}
-                            className="w-full text-left rounded-2xl p-3 transition-colors"
+                            className="w-full text-left rounded-2xl p-3 transition-colors hover:bg-[var(--bg-hover)]"
                             style={{
                               background: selected ? `${accentColor}12` : bgPanel,
                               border: `1px solid ${selected ? `${accentColor}35` : border}`,
@@ -1754,7 +1754,7 @@ export default function EVChargingPlanner({
                                     planTrip().catch(() => {});
                                     setTab('trip');
                                   }}
-                                  className="px-2 py-1 rounded-lg text-[11px] font-semibold"
+                                  className="px-2 py-1 rounded-lg text-[11px] font-semibold hover:opacity-80"
                                   style={{ background: bgPanel, border: `1px solid ${border}`, color: 'var(--text-secondary)' }}
                                   title="Add this station as the next charging stop and recompute the plan"
                                 >
@@ -1800,7 +1800,7 @@ export default function EVChargingPlanner({
                   <div className="text-sm font-semibold truncate" style={{ color: textMain }}>{selectedStation.name}</div>
                   <div className="text-xs mt-0.5 truncate" style={{ color: textMuted }}>{selectedStation.network} • {selectedStation.connectors.join('/')}</div>
                 </div>
-                <button type="button" onClick={() => setSelectedStationId(null)} className="p-2 rounded-xl" style={{ background: bgPanel, border: `1px solid ${border}`, color: 'var(--text-secondary)' }}>
+                <button type="button" onClick={() => setSelectedStationId(null)} className="p-2 rounded-xl hover:opacity-80" style={{ background: bgPanel, border: `1px solid ${border}`, color: 'var(--text-secondary)' }}>
                   <XCircle className="w-4 h-4" />
                 </button>
               </div>

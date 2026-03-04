@@ -866,7 +866,7 @@ export default function MultiStopPlanner({
             >
               <button
                 onClick={() => setSidebarView('stops')}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all"
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all hover:opacity-80"
                 style={{ 
                   background: sidebarView === 'stops' ? 'var(--bg-widget)' : 'transparent',
                   color: sidebarView === 'stops' ? accentColor : 'var(--text-muted)',
@@ -879,7 +879,7 @@ export default function MultiStopPlanner({
               <button
                 onClick={() => setSidebarView('segments')}
                 disabled={!routeResult}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all hover:opacity-80 disabled:opacity-40"
                 style={{ 
                   background: sidebarView === 'segments' ? 'var(--bg-widget)' : 'transparent',
                   color: sidebarView === 'segments' ? accentColor : 'var(--text-muted)',
@@ -895,7 +895,7 @@ export default function MultiStopPlanner({
                   setHighlightedSegment(null);
                 }}
                 disabled={!routeResult}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all disabled:opacity-40"
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all hover:opacity-80 disabled:opacity-40"
                 style={{ 
                   background: sidebarView === 'route' ? 'var(--bg-widget)' : 'transparent',
                   color: sidebarView === 'route' ? accentColor : 'var(--text-muted)',
@@ -1057,7 +1057,7 @@ export default function MultiStopPlanner({
                                   setOpenWindowStopId((prev) => (prev === stop.id ? null : stop.id));
                                 }
                               }}
-                              className="text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors"
+                              className="text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors hover:opacity-80"
                               style={{
                                 background: stop.windowEnabled ? `${accentColor}15` : 'var(--bg-panel)',
                                 border: `1px solid ${stop.windowEnabled ? `${accentColor}35` : 'var(--border-subtle)'}`,
@@ -1093,7 +1093,7 @@ export default function MultiStopPlanner({
                                       updateStopDetails(stop.id, { windowEnabled: false, windowStart: '', windowEnd: '' });
                                       setOpenWindowStopId(null);
                                     }}
-                                    className="text-[10px] font-semibold px-2 py-1 rounded-lg"
+                                    className="text-[10px] font-semibold px-2 py-1 rounded-lg hover:opacity-80"
                                     style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}
                                   >
                                     Remove
@@ -1101,7 +1101,7 @@ export default function MultiStopPlanner({
                                   <button
                                     type="button"
                                     onClick={() => setOpenWindowStopId(null)}
-                                    className="text-[10px] font-semibold px-2 py-1 rounded-lg"
+                                    className="text-[10px] font-semibold px-2 py-1 rounded-lg hover:brightness-110 transition-all"
                                     style={{ background: `${accentColor}12`, border: `1px solid ${accentColor}25`, color: accentColor }}
                                   >
                                     Done
@@ -1191,7 +1191,7 @@ export default function MultiStopPlanner({
                         return (
                           <div 
                             key={index}
-                            className="rounded-xl overflow-hidden transition-all duration-200 cursor-pointer"
+                            className="rounded-xl overflow-hidden transition-all duration-200 cursor-pointer hover:opacity-80"
                             style={{ 
                               background: isHighlighted 
                                 ? `linear-gradient(135deg, ${accentColor}15 0%, ${accentColor}08 100%)`
@@ -1321,7 +1321,7 @@ export default function MultiStopPlanner({
                                       ...prev, 
                                       [index]: { ...settings, routeType: 'fastest' } 
                                     }))}
-                                    className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all"
+                                    className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all hover:opacity-80"
                                     style={{
                                       background: settings.routeType === 'fastest' ? `${accentColor}15` : 'var(--bg-panel)',
                                       border: `1px solid ${settings.routeType === 'fastest' ? accentColor : 'var(--border-subtle)'}`,
@@ -1335,7 +1335,7 @@ export default function MultiStopPlanner({
                                       ...prev, 
                                       [index]: { ...settings, routeType: 'shortest' } 
                                     }))}
-                                    className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all"
+                                    className="flex-1 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all hover:opacity-80"
                                     style={{
                                       background: settings.routeType === 'shortest' ? `${accentColor}15` : 'var(--bg-panel)',
                                       border: `1px solid ${settings.routeType === 'shortest' ? accentColor : 'var(--border-subtle)'}`,
@@ -1353,7 +1353,7 @@ export default function MultiStopPlanner({
                                       ...prev, 
                                       [index]: { ...settings, avoidHighways: !settings.avoidHighways } 
                                     }))}
-                                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all"
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all hover:opacity-80"
                                     style={{
                                       background: settings.avoidHighways ? '#ef444415' : 'var(--bg-panel)',
                                       border: `1px solid ${settings.avoidHighways ? '#ef4444' : 'var(--border-subtle)'}`,
@@ -1368,7 +1368,7 @@ export default function MultiStopPlanner({
                                       ...prev, 
                                       [index]: { ...settings, avoidTolls: !settings.avoidTolls } 
                                     }))}
-                                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all"
+                                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all hover:opacity-80"
                                     style={{
                                       background: settings.avoidTolls ? '#f59e0b15' : 'var(--bg-panel)',
                                       border: `1px solid ${settings.avoidTolls ? '#f59e0b' : 'var(--border-subtle)'}`,
@@ -1564,7 +1564,7 @@ export default function MultiStopPlanner({
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={downloadRouteSheet}
-                        className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all"
+                        className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
                         style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
                       >
                         <Download className="w-4 h-4" />
@@ -1572,7 +1572,7 @@ export default function MultiStopPlanner({
                       </button>
                       <button
                         onClick={generateShareUrl}
-                        className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all"
+                        className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-medium transition-all hover:opacity-80"
                         style={{ 
                           background: copySuccess ? '#22c55e15' : 'var(--bg-input)', 
                           border: `1px solid ${copySuccess ? '#22c55e' : 'var(--border-subtle)'}`, 
@@ -1624,7 +1624,7 @@ export default function MultiStopPlanner({
                     <button
                       type="button"
                       onClick={() => setShowDeparturePicker(v => !v)}
-                      className="w-full px-3 py-2 rounded-xl text-sm font-medium outline-none transition-all flex items-center justify-between gap-2"
+                      className="w-full px-3 py-2 rounded-xl text-sm font-medium outline-none transition-all hover:opacity-80 flex items-center justify-between gap-2"
                       style={{
                         background: 'var(--bg-input)',
                         border: `1px solid ${showDeparturePicker ? `${accentColor}80` : 'var(--border-subtle)'}`,
@@ -1658,7 +1658,7 @@ export default function MultiStopPlanner({
                           <button
                             type="button"
                             onClick={() => setShowDeparturePicker(false)}
-                            className="text-xs font-medium px-2 py-1 rounded-lg"
+                            className="text-xs font-medium px-2 py-1 rounded-lg hover:opacity-80"
                             style={{
                               background: 'var(--bg-panel)',
                               color: 'var(--text-muted)',
@@ -1708,7 +1708,7 @@ export default function MultiStopPlanner({
                           <button
                             type="button"
                             onClick={() => { setDepartureTime(new Date()); setShowDeparturePicker(false); }}
-                            className="px-2 py-2 rounded-xl text-[11px] font-semibold transition-all"
+                            className="px-2 py-2 rounded-xl text-[11px] font-semibold transition-all hover:opacity-80"
                             style={{
                               background: 'var(--bg-panel)',
                               border: '1px solid var(--border-subtle)',
@@ -1725,7 +1725,7 @@ export default function MultiStopPlanner({
                                 setDepartureTime(new Date(Date.now() + mins * 60 * 1000));
                                 setShowDeparturePicker(false);
                               }}
-                              className="px-2 py-2 rounded-xl text-[11px] font-semibold transition-all"
+                              className="px-2 py-2 rounded-xl text-[11px] font-semibold transition-all hover:brightness-110"
                               style={{
                                 background: `${accentColor}12`,
                                 border: `1px solid ${accentColor}25`,
@@ -1747,7 +1747,7 @@ export default function MultiStopPlanner({
               <button
                 onClick={calculateRoute}
                 disabled={loading || optimizing || stops.filter(s => s.address.trim()).length < 2}
-                className="prism-btn prism-btn-primary flex-1 py-3 text-sm"
+                className="prism-btn prism-btn-primary flex-1 py-3 text-sm hover:brightness-110 transition-all"
                 style={{ background: accentColor }}
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
@@ -1760,7 +1760,7 @@ export default function MultiStopPlanner({
                 <button
                   onClick={handleOptimizeRoute}
                   disabled={optimizing || loading}
-                  className="px-4 py-3 rounded-xl text-sm font-medium transition-colors flex items-center gap-2"
+                  className="px-4 py-3 rounded-xl text-sm font-medium transition-colors hover:brightness-110 flex items-center gap-2"
                   style={{ 
                     background: optimizing ? accentColor : `${accentColor}15`, 
                     color: optimizing ? 'white' : accentColor 
@@ -1773,7 +1773,7 @@ export default function MultiStopPlanner({
               )}
               
               {routeResult && (
-                <button onClick={resetRoute} className="px-4 py-3 rounded-xl transition-colors" style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
+                <button onClick={resetRoute} className="px-4 py-3 rounded-xl transition-colors hover:opacity-80" style={{ border: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
                   <RotateCcw className="w-4 h-4" />
                 </button>
               )}

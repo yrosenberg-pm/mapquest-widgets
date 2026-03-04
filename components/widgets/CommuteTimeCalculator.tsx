@@ -314,7 +314,7 @@ export default function CommuteTimeCalculator({
                         <button
                           key={label}
                           onClick={() => setBaseLabel(label)}
-                          className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
                           style={{
                             background: baseLabel === label ? accentColor : 'var(--bg-input)',
                             color: baseLabel === label ? 'white' : 'var(--text-secondary)',
@@ -367,7 +367,7 @@ export default function CommuteTimeCalculator({
                   <button
                     onClick={setBaseLocationAddress}
                     disabled={loading || !baseLocation.trim()}
-                    className="prism-btn prism-btn-primary w-full"
+                    className="prism-btn prism-btn-primary w-full hover:brightness-110 transition-all"
                     style={{ 
                       background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
                       boxShadow: `0 4px 12px ${accentColor}40`,
@@ -457,7 +457,7 @@ export default function CommuteTimeCalculator({
                   </div>
                   <button
                     onClick={() => { setBaseLocationSet(false); setResult(null); setDestCoords(null); setBaseResult(null); }}
-                    className="text-xs font-medium"
+                    className="text-xs font-medium hover:opacity-80"
                     style={{ color: accentColor }}
                   >
                     Change
@@ -523,7 +523,7 @@ export default function CommuteTimeCalculator({
                       <button
                         key={mode.id}
                         onClick={() => setTravelMode(mode.id)}
-                        className="flex-1 flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-all"
+                        className="flex-1 flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-all hover:opacity-80"
                         style={{
                           background: isActive ? accentColor : 'var(--bg-panel)',
                           color: isActive ? 'white' : 'var(--text-muted)',
@@ -550,7 +550,7 @@ export default function CommuteTimeCalculator({
                     </label>
                     <button
                       onClick={() => setUseCustomTime(!useCustomTime)}
-                      className="text-xs font-medium"
+                      className="text-xs font-medium hover:opacity-80"
                       style={{ color: accentColor }}
                     >
                       {useCustomTime ? 'Use presets' : 'Pick time'}
@@ -590,7 +590,7 @@ export default function CommuteTimeCalculator({
                           <button
                             key={time.id}
                             onClick={() => setSelectedTime(time.id)}
-                            className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all"
+                            className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-all hover:opacity-80"
                             style={{
                               background: isActive ? `${accentColor}10` : 'transparent',
                               border: isActive ? `2px solid ${accentColor}` : '1px solid var(--border-subtle)',
@@ -628,7 +628,7 @@ export default function CommuteTimeCalculator({
                   <button
                     onClick={calculateCommute}
                     disabled={loading || !destination.trim()}
-                    className="prism-btn prism-btn-primary w-full"
+                    className="prism-btn prism-btn-primary w-full hover:brightness-110 transition-all"
                     style={{ 
                       background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
                       boxShadow: `0 4px 12px ${accentColor}40`,

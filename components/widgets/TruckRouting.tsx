@@ -1097,7 +1097,7 @@ export default function TruckRouting({
                             aria-checked={showTruckPois}
                             onClick={() => setShowTruckPois((v) => !v)}
                             disabled={!routePolyline || routePolyline.length < 2}
-                            className="relative inline-flex h-6 w-11 items-center rounded-full border transition-colors"
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${routePolyline && routePolyline.length >= 2 ? 'hover:opacity-80' : ''}`}
                             style={{
                               borderColor: 'var(--border-subtle)',
                               background: showTruckPois ? 'var(--brand-primary)' : 'var(--bg-input)',
@@ -1178,7 +1178,7 @@ export default function TruckRouting({
                         calculateRoute({ from: DEMO_FROM, to: DEMO_TO, applyInputs: true });
                       }}
                       disabled={loading}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!loading ? 'hover:brightness-110' : ''}`}
                       style={{
                         background: loading ? 'var(--bg-panel)' : `${accentColor}15`,
                         border: `1px solid ${loading ? 'var(--border-subtle)' : `${accentColor}35`}`,
@@ -1197,7 +1197,7 @@ export default function TruckRouting({
                         calculateRoute({ from: DEMO_DONNER_FROM, to: DEMO_DONNER_TO, applyInputs: true });
                       }}
                       disabled={loading}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!loading ? 'hover:brightness-110' : ''}`}
                       style={{
                         background: loading ? 'var(--bg-panel)' : `${accentColor}15`,
                         border: `1px solid ${loading ? 'var(--border-subtle)' : `${accentColor}35`}`,
@@ -1301,7 +1301,7 @@ export default function TruckRouting({
               <div className="mt-2 relative">
               <button
                 onClick={() => setShowDepartureOptions(!showDepartureOptions)}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all"
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all hover:opacity-80"
                 style={{
                   background: 'var(--bg-panel)',
                   border: '1px solid var(--border-subtle)',
@@ -1330,7 +1330,7 @@ export default function TruckRouting({
                 >
                   <button
                     onClick={() => { setDepartureTime('now'); setShowDepartureOptions(false); }}
-                    className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                    className="w-full px-3 py-2.5 text-left text-sm transition-colors hover:opacity-80"
                     style={{ 
                       background: departureTime === 'now' ? `${accentColor}15` : 'transparent',
                       color: departureTime === 'now' ? accentColor : 'var(--text-main)',
@@ -1345,7 +1345,7 @@ export default function TruckRouting({
                       <button
                         key={mins}
                         onClick={() => { setDepartureTime(time); setShowDepartureOptions(false); }}
-                        className="w-full px-3 py-2.5 text-left text-sm transition-colors"
+                        className="w-full px-3 py-2.5 text-left text-sm transition-colors hover:opacity-80"
                         style={{ color: 'var(--text-main)' }}
                       >
                         {label}
@@ -1565,7 +1565,7 @@ export default function TruckRouting({
               <button
                 onClick={() => calculateRoute()}
                 disabled={loading || !from.trim() || !to.trim()}
-                className="prism-btn prism-btn-primary w-full"
+                className={`prism-btn prism-btn-primary w-full ${!(loading || !from.trim() || !to.trim()) ? 'hover:brightness-110 transition-all' : ''}`}
                 style={{ 
                   background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
                   boxShadow: `0 8px 20px ${accentColor}40`,

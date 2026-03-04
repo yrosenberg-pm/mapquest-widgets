@@ -244,7 +244,7 @@ function AddressLine1Autocomplete({
                 e.preventDefault();
                 handleSelect(s);
               }}
-              className={`w-full px-4 py-3 text-left text-sm flex items-start gap-3 transition-colors ${idx === highlightedIndex ? 'bg-black/5' : ''}`}
+              className={`w-full px-4 py-3 text-left text-sm flex items-start gap-3 transition-colors hover:bg-[var(--bg-hover)] ${idx === highlightedIndex ? 'bg-black/5' : ''}`}
               style={{ color: 'var(--text-main)' }}
             >
               <span className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--bg-panel)' }}>
@@ -507,7 +507,7 @@ export default function CheckoutFlowWidget({
                     <div className="flex items-center gap-2 mt-3">
                       <button
                         type="button"
-                        className="prism-btn prism-btn-primary px-3 py-2 text-sm"
+                        className="prism-btn prism-btn-primary px-3 py-2 text-sm hover:brightness-110 transition-all"
                         style={{ background: accentColor }}
                         onClick={() => {
                           setFields((p) => ({ ...p, ...validation.suggested! }));
@@ -518,7 +518,7 @@ export default function CheckoutFlowWidget({
                       </button>
                       <button
                         type="button"
-                        className="px-3 py-2 rounded-xl text-sm font-semibold"
+                        className="px-3 py-2 rounded-xl text-sm font-semibold hover:opacity-80"
                         style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)' }}
                         onClick={() => setValidation((v) => ({ state: 'verified', original: v.original, coords: v.coords }))}
                       >
@@ -600,7 +600,7 @@ export default function CheckoutFlowWidget({
                   setPlacing(false);
                 }
               }}
-              className="prism-btn prism-btn-primary w-full py-3 text-sm"
+              className="prism-btn prism-btn-primary w-full py-3 text-sm hover:brightness-110 transition-all"
               style={{
                 background: accentColor,
                 opacity: btnDisabled ? 0.6 : 1,

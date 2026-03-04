@@ -826,7 +826,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                           <button
                             key={q}
                             onClick={() => sendChatMessage(q)}
-                            className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                            className="text-[10px] px-2 py-1 rounded-full transition-colors hover:opacity-80"
                             style={{
                               background: accentColor + '15',
                               color: accentColor,
@@ -895,7 +895,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                   <button
                     onClick={() => sendChatMessage()}
                     disabled={!chatInput.trim() || chatLoading}
-                    className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                    className="p-2 rounded-lg transition-colors disabled:opacity-30 hover:brightness-110 transition-all"
                     style={{ background: accentColor, color: 'white' }}
                   >
                     <Send className="w-3.5 h-3.5" />
@@ -967,7 +967,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
             <button
               onClick={calculateScores}
               disabled={loading || (!address && !location)}
-              className="prism-btn prism-btn-primary w-full mt-2"
+              className="prism-btn prism-btn-primary w-full mt-2 hover:brightness-110 transition-all"
               style={{ 
                 background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
                 boxShadow: `0 4px 12px ${accentColor}40`,
@@ -1029,7 +1029,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     {/* Walkability card */}
                     <button
                       onClick={() => setShowWalkability(v => !v)}
-                      className="flex flex-col items-start gap-1.5 p-2.5 rounded-xl transition-all text-left"
+                      className="flex flex-col items-start gap-1.5 p-2.5 rounded-xl transition-all text-left hover:opacity-80"
                       style={{
                         background: showWalkability ? `${accentColor}12` : 'var(--bg-panel)',
                         border: `1.5px solid ${showWalkability ? accentColor : 'var(--border-subtle)'}`,
@@ -1100,7 +1100,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                           )}
                           <button
                             onClick={() => { setCommuteData(null); setWorkAddress(''); setWorkLocation(null); }}
-                            className="text-[9px] mt-0.5 self-start transition-colors"
+                            className="text-[9px] mt-0.5 self-start transition-colors hover:opacity-80"
                             style={{ color: 'var(--text-muted)' }}
                           >
                             Change address
@@ -1131,7 +1131,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                           <button
                             onClick={calculateCommute}
                             disabled={commuteLoading || !workLocation}
-                            className="p-1 rounded-md disabled:opacity-30 transition-colors flex-shrink-0"
+                            className="p-1 rounded-md disabled:opacity-30 transition-colors flex-shrink-0 hover:brightness-110 transition-all"
                             style={{ background: accentColor, color: 'white' }}
                           >
                             {commuteLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronRight className="w-3 h-3" />}
@@ -1152,7 +1152,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     setSelectedCategory(null);
                     setSelectedPlace(null);
                   }}
-                  className="flex items-center gap-1 text-sm mb-3 transition-colors"
+                  className="flex items-center gap-1 text-sm mb-3 transition-colors hover:opacity-80"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   <ChevronLeft className="w-4 h-4" /> Back
@@ -1212,7 +1212,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                                 setMapFitBounds(undefined);
                               }
                             }}
-                            className="w-full flex items-center justify-between p-2 rounded-lg transition-colors"
+                            className="w-full flex items-center justify-between p-2 rounded-lg transition-colors hover:opacity-80"
                             style={{
                               background: isSelected ? accentColor : 'var(--bg-panel)',
                               color: isSelected ? 'white' : 'var(--text-main)',
@@ -1236,7 +1236,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                           }
                           setExpandedCategories(newExpanded);
                         }}
-                        className="w-full mt-2 flex items-center justify-center gap-1 text-xs transition-colors"
+                        className="w-full mt-2 flex items-center justify-center gap-1 text-xs transition-colors hover:opacity-80"
                         style={{ color: 'var(--text-muted)' }}
                       >
                         {expandedCategories.has(selectedCategory.category.id) ? (
@@ -1298,7 +1298,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                               }
                             }}
                             disabled={!catScore}
-                            className="prism-list-item w-full flex items-center justify-between p-2 rounded-lg transition-colors disabled:opacity-50"
+                            className="prism-list-item w-full flex items-center justify-between p-2 rounded-lg transition-colors disabled:opacity-50 hover:opacity-80 disabled:hover:opacity-50"
                             style={{ border: 'none' }}
                           >
                             <div className="flex items-center gap-3 flex-1 min-w-0">

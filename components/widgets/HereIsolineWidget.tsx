@@ -323,7 +323,7 @@ export default function HereIsolineWidget({
                     <button
                       key={mode.id}
                       onClick={() => setTransportMode(mode.id)}
-                      className="flex-1 flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors"
+                      className="flex-1 flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors hover:opacity-80"
                       style={{
                         background: isActive ? accentColor : 'var(--bg-panel)',
                         color: isActive ? 'white' : 'var(--text-muted)',
@@ -354,7 +354,7 @@ export default function HereIsolineWidget({
                     <button
                       key={preset}
                       onClick={() => handlePresetClick(preset)}
-                      className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
+                      className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors hover:opacity-80"
                       style={{
                         background: isActive ? accentColor : 'var(--bg-panel)',
                         color: isActive ? 'white' : 'var(--text-muted)',
@@ -398,7 +398,7 @@ export default function HereIsolineWidget({
             <button
               onClick={calculateIsoline}
               disabled={loading || (!address && !location)}
-              className="prism-btn prism-btn-primary w-full"
+              className="prism-btn prism-btn-primary w-full hover:brightness-110 transition-all"
               style={{ 
                 background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
                 boxShadow: `0 4px 12px ${accentColor}40`,

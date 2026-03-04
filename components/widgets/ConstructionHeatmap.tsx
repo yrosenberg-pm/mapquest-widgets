@@ -461,7 +461,7 @@ export default function ConstructionHeatmap({
             <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
               <button
                 onClick={() => setFiltersOpen(v => !v)}
-                className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left cursor-pointer hover:opacity-80"
                 style={{ background: 'var(--bg-widget)' }}
               >
                 <Filter className="w-3.5 h-3.5" style={{ color: textMuted }} />
@@ -516,7 +516,7 @@ export default function ConstructionHeatmap({
                       {selectedTags.size > 0 && (
                         <button
                           onClick={() => setSelectedTags(new Set())}
-                          className="ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                          className="ml-auto text-[9px] font-semibold px-1.5 py-0.5 rounded-full hover:opacity-80"
                           style={{ color: accentColor, background: `${accentColor}12` }}
                         >
                           Clear
@@ -530,7 +530,7 @@ export default function ConstructionHeatmap({
                           <button
                             key={tag.id}
                             onClick={() => toggleTag(tag.id)}
-                            className="text-[9px] font-semibold px-2 py-0.5 rounded-full transition-colors"
+                            className="text-[9px] font-semibold px-2 py-0.5 rounded-full transition-colors hover:opacity-80"
                             style={{
                               background: active ? `${tag.color}20` : 'var(--bg-input)',
                               color: active ? tag.color : textMuted,
@@ -557,7 +557,7 @@ export default function ConstructionHeatmap({
                           <button
                             key={pt}
                             onClick={() => setPropertyType(pt)}
-                            className="px-2 py-1.5 rounded-lg text-[10px] font-semibold transition-colors capitalize"
+                            className="px-2 py-1.5 rounded-lg text-[10px] font-semibold transition-colors capitalize hover:opacity-80"
                             style={{
                               background: active ? `${accentColor}18` : bgPanel,
                               border: `1px solid ${active ? `${accentColor}45` : border}`,
@@ -575,7 +575,7 @@ export default function ConstructionHeatmap({
                   {coords && !loading && (
                     <button
                       onClick={() => handleSearch(coords.lat, coords.lng)}
-                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-white transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:brightness-110"
                       style={{ background: accentColor }}
                     >
                       <Search className="w-3.5 h-3.5" />
@@ -608,7 +608,7 @@ export default function ConstructionHeatmap({
                 <div className="px-4 py-3" style={{ background: `linear-gradient(135deg, ${accentColor}12, ${accentColor}04)` }}>
                   <button
                     onClick={() => setSelectedZip(null)}
-                    className="flex items-center gap-1 text-[10px] font-semibold mb-2"
+                    className="flex items-center gap-1 text-[10px] font-semibold mb-2 cursor-pointer hover:opacity-80"
                     style={{ color: textMuted }}
                   >
                     <ChevronRight className="w-3 h-3 rotate-180" /> Back to summary
@@ -714,7 +714,7 @@ export default function ConstructionHeatmap({
                         <button
                           key={b.zipCode}
                           onClick={() => setSelectedZip(b)}
-                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors text-left"
+                          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors text-left hover:bg-[var(--bg-hover)]"
                           style={{ background: 'var(--bg-input)' }}
                         >
                           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: gridColorForCount(b.permits.length).fill }} />

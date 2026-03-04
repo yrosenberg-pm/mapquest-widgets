@@ -737,7 +737,7 @@ export default function IsolineOverlapWidget({
                 type="button"
                 onClick={addLocation}
                 disabled={locations.length >= 5}
-                className="prism-btn prism-btn-secondary w-full justify-center"
+                className={`prism-btn prism-btn-secondary w-full justify-center ${locations.length < 5 ? 'hover:opacity-80' : ''}`}
                 style={{ height: 38 }}
                 title={locations.length >= 5 ? 'Max 5 locations' : 'Add a location'}
               >

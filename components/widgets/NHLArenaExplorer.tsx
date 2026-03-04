@@ -785,7 +785,7 @@ export default function NHLArenaExplorer({
                   <button 
                     key={t.id} 
                     onClick={() => setActiveTab(t.id)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all hover:opacity-80"
                     style={{
                       background: activeTab === t.id ? accentColor : 'transparent',
                       color: activeTab === t.id ? 'white' : 'var(--text-muted)',
@@ -882,7 +882,7 @@ export default function NHLArenaExplorer({
                           <button 
                             key={tab} 
                             onClick={() => setActiveTab(tab)} 
-                            className="p-2.5 rounded-xl transition-colors"
+                            className="p-2.5 rounded-xl transition-colors hover:opacity-80"
                             style={{ 
                               background: 'var(--bg-panel)',
                               border: '1px solid var(--border-subtle)',
@@ -949,7 +949,7 @@ export default function NHLArenaExplorer({
                             <button
                               key={id}
                               onClick={() => setRouteType(id)}
-                              className="p-2.5 rounded-xl transition-all"
+                              className="p-2.5 rounded-xl transition-all hover:opacity-80"
                               style={{
                                 background: isSelected ? `${accentColor}33` : 'var(--bg-hover)',
                                 border: isSelected ? `1px solid ${accentColor}80` : '1px solid var(--border-subtle)',
@@ -1110,7 +1110,7 @@ export default function NHLArenaExplorer({
                         
                         <button 
                           onClick={openDirectionsInMapQuest}
-                          className="w-full py-2 rounded-lg text-white text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                          className="w-full py-2 rounded-lg text-white text-sm font-medium flex items-center justify-center gap-2 transition-all hover:brightness-110"
                           style={{ background: 'var(--color-success)' }}
                         >
                           <ExternalLink className="w-4 h-4" /> Open in MapQuest

@@ -622,7 +622,7 @@ export default function PublicTransitDepartures({
                           <button
                             key={q}
                             onClick={() => sendChatMessage(q)}
-                            className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                            className="text-[10px] px-2 py-1 rounded-full transition-colors hover:opacity-80"
                             style={{
                               background: accentColor + '15',
                               color: accentColor,
@@ -691,7 +691,7 @@ export default function PublicTransitDepartures({
                   <button
                     onClick={() => sendChatMessage()}
                     disabled={!chatInput.trim() || chatLoading}
-                    className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                    className="p-2 rounded-lg transition-all disabled:opacity-30 hover:brightness-110"
                     style={{ background: accentColor, color: 'white' }}
                   >
                     <Send className="w-3.5 h-3.5" />
@@ -778,7 +778,7 @@ export default function PublicTransitDepartures({
                     <Filter className="w-3.5 h-3.5 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
                     <button
                       onClick={() => setStationModeFilter(new Set())}
-                      className="text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors"
+                      className="text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors hover:opacity-80"
                       style={{
                         background: stationModeFilter.size === 0 ? `${accentColor}20` : 'var(--bg-panel)',
                         color: stationModeFilter.size === 0 ? accentColor : 'var(--text-muted)',
@@ -794,7 +794,7 @@ export default function PublicTransitDepartures({
                         <button
                           key={m}
                           onClick={() => toggleStationMode(m)}
-                          className="text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors flex items-center gap-1"
+                          className="text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 hover:opacity-80"
                           style={{
                             background: active ? `${modeColor(m)}20` : 'var(--bg-panel)',
                             color: active ? modeColor(m) : 'var(--text-muted)',
@@ -821,7 +821,7 @@ export default function PublicTransitDepartures({
                     <button
                       key={station.id}
                       onClick={() => setSelectedStation(station)}
-                      className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left"
+                      className="w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left hover:bg-[var(--bg-hover)]"
                       style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
                       onMouseEnter={e => (e.currentTarget.style.background = `${accentColor}08`)}
                       onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-panel)')}
@@ -866,7 +866,7 @@ export default function PublicTransitDepartures({
                     </p>
                     <button
                       onClick={() => setStationModeFilter(new Set())}
-                      className="text-[10px] font-semibold mt-2 px-3 py-1 rounded-full transition-colors"
+                      className="text-[10px] font-semibold mt-2 px-3 py-1 rounded-full transition-colors hover:opacity-80"
                       style={{ color: accentColor, background: `${accentColor}10` }}
                     >
                       Clear filter
@@ -893,7 +893,7 @@ export default function PublicTransitDepartures({
                     setDepartureError(null);
                     setModeFilter(new Set());
                   }}
-                  className="flex items-center gap-1.5 text-xs mb-3 transition-colors"
+                  className="flex items-center gap-1.5 text-xs mb-3 transition-colors cursor-pointer hover:opacity-80"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   <ChevronRight className="w-3.5 h-3.5 rotate-180" /> All Stations
@@ -937,7 +937,7 @@ export default function PublicTransitDepartures({
                         <button
                           key={m}
                           onClick={() => toggleMode(m)}
-                          className="text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors"
+                          className="text-[10px] font-semibold px-2.5 py-1 rounded-full transition-colors hover:opacity-80"
                           style={{
                             background: active ? `${modeColor(m)}20` : 'var(--bg-panel)',
                             color: active ? modeColor(m) : 'var(--text-muted)',

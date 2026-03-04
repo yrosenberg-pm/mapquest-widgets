@@ -390,7 +390,7 @@ export default function ParkingFinder({
                       <button
                         key={d}
                         onClick={() => setMaxDistance(d)}
-                        className="flex-1 text-[10px] font-semibold py-1 rounded-lg transition-colors text-center"
+                        className="flex-1 text-[10px] font-semibold py-1 rounded-lg transition-colors text-center hover:opacity-80"
                         style={{
                           background: active ? accentColor : 'var(--bg-input)',
                           color: active ? 'white' : 'var(--text-muted)',
@@ -419,7 +419,7 @@ export default function ParkingFinder({
                   <button
                     key={f}
                     onClick={() => toggleFacility(f)}
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors"
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors hover:opacity-80"
                     style={{
                       background: active ? `${brandColor}18` : 'var(--bg-input)',
                       color: active ? brandColor : 'var(--text-muted)',
@@ -432,7 +432,7 @@ export default function ParkingFinder({
               })}
               <button
                 onClick={() => setShowHandicapOnly(p => !p)}
-                className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1"
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors hover:opacity-80 flex items-center gap-1"
                 style={{
                   background: showHandicapOnly ? `${brandColor}18` : 'var(--bg-input)',
                   color: showHandicapOnly ? brandColor : 'var(--text-muted)',
@@ -443,7 +443,7 @@ export default function ParkingFinder({
               </button>
               <button
                 onClick={() => setShowEVOnly(p => !p)}
-                className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1"
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors hover:opacity-80 flex items-center gap-1"
                 style={{
                   background: showEVOnly ? `${brandColor}18` : 'var(--bg-input)',
                   color: showEVOnly ? brandColor : 'var(--text-muted)',
@@ -492,7 +492,7 @@ export default function ParkingFinder({
                 <div className="p-3">
                   <button
                     onClick={() => setSelectedSpot(null)}
-                    className="flex items-center gap-1.5 text-xs mb-3 transition-colors"
+                    className="flex items-center gap-1.5 text-xs mb-3 transition-colors hover:opacity-80"
                     style={{ color: 'var(--text-muted)' }}
                   >
                     <ChevronRight className="w-3.5 h-3.5 rotate-180" /> Back to list
@@ -582,7 +582,7 @@ export default function ParkingFinder({
                   <div className="mt-3">
                     <button
                       onClick={() => handleNavigate(selectedSpot)}
-                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white transition-colors"
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:brightness-110"
                       style={{ background: accentColor, boxShadow: `0 2px 8px ${accentColor}30` }}
                     >
                       <Navigation className="w-4 h-4" />
@@ -603,7 +603,7 @@ export default function ParkingFinder({
                     <button
                       key={spot.id}
                       onClick={() => setSelectedSpot(spot)}
-                      className="w-full rounded-xl transition-all text-left"
+                      className="w-full rounded-xl transition-all text-left hover:brightness-[0.97]"
                       style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = `${c}60`; e.currentTarget.style.boxShadow = `0 2px 8px ${c}10`; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; }}
@@ -668,7 +668,7 @@ export default function ParkingFinder({
                 </p>
                 <button
                   onClick={() => { setFacilityFilter(new Set()); setShowHandicapOnly(false); setShowEVOnly(false); }}
-                  className="text-[10px] font-semibold mt-2 px-3 py-1 rounded-full"
+                  className="text-[10px] font-semibold mt-2 px-3 py-1 rounded-full hover:opacity-80"
                   style={{ color: brandColor, background: `${brandColor}10` }}
                 >
                   Clear filters

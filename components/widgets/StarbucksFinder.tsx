@@ -440,7 +440,7 @@ export default function StarbucksFinder({
             <button
               onClick={searchStarbucks}
               disabled={loading || !searchQuery.trim()}
-              className="prism-btn prism-btn-primary w-full mt-4"
+              className="prism-btn prism-btn-primary w-full mt-4 hover:brightness-110 transition-all"
               style={{ 
                 '--brand-primary': STARBUCKS_GREEN,
                 background: `linear-gradient(135deg, ${STARBUCKS_GREEN} 0%, #1E3932 100%)`,
@@ -571,7 +571,7 @@ export default function StarbucksFinder({
                 </div>
                 <button 
                   onClick={() => setSelectedStore(null)}
-                  className="p-1.5 rounded-lg transition-colors"
+                  className="p-1.5 rounded-lg transition-colors hover:opacity-80"
                   style={{ background: 'var(--bg-input)' }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
@@ -595,7 +595,7 @@ export default function StarbucksFinder({
                 )}
               </div>
               <button
-                className="prism-btn prism-btn-primary w-full mt-4"
+                className="prism-btn prism-btn-primary w-full mt-4 hover:brightness-110 transition-all"
                 style={{ 
                   background: `linear-gradient(135deg, ${STARBUCKS_GREEN} 0%, #1E3932 100%)`,
                   boxShadow: `0 4px 12px ${STARBUCKS_GREEN}40`,

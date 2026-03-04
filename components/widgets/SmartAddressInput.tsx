@@ -264,7 +264,7 @@ export default function SmartAddressInput({
             <button 
               onClick={clearSelection} 
               type="button"
-              className="p-1 rounded transition-colors"
+              className="p-1 rounded transition-colors cursor-pointer hover:opacity-80"
               style={{ color: textMuted }}
             >
               <X className="w-4 h-4" />
@@ -297,7 +297,7 @@ export default function SmartAddressInput({
                     handleSelect(suggestion);
                   }}
                   onMouseEnter={() => setHighlightedIndex(index)}
-                  className="w-full px-3 py-2.5 text-left text-sm flex items-start gap-2.5 transition-colors"
+                  className="w-full px-3 py-2.5 text-left text-sm flex items-start gap-2.5 transition-colors hover:bg-[var(--bg-hover)]"
                   style={{
                     background: isHighlighted ? bgHover : 'transparent',
                     borderBottom: `1px solid ${borderSubtle}`,

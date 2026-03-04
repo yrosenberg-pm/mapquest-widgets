@@ -427,7 +427,7 @@ export default function CitiBikeFinder({
             <button
               onClick={searchStations}
               disabled={loading || !searchQuery.trim()}
-              className="prism-btn prism-btn-primary w-full mt-4"
+              className="prism-btn prism-btn-primary w-full mt-4 hover:brightness-110 transition-all"
               style={{ 
                 background: `linear-gradient(135deg, ${CITIBIKE_BLUE} 0%, ${LYFT_PINK} 100%)`,
                 boxShadow: `0 4px 12px ${CITIBIKE_BLUE}40`,
@@ -584,7 +584,7 @@ export default function CitiBikeFinder({
                 </div>
                 <button 
                   onClick={() => setSelectedStation(null)}
-                  className="p-1.5 rounded-lg transition-colors"
+                  className="p-1.5 rounded-lg transition-colors hover:opacity-80"
                   style={{ background: 'var(--bg-input)' }}
                 >
                   <X className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
@@ -667,7 +667,7 @@ export default function CitiBikeFinder({
               )}
               
               <button
-                className="prism-btn prism-btn-primary w-full"
+                className="prism-btn prism-btn-primary w-full hover:brightness-110 transition-all"
                 style={{ 
                   background: `linear-gradient(135deg, ${CITIBIKE_BLUE} 0%, ${LYFT_PINK} 100%)`,
                 }}

@@ -1079,7 +1079,7 @@ export default function LiveTrafficWidget({
               <button
                 type="button"
                 onClick={() => setMode('area')}
-                className="px-3 py-2 text-xs font-semibold"
+                className="px-3 py-2 text-xs font-semibold hover:opacity-80"
                 style={{
                   background: mode === 'area' ? 'var(--brand-primary)' : 'transparent',
                   color: mode === 'area' ? 'white' : 'var(--text-main)',
@@ -1091,7 +1091,7 @@ export default function LiveTrafficWidget({
               <button
                 type="button"
                 onClick={() => setMode('route')}
-                className="px-3 py-2 text-xs font-semibold border-l"
+                className="px-3 py-2 text-xs font-semibold border-l hover:opacity-80"
                 style={{
                   borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
                   background: mode === 'route' ? 'var(--brand-primary)' : 'transparent',
@@ -1109,7 +1109,7 @@ export default function LiveTrafficWidget({
             <button
               type="button"
               onClick={() => void load()}
-              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium shadow-sm"
+              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium shadow-sm hover:opacity-80"
               style={{
                 borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
                 background: isDark ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.92)',
@@ -1223,7 +1223,7 @@ export default function LiveTrafficWidget({
                           <button
                             key={q}
                             onClick={() => sendChatMessage(q)}
-                            className="text-[10px] px-2 py-1 rounded-full transition-colors"
+                            className="text-[10px] px-2 py-1 rounded-full transition-colors hover:opacity-80"
                             style={{
                               background: accentColor + '15',
                               color: accentColor,
@@ -1292,7 +1292,7 @@ export default function LiveTrafficWidget({
                   <button
                     onClick={() => sendChatMessage()}
                     disabled={!chatInput.trim() || chatLoading}
-                    className="p-2 rounded-lg transition-colors disabled:opacity-30"
+                    className="p-2 rounded-lg transition-all disabled:opacity-30 hover:brightness-110"
                     style={{ background: accentColor, color: 'white' }}
                   >
                     <Send className="w-3.5 h-3.5" />
@@ -1429,7 +1429,7 @@ export default function LiveTrafficWidget({
                           key={v}
                           type="button"
                           onClick={() => setAreaRadiusMiles(v)}
-                          className="rounded-full border px-2.5 py-1 text-xs font-semibold"
+                          className="rounded-full border px-2.5 py-1 text-xs font-semibold hover:opacity-80"
                           style={{
                             borderColor: active ? 'transparent' : 'var(--border-subtle)',
                             background: active ? 'var(--brand-primary)' : 'transparent',
@@ -1485,7 +1485,7 @@ export default function LiveTrafficWidget({
                 <button
                   type="submit"
                   disabled={exitSearching || !exitQuery.trim()}
-                  className="rounded-xl px-3 py-2 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  className="rounded-xl px-3 py-2 text-xs font-semibold transition-colors flex items-center gap-1.5 hover:brightness-110 transition-all"
                   style={{
                     background: exitQuery.trim() ? accentColor : 'var(--bg-input)',
                     color: exitQuery.trim() ? 'white' : 'var(--text-muted)',
@@ -1511,7 +1511,7 @@ export default function LiveTrafficWidget({
                     <button
                       key={`${r.lat}-${r.lng}-${i}`}
                       onClick={() => selectExitResult(r)}
-                      className="w-full flex items-start gap-2.5 p-2.5 rounded-xl transition-colors text-left"
+                      className="w-full flex items-start gap-2.5 p-2.5 rounded-xl transition-colors text-left hover:bg-[var(--bg-hover)]"
                       style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
                       onMouseEnter={(e) => (e.currentTarget.style.background = `${accentColor}10`)}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
@@ -1637,7 +1637,7 @@ export default function LiveTrafficWidget({
                       <button
                         type="button"
                         onClick={() => void calcRoute()}
-                        className="rounded-lg border px-3 py-2 text-xs font-semibold"
+                        className="rounded-lg border px-3 py-2 text-xs font-semibold hover:brightness-110 transition-all"
                         style={{
                           borderColor: 'transparent',
                           background: 'var(--brand-primary)',
@@ -1649,7 +1649,7 @@ export default function LiveTrafficWidget({
                       <button
                         type="button"
                         onClick={clearRoute}
-                        className="rounded-lg border px-3 py-2 text-xs font-semibold"
+                        className="rounded-lg border px-3 py-2 text-xs font-semibold hover:opacity-80"
                         style={{
                           borderColor: 'var(--border-subtle)',
                           background: 'transparent',

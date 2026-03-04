@@ -19,6 +19,35 @@
   box-sizing: border-box;
 }
 
+/* Global cursor rules for interactive elements inside widgets */
+.prism-widget button,
+.prism-widget [role="button"],
+.prism-widget select,
+.prism-widget summary,
+.prism-widget a[href] {
+  cursor: pointer;
+}
+
+.prism-widget button:disabled,
+.prism-widget [role="button"][aria-disabled="true"],
+.prism-widget select:disabled {
+  cursor: not-allowed;
+}
+
+.prism-widget input[type="text"],
+.prism-widget input[type="search"],
+.prism-widget input[type="number"],
+.prism-widget input[type="email"],
+.prism-widget input[type="url"],
+.prism-widget input[type="tel"],
+.prism-widget input[type="password"],
+.prism-widget input[type="datetime-local"],
+.prism-widget input[type="date"],
+.prism-widget input[type="time"],
+.prism-widget textarea {
+  cursor: text;
+}
+
 /* ========================================
    Panel Styles - Subtle backgrounds
    ======================================== */

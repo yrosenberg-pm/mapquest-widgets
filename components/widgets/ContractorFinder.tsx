@@ -488,7 +488,7 @@ export default function ContractorFinder({
             <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar p-4 space-y-3">
               <button
                 onClick={() => setSelectedContractor(null)}
-                className="flex items-center gap-1.5 text-[13px] font-medium mb-2"
+                className="flex items-center gap-1.5 text-[13px] font-medium mb-2 cursor-pointer hover:opacity-80"
                 style={{ color: accentColor }}
               >
                 <ArrowLeft className="w-4 h-4" /> Back to results
@@ -753,7 +753,7 @@ export default function ContractorFinder({
                           <button
                             key={pt}
                             onClick={() => setPropertyType(pt)}
-                            className="text-[10px] font-semibold py-1.5 rounded-lg transition-colors text-center"
+                            className="text-[10px] font-semibold py-1.5 rounded-lg transition-colors text-center hover:opacity-80"
                             style={{
                               background: active ? `${accentColor}18` : bgPanel,
                               border: `1px solid ${active ? `${accentColor}45` : border}`,
@@ -781,7 +781,7 @@ export default function ContractorFinder({
                         <button
                           key={r}
                           onClick={() => setRadius(r)}
-                          className="flex-1 text-[10px] font-semibold py-1.5 rounded-lg transition-colors text-center"
+                          className="flex-1 text-[10px] font-semibold py-1.5 rounded-lg transition-colors text-center hover:opacity-80"
                           style={{
                             background: active ? `${accentColor}18` : bgPanel,
                             border: `1px solid ${active ? `${accentColor}45` : border}`,
@@ -799,7 +799,7 @@ export default function ContractorFinder({
                 <button
                   onClick={handleSearch}
                   disabled={loading || !searchCenter}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110"
                   style={{ background: loading || !searchCenter ? 'var(--text-muted)' : accentColor }}
                 >
                   {loading ? (
@@ -958,7 +958,7 @@ function ContractorCard({
   return (
     <button
       onClick={onClick}
-      className="w-full text-left p-3 mb-1.5 rounded-xl transition-colors cursor-pointer"
+      className="w-full text-left p-3 mb-1.5 rounded-xl transition-colors cursor-pointer hover:opacity-80"
       style={{
         border: `1px solid ${isSelected ? accentColor : 'var(--border-subtle)'}`,
         background: isSelected ? `${accentColor}10` : 'var(--bg-panel)',
