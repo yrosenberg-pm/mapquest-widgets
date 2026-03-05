@@ -105,6 +105,14 @@ function getClosestScore(distance: number, thresholdType: ThresholdType): number
   return 0;
 }
 
+function ringArea(ring: [number, number][]): number {
+  let a = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    a += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
+  }
+  return Math.abs(a / 2);
+}
+
 function geojsonToMapCoords(geometry: any): { lat: number; lng: number }[] | null {
   if (!geometry) return null;
   const { type, coordinates } = geometry;
@@ -112,8 +120,12 @@ function geojsonToMapCoords(geometry: any): { lat: number; lng: number }[] | nul
     return coordinates[0].map(([lng, lat]: [number, number]) => ({ lat, lng }));
   if (type === 'MultiPolygon' && coordinates?.length) {
     let best: [number, number][] = [];
+    let bestArea = 0;
     for (const poly of coordinates) {
-      if (poly[0] && poly[0].length > best.length) best = poly[0];
+      if (poly[0]) {
+        const a = ringArea(poly[0]);
+        if (a > bestArea) { bestArea = a; best = poly[0]; }
+      }
     }
     return best.map(([lng, lat]) => ({ lat, lng }));
   }
@@ -285,7 +297,7 @@ export default function NeighborhoodScore({
   // EV Score state
   const [evScore, setEvScore] = useState<number | null>(null);
   const [evBreakdown, setEvBreakdown] = useState<{
-    chargerCount: number; dcFastCount: number; evPermits: number;
+    chargerCount: number; evPermits: number;
     solarPermits: number; permitGrowthRate: number;
   } | null>(null);
 
@@ -333,7 +345,7 @@ export default function NeighborhoodScore({
         : '';
       const walkStr = walkabilityPolygons.length > 0 ? 'WALKABILITY: 10-min and 20-min walk zones available on map' : '';
 
-      const evStr = evScore !== null ? `EV READINESS: ${evScore}/100${evBreakdown ? ` (${evBreakdown.chargerCount} chargers, ${evBreakdown.dcFastCount} DC fast, ${evBreakdown.solarPermits} solar permits, ${evBreakdown.permitGrowthRate}% growth)` : ''}` : '';
+      const evStr = evScore !== null ? `EV READINESS: ${evScore}/100${evBreakdown ? ` (${evBreakdown.chargerCount} chargers, ${evBreakdown.solarPermits} solar permits, ${evBreakdown.permitGrowthRate}% growth)` : ''}` : '';
 
       const context = `WIDGET: Neighborhood Score
 ADDRESS: ${address || 'Unknown'}
@@ -1290,12 +1302,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Zap className="w-3 h-3" style={{ color: '#f59e0b' }} />
-                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                            {evBreakdown.dcFastCount} DC fast
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
                           <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                             {evBreakdown.solarPermits} solar permits
                           </span>
@@ -1396,9 +1402,9 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 w-full">
+                        <div className="flex flex-col gap-1.5 w-full">
                           <div
-                            className="flex-1 rounded-md flex items-center gap-1 px-1.5 py-1"
+                            className="flex-1 rounded-lg flex items-center gap-1 px-2 py-1.5"
                             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
                           >
                             <AddressAutocomplete
@@ -1420,10 +1426,15 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                           <button
                             onClick={calculateCommute}
                             disabled={commuteLoading || !workLocation}
-                            className="p-1 rounded-md disabled:opacity-30 transition-colors flex-shrink-0 hover:brightness-110 transition-all"
+                            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold disabled:opacity-30 hover:brightness-110 transition-all"
                             style={{ background: accentColor, color: 'white' }}
                           >
-                            {commuteLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronRight className="w-3 h-3" />}
+                            {commuteLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
+                              <>
+                                <Navigation className="w-3.5 h-3.5" />
+                                Calculate Commute
+                              </>
+                            )}
                           </button>
                         </div>
                       )}

@@ -365,14 +365,13 @@ function HomeContent() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Generate permalink for current widget
-  const getWidgetPermalink = (embed: boolean = true) => {
+  const getWidgetPermalink = () => {
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${baseUrl}/?widget=${activeWidget}${embed ? '&embed=true' : ''}`;
+    return `${baseUrl}/${activeWidget}`;
   };
 
   const copyPermalink = () => {
-    navigator.clipboard.writeText(getWidgetPermalink(true));
+    navigator.clipboard.writeText(getWidgetPermalink());
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -774,7 +773,7 @@ function HomeContent() {
                 <button
                   onClick={copyPermalink}
                   className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
-                  title="Copy shareable link (embed mode)"
+                  title="Copy shareable widget link"
                 >
                   {copiedLink ? <Check className="w-4 h-4 text-green-500" /> : <Link2 className="w-4 h-4" />}
                   <span className="hidden sm:inline text-sm">{copiedLink ? 'Copied!' : 'Share'}</span>

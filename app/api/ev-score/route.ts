@@ -4,28 +4,27 @@ const HERE_API_KEY = process.env.HERE_API_KEY;
 
 function calcEVScore({
   chargerCount,
-  dcFastCount,
   evPermits,
   solarPermits,
   permitGrowthRate,
 }: {
   chargerCount: number;
-  dcFastCount: number;
   evPermits: number;
   solarPermits: number;
   permitGrowthRate: number;
 }) {
-  const densityScore = Math.min(chargerCount / 20, 1) * 25;
-  const qualityScore = Math.min(dcFastCount / 5, 1) * 25;
+  // Infrastructure (50 pts): charger density within 2 miles
+  const densityScore = Math.min(chargerCount / 20, 1) * 50;
+  // Adoption momentum (50 pts): EV/solar business presence + growth signal
   const permitScore = Math.min((evPermits + solarPermits) / 50, 1) * 35;
   const growthScore = Math.min(Math.max(permitGrowthRate, 0), 1) * 15;
-  return Math.round(densityScore + qualityScore + permitScore + growthScore);
+  return Math.round(densityScore + permitScore + growthScore);
 }
 
 // ── HERE EV Charger data ───────────────────────────────────────────────
 // Tries dedicated EV Charge Points endpoint, falls back to Search/Discover
 async function fetchHereChargers(lat: number, lng: number, radiusM: number) {
-  if (!HERE_API_KEY) return { chargerCount: 0, dcFastCount: 0 };
+  if (!HERE_API_KEY) return { chargerCount: 0 };
 
   const candidates = [
     `https://ev-chargepoints.search.hereapi.com/v1/chargepoints?apiKey=${HERE_API_KEY}&at=${lat},${lng}&radius=${radiusM}&limit=100`,
@@ -75,38 +74,25 @@ async function fetchHereChargers(lat: number, lng: number, radiusM: number) {
     }
   } catch { /* ignore */ }
 
-  return { chargerCount: 0, dcFastCount: 0 };
+  return { chargerCount: 0 };
 }
 
-function parseChargerItems(items: any[]): { chargerCount: number; dcFastCount: number } {
+function parseChargerItems(items: any[]): { chargerCount: number } {
   let chargerCount = 0;
-  let dcFastCount = 0;
 
   for (const item of items) {
-    // EV Charge Points API format
     const evses = item.evses || item.connectors || [];
     if (evses.length > 0) {
       for (const evse of evses) {
         const connectors = evse.connectors || [evse];
-        for (const conn of connectors) {
-          const power = conn.maxPowerInKw ?? conn.powerInKw ?? conn.maxPower ?? conn.power ?? 0;
-          chargerCount++;
-          if (power >= 50) dcFastCount++;
-        }
+        chargerCount += connectors.length;
       }
       continue;
     }
-
-    // Discover/Browse POI format — each result is one station location
     chargerCount++;
-    const title = (item.title || '').toLowerCase();
-    const cats = (item.categories || []).map((c: any) => (c.name || c.id || '').toLowerCase()).join(' ');
-    if (title.includes('fast') || title.includes('supercharg') || title.includes('dc ') || cats.includes('fast')) {
-      dcFastCount++;
-    }
   }
 
-  return { chargerCount, dcFastCount };
+  return { chargerCount };
 }
 
 // ── HERE-based adoption / permit proxies ───────────────────────────────
@@ -182,7 +168,6 @@ export async function GET(request: NextRequest) {
 
   const score = calcEVScore({
     chargerCount: chargerData.chargerCount,
-    dcFastCount: chargerData.dcFastCount,
     evPermits,
     solarPermits,
     permitGrowthRate,
@@ -192,7 +177,6 @@ export async function GET(request: NextRequest) {
     score,
     breakdown: {
       chargerCount: chargerData.chargerCount,
-      dcFastCount: chargerData.dcFastCount,
       evPermits,
       solarPermits,
       permitGrowthRate: Math.round(permitGrowthRate * 100),

@@ -239,8 +239,25 @@ export async function GET(request: NextRequest) {
 
     if (type === 'city') {
       const parts = q.split(',').map(s => s.trim());
+      const cityName = parts[0];
+
+      // Try Census TIGER Incorporated Places (layer 28) first — tighter boundaries
+      try {
+        const tigerUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_ACS2023/MapServer/28/query?where=NAME+LIKE+%27${encodeURIComponent(cityName)}%25%27&outFields=NAME,GEOID&f=geojson&outSR=4326`;
+        const tigerRes = await fetch(tigerUrl);
+        if (tigerRes.ok) {
+          const tigerData = await tigerRes.json();
+          const feat = tigerData.features?.[0];
+          if (feat?.geometry) {
+            const label = feat.properties?.NAME?.replace(/ (city|town|village|borough|CDP)$/i, '') || cityName;
+            return NextResponse.json({ label, geometry: feat.geometry }, { headers: CACHE_HEADER });
+          }
+        }
+      } catch { /* fall through to Nominatim */ }
+
+      // Fallback: Nominatim
       const qs = parts.length >= 2
-        ? `city=${encodeURIComponent(parts[0])}&state=${encodeURIComponent(parts[1])}`
+        ? `city=${encodeURIComponent(cityName)}&state=${encodeURIComponent(parts[1])}`
         : `q=${encodeURIComponent(q)}`;
       const url = `https://nominatim.openstreetmap.org/search?${qs}&countrycodes=us&format=json&polygon_geojson=1&limit=1`;
       const res = await fetch(url, { headers: { 'User-Agent': 'MapQuestWidgets/1.0' } });
@@ -276,9 +293,20 @@ export async function GET(request: NextRequest) {
       const lat = parseFloat(item.lat);
       const lon = parseFloat(item.lon);
 
-      // 1. Nominatim has a real polygon — use it directly
-      if (item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon')) {
+      // 1. Nominatim has a real polygon — use it if it's actually a neighborhood/suburb
+      //    Skip city/admin-level results so the city handler (with Census TIGER) handles them
+      const nomType = (item.type || '').toLowerCase();
+      const nomClass = (item.class || '').toLowerCase();
+      const isNeighborhoodLevel = ['suburb', 'neighbourhood', 'quarter', 'residential', 'hamlet', 'village'].includes(nomType)
+        || (nomClass === 'place' && !['city', 'town', 'state', 'county'].includes(nomType));
+
+      if (isNeighborhoodLevel && item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon')) {
         return NextResponse.json({ label, geometry: item.geojson }, { headers: CACHE_HEADER });
+      }
+
+      // Nominatim matched a city/admin boundary, not a neighborhood — bail so the city handler can take over
+      if (!isNeighborhoodLevel) {
+        return NextResponse.json({ error: 'Not a neighborhood' }, { status: 404 });
       }
 
       if (!Number.isFinite(lat) || !Number.isFinite(lon)) {

@@ -24,6 +24,8 @@ import {
   EVChargingPlanner,
   LiveTrafficWidget,
   CustomRouteWidget,
+  PublicTransitDepartures,
+  ParkingFinder,
   ConstructionHeatmap,
   ContractorFinder,
   MultiZoneCoverage,
@@ -39,7 +41,8 @@ const VALID_WIDGETS = [
   'citibike',
   'directions',
   'truck',
-
+  'route-weather',
+  'transit',
   'neighborhood',
   'multistop',
   'delivery',
@@ -50,6 +53,7 @@ const VALID_WIDGETS = [
   'ev-charging',
   'traffic',
   'custom-route',
+  'parking',
   'construction',
   'contractor-finder',
   'zone-coverage',
@@ -289,6 +293,10 @@ export default function WidgetPage() {
         return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
       case 'isoline-overlap':
         return <IsolineOverlapWidget {...commonProps} />;
+      case 'transit':
+        return <PublicTransitDepartures {...commonProps} />;
+      case 'parking':
+        return <ParkingFinder {...commonProps} />;
       case 'construction':
         return <ConstructionHeatmap {...commonProps} />;
       case 'contractor-finder':
