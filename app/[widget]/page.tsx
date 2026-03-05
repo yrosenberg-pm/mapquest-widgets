@@ -11,7 +11,7 @@ import {
   CitiBikeFinder,
   DirectionsEmbed,
   TruckRouting,
-  ServiceAreaChecker,
+
   NeighborhoodScore,
   MultiStopPlanner,
   DeliveryETA,
@@ -26,6 +26,7 @@ import {
   CustomRouteWidget,
   ConstructionHeatmap,
   ContractorFinder,
+  MultiZoneCoverage,
 } from '@/components/widgets';
 
 const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -38,7 +39,7 @@ const VALID_WIDGETS = [
   'citibike',
   'directions',
   'truck',
-  'service',
+
   'neighborhood',
   'multistop',
   'delivery',
@@ -51,6 +52,7 @@ const VALID_WIDGETS = [
   'custom-route',
   'construction',
   'contractor-finder',
+  'zone-coverage',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -231,8 +233,7 @@ export default function WidgetPage() {
         return <CheckoutFlowWidget {...commonProps} />;
       case 'ev-charging':
         return <EVChargingPlanner {...commonProps} />;
-      case 'service':
-        return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
+
       case 'traffic':
         return (
           <LiveTrafficWidget
@@ -292,6 +293,8 @@ export default function WidgetPage() {
         return <ConstructionHeatmap {...commonProps} />;
       case 'contractor-finder':
         return <ContractorFinder {...commonProps} />;
+      case 'zone-coverage':
+        return <MultiZoneCoverage {...commonProps} />;
       default:
         return null;
     }

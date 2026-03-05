@@ -10,7 +10,7 @@ import {
   StarbucksFinder,
   CitiBikeFinder,
   DirectionsEmbed,
-  ServiceAreaChecker,
+
   NeighborhoodScore,
   MultiStopPlanner,
   DeliveryETA,
@@ -28,6 +28,7 @@ import {
   ParkingFinder,
   ConstructionHeatmap,
   ContractorFinder,
+  MultiZoneCoverage,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -40,7 +41,7 @@ type WidgetId =
   | 'citibike'
   | 'directions'
   | 'truck'
-  | 'service'
+
   | 'neighborhood'
   | 'multistop'
   | 'delivery'
@@ -55,7 +56,8 @@ type WidgetId =
   | 'transit'
   | 'parking'
   | 'construction'
-  | 'contractor-finder';
+  | 'contractor-finder'
+  | 'zone-coverage';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
 const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'nhl', 'starbucks', 'instacart', 'citibike']);
@@ -75,7 +77,8 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
   { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', section: 'other', menuLucide: MapPin },
-  { id: 'service' as WidgetId, name: 'Service Area Checker', description: 'Check if address is within service range', section: 'other', menuLucide: Navigation },
+
+  { id: 'zone-coverage' as WidgetId, name: 'Coverage Zone Builder', description: 'Multi-zone boundary visualization tool', section: 'other', menuLucide: Layers },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', section: 'other', menuLucide: Package },
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', section: 'other', menuLucide: ShoppingBag },
@@ -405,8 +408,7 @@ function HomeContent() {
         return <CheckoutFlowWidget {...commonProps} />;
       case 'ev-charging':
         return <EVChargingPlanner {...commonProps} />;
-      case 'service':
-        return <ServiceAreaChecker {...commonProps} serviceCenter={{ lat: 47.6062, lng: -122.3321 }} serviceRadiusMiles={15} />;
+
       case 'traffic':
         return (
           <LiveTrafficWidget
@@ -471,6 +473,8 @@ function HomeContent() {
         return <ConstructionHeatmap {...commonProps} />;
       case 'contractor-finder':
         return <ContractorFinder {...commonProps} />;
+      case 'zone-coverage':
+        return <MultiZoneCoverage {...commonProps} />;
       default:
         return null;
     }
@@ -747,7 +751,7 @@ function HomeContent() {
       {/* Main */}
       <div className="flex-1 min-w-0">
         <div className="p-2 md:p-6">
-          <div className="max-w-[1400px] mx-auto">
+          <div className="max-w-[1600px] mx-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3 min-w-0">

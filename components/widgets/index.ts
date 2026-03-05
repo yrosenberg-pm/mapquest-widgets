@@ -6,7 +6,7 @@ export { default as StarbucksFinder } from './StarbucksFinder';
 export { default as CitiBikeFinder } from './CitiBikeFinder';
 export { default as InstacartDeliveryETA } from './InstacartDeliveryETA';
 export { default as DirectionsEmbed } from './DirectionsEmbed';
-export { default as ServiceAreaChecker } from './ServiceAreaChecker';
+
 export { default as NeighborhoodScore } from './NeighborhoodScore';
 export { default as MultiStopPlanner } from './MultiStopPlanner';
 export { default as DeliveryETA } from './DeliveryETA';
@@ -24,6 +24,7 @@ export { default as CustomRouteWidget } from './CustomRouteWidget';
 export { default as PublicTransitDepartures } from './PublicTransitDepartures';
 export { default as ParkingFinder } from './ParkingFinder';
 export { default as ContractorFinder } from './ContractorFinder';
+export { default as MultiZoneCoverage } from './MultiZoneCoverage';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

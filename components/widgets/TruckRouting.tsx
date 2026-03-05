@@ -1068,8 +1068,39 @@ export default function TruckRouting({
                         <VehicleInput label="Weight" value={vehicle.weight} unit="tons" field="weight" step={1} />
                         <VehicleInput label="Width" value={vehicle.width} unit="ft" field="width" step={0.5} />
                         <VehicleInput label="Axles" value={vehicle.axleCount} unit="" field="axleCount" step={1} />
-                        <div className="col-span-2">
-                          <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
+                        <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
+                        {/* Elevation constraint – inline with Length */}
+                        <div>
+                          <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
+                            Max elevation
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              value={maxElevationFt ?? ''}
+                              min={0}
+                              step={100}
+                              placeholder="No limit"
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === '') {
+                                  setMaxElevationFt(null);
+                                  return;
+                                }
+                                const next = Number(raw);
+                                if (Number.isFinite(next) && next >= 0) setMaxElevationFt(next);
+                              }}
+                              className="w-full px-3 py-2 rounded-lg text-sm font-medium"
+                              style={{
+                                background: 'var(--bg-input)',
+                                border: '1px solid var(--border-subtle)',
+                                color: 'var(--text-main)',
+                              }}
+                            />
+                            <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '30px' }}>
+                              ft
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -1121,42 +1152,6 @@ export default function TruckRouting({
                         </div>
                       ) : null}
 
-                      {/* Elevation constraint */}
-                      <div className="mt-2">
-                        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
-                          Max elevation (optional)
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={maxElevationFt ?? ''}
-                            min={0}
-                            step={100}
-                            placeholder="No limit"
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              if (raw === '') {
-                                setMaxElevationFt(null);
-                                return;
-                              }
-                              const next = Number(raw);
-                              if (Number.isFinite(next) && next >= 0) setMaxElevationFt(next);
-                            }}
-                            className="w-full px-3 py-2 rounded-lg text-sm font-medium"
-                            style={{
-                              background: 'var(--bg-input)',
-                              border: '1px solid var(--border-subtle)',
-                              color: 'var(--text-main)',
-                            }}
-                          />
-                          <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '30px' }}>
-                            ft
-                          </span>
-                        </div>
-                        <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                          If set, we’ll request route alternatives and pick one whose max elevation stays under this ceiling.
-                        </p>
-                      </div>
                     </div>
                   </CollapsibleSection>
                 </div>
