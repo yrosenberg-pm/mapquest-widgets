@@ -31,7 +31,7 @@ const ZONE_COLORS = [
 interface Zone {
   id: string;
   name: string;
-  type: 'zip' | 'city' | 'state' | 'county';
+  type: 'zip' | 'city' | 'state' | 'county' | 'neighborhood';
   color: string;
   coordinates: { lat: number; lng: number }[];
   visible: boolean;
@@ -48,12 +48,15 @@ const US_STATES = new Set([
   'wisconsin','wyoming',
 ]);
 
+const NEIGHBORHOOD_HINTS = /\b(district|heights|hill|hills|village|park|square|quarter|landing|point|beach|terrace|hollow|grove|glen|gardens|flats|crossing|commons|addition)\b/i;
+
 function detectType(query: string): { type: Zone['type']; normalized: string } {
   const trimmed = query.trim();
   if (/^\d{5}(,|\s|$)/.test(trimmed)) return { type: 'zip', normalized: trimmed.slice(0, 5) };
   const lower = trimmed.toLowerCase();
   if (US_STATES.has(lower)) return { type: 'state', normalized: trimmed };
   if (/county/i.test(trimmed)) return { type: 'county', normalized: trimmed };
+  if (NEIGHBORHOOD_HINTS.test(trimmed)) return { type: 'neighborhood', normalized: trimmed };
   return { type: 'city', normalized: trimmed };
 }
 
@@ -72,15 +75,25 @@ function geojsonToCoords(geometry: any): { lat: number; lng: number }[] | null {
   return null;
 }
 
-async function fetchBoundary(type: string, query: string): Promise<{ label: string; coords: { lat: number; lng: number }[] } | null> {
+async function fetchBoundary(type: string, query: string): Promise<{ label: string; coords: { lat: number; lng: number }[]; resolvedType?: Zone['type'] } | null> {
   try {
     const apiType = type === 'county' ? 'city' : type;
     const res = await fetch(`/api/boundary?type=${apiType}&q=${encodeURIComponent(query)}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const coords = geojsonToCoords(data.geometry);
-    if (!coords || coords.length < 3) return null;
-    return { label: data.label || query, coords };
+    if (res.ok) {
+      const data = await res.json();
+      const coords = geojsonToCoords(data.geometry);
+      if (coords && coords.length >= 3) return { label: data.label || query, coords };
+    }
+    // If the primary lookup failed or returned non-polygon geometry, try neighborhood
+    if (apiType !== 'neighborhood') {
+      const nbRes = await fetch(`/api/boundary?type=neighborhood&q=${encodeURIComponent(query)}`);
+      if (nbRes.ok) {
+        const nbData = await nbRes.json();
+        const coords = geojsonToCoords(nbData.geometry);
+        if (coords && coords.length >= 3) return { label: nbData.label || query, coords, resolvedType: 'neighborhood' };
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -129,7 +142,7 @@ function boundsCenter(coords: { lat: number; lng: number }[]) {
   return { lat, lng };
 }
 
-const typeLabel = (t: Zone['type']) => ({ zip: 'ZIP', city: 'City', state: 'State', county: 'County' }[t]);
+const typeLabel = (t: Zone['type']) => ({ zip: 'ZIP', city: 'City', state: 'State', county: 'County', neighborhood: 'Nbhd' }[t]);
 
 const US_CENTER = { lat: 39.8283, lng: -98.5795 };
 
@@ -201,9 +214,10 @@ export default function MultiZoneCoverage({
       const { type, normalized } = detectType(q);
       const result = await fetchBoundary(type, normalized);
       if (!result) { setError(`No boundary found for "${q}"`); return; }
+      const finalType = result.resolvedType || type;
       const zone: Zone = {
-        id: `${type}-${normalized}-${Date.now()}`,
-        name: result.label, type, color: nextColor(),
+        id: `${finalType}-${normalized}-${Date.now()}`,
+        name: result.label, type: finalType, color: nextColor(),
         coordinates: result.coords, visible: true,
       };
       setZones(prev => [...prev, zone]);
@@ -227,9 +241,10 @@ export default function MultiZoneCoverage({
         const { type, normalized } = detectType(item);
         const result = await fetchBoundary(type, normalized);
         if (result) {
+          const finalType = result.resolvedType || type;
           const zone: Zone = {
-            id: `${type}-${normalized}-${Date.now()}-${added}`,
-            name: result.label, type, color: nextColor(),
+            id: `${finalType}-${normalized}-${Date.now()}-${added}`,
+            name: result.label, type: finalType, color: nextColor(),
             coordinates: result.coords, visible: true,
           };
           setZones(prev => [...prev, zone]);
@@ -376,7 +391,7 @@ export default function MultiZoneCoverage({
           {/* Search bar */}
           <div className="p-3 pb-2">
             <div className="flex gap-2">
-              <div className="relative flex-1">
+              <div className="relative flex-1" style={{ zIndex: 1000 }}>
                 <div className="rounded-xl flex items-center gap-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '8px 12px' }}>
                   <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
                   <input
@@ -386,7 +401,7 @@ export default function MultiZoneCoverage({
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addZone(searchQuery); } }}
                     onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
                     onBlur={handleBlur}
-                    placeholder="Search ZIP, city, state, county..."
+                    placeholder="Search ZIP, city, neighborhood, state..."
                     className="flex-1 bg-transparent text-sm outline-none"
                     style={{ color: 'var(--text-main)' }}
                   />

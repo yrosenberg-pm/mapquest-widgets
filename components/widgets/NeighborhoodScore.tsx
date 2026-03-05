@@ -6,7 +6,7 @@ import {
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
   Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft,
-  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase
+  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase, BatteryCharging
 } from 'lucide-react';
 import { geocode, searchPlaces, getDirections } from '@/lib/mapquest';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
@@ -103,6 +103,35 @@ function getClosestScore(distance: number, thresholdType: ThresholdType): number
     if (distance <= t.maxDistance) return t.score;
   }
   return 0;
+}
+
+function geojsonToMapCoords(geometry: any): { lat: number; lng: number }[] | null {
+  if (!geometry) return null;
+  const { type, coordinates } = geometry;
+  if (type === 'Polygon' && coordinates?.[0])
+    return coordinates[0].map(([lng, lat]: [number, number]) => ({ lat, lng }));
+  if (type === 'MultiPolygon' && coordinates?.length) {
+    let best: [number, number][] = [];
+    for (const poly of coordinates) {
+      if (poly[0] && poly[0].length > best.length) best = poly[0];
+    }
+    return best.map(([lng, lat]) => ({ lat, lng }));
+  }
+  return null;
+}
+
+// Ray-casting point-in-polygon test
+function pointInPolygon(pt: { lat: number; lng: number }, ring: { lat: number; lng: number }[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const yi = ring[i].lat, xi = ring[i].lng;
+    const yj = ring[j].lat, xj = ring[j].lng;
+    if ((yi > pt.lat) !== (yj > pt.lat) &&
+        pt.lng < (xj - xi) * (pt.lat - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
 
 const categoryConfigs: Record<string, CategoryConfig> = {
@@ -248,6 +277,18 @@ export default function NeighborhoodScore({
   const [walkabilityPolygons, setWalkabilityPolygons] = useState<Array<{ coordinates: { lat: number; lng: number }[]; color: string; label: string }>>([]);
   const [walkabilityLoading, setWalkabilityLoading] = useState(false);
 
+  // Area boundary state
+  const [boundaryPolygon, setBoundaryPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
+  const [boundaryLabel, setBoundaryLabel] = useState<string>('');
+  const [boundaryHint, setBoundaryHint] = useState<string>('');
+
+  // EV Score state
+  const [evScore, setEvScore] = useState<number | null>(null);
+  const [evBreakdown, setEvBreakdown] = useState<{
+    chargerCount: number; dcFastCount: number; evPermits: number;
+    solarPermits: number; permitGrowthRate: number;
+  } | null>(null);
+
   // Commute time state
   const [workAddress, setWorkAddress] = useState('');
   const [workLocation, setWorkLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -292,10 +333,13 @@ export default function NeighborhoodScore({
         : '';
       const walkStr = walkabilityPolygons.length > 0 ? 'WALKABILITY: 10-min and 20-min walk zones available on map' : '';
 
+      const evStr = evScore !== null ? `EV READINESS: ${evScore}/100${evBreakdown ? ` (${evBreakdown.chargerCount} chargers, ${evBreakdown.dcFastCount} DC fast, ${evBreakdown.solarPermits} solar permits, ${evBreakdown.permitGrowthRate}% growth)` : ''}` : '';
+
       const context = `WIDGET: Neighborhood Score
 ADDRESS: ${address || 'Unknown'}
 LOCATION: ${location ? `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}` : 'Not set'}
 OVERALL SCORE: ${overallScore !== null ? `${overallScore.toFixed(1)} / 5` : 'Not calculated yet'}
+${evStr}
 ${commuteStr}
 ${walkStr}
 
@@ -360,6 +404,104 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
       setWalkabilityPolygons([]);
     } finally {
       setWalkabilityLoading(false);
+    }
+  }, []);
+
+  const resolveBoundary = useCallback(async (addr: string): Promise<{ polygon: { lat: number; lng: number }[]; label: string } | 'too_large' | null> => {
+    if (!addr.trim()) return null;
+    const trimmed = addr.trim();
+    const parts = trimmed.split(',').map(s => s.trim());
+
+    const primaryName = parts[0];
+    const isStreetAddress = /^\d+\s/.test(primaryName);
+    const primaryIsZip = /^\d{5}$/.test(primaryName);
+    const zipMatch = trimmed.match(/\b(\d{5})\b/);
+
+    const attempts: { type: string; q: string }[] = [];
+
+    if (primaryIsZip) {
+      // Primary part is a ZIP code — prioritize zip boundary lookup
+      attempts.push({ type: 'zip', q: primaryName });
+    } else if (isStreetAddress) {
+      if (zipMatch) attempts.push({ type: 'zip', q: zipMatch[1] });
+      const cityPart = parts.find((p, i) =>
+        i > 0 && !/^\d/.test(p) && !/united states/i.test(p) && !/^[A-Z]{2}$/.test(p) && !/^[A-Z]{2}\s+\d{5}/.test(p)
+      );
+      if (cityPart) {
+        attempts.push({ type: 'neighborhood', q: cityPart });
+        attempts.push({ type: 'city', q: cityPart });
+      }
+    } else {
+      // Check for a ZIP anywhere in the string (e.g. "San Diego, CA 92122")
+      if (zipMatch) attempts.push({ type: 'zip', q: zipMatch[1] });
+      const hasCity = parts.length >= 2 && parts.some((p, i) => i > 0 && /^[A-Za-z]/.test(p) && !/united states/i.test(p) && !/^[A-Z]{2}$/.test(p));
+      attempts.push({ type: 'neighborhood', q: trimmed });
+      attempts.push({ type: 'neighborhood', q: primaryName });
+      attempts.push({ type: 'city', q: trimmed });
+      if (!hasCity) {
+        attempts.push({ type: 'city', q: primaryName });
+      }
+    }
+
+    const seen = new Set<string>();
+    const unique = attempts.filter(a => {
+      const key = `${a.type}:${a.q}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    // Reject polygons too large for a neighborhood-level score (e.g. entire states)
+    const isTooLarge = (coords: { lat: number; lng: number }[]) => {
+      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+      for (const c of coords) {
+        if (c.lat < minLat) minLat = c.lat;
+        if (c.lat > maxLat) maxLat = c.lat;
+        if (c.lng < minLng) minLng = c.lng;
+        if (c.lng > maxLng) maxLng = c.lng;
+      }
+      return (maxLat - minLat) > 1.5 || (maxLng - minLng) > 1.5;
+    };
+
+    let rejectedAsLarge = false;
+
+    try {
+      for (const attempt of unique) {
+        const res = await fetch(`/api/boundary?type=${attempt.type}&q=${encodeURIComponent(attempt.q)}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (data.approximate) continue;
+        const coords = geojsonToMapCoords(data.geometry);
+        if (coords && coords.length >= 3) {
+          if (isTooLarge(coords)) { rejectedAsLarge = true; continue; }
+          return { polygon: coords, label: data.label || primaryName };
+        }
+      }
+      for (const attempt of unique) {
+        const res = await fetch(`/api/boundary?type=${attempt.type}&q=${encodeURIComponent(attempt.q)}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const coords = geojsonToMapCoords(data.geometry);
+        if (coords && coords.length >= 3) {
+          if (isTooLarge(coords)) { rejectedAsLarge = true; continue; }
+          return { polygon: coords, label: data.label || primaryName };
+        }
+      }
+    } catch { /* boundary unavailable */ }
+    return rejectedAsLarge ? 'too_large' : null;
+  }, []);
+
+  const fetchEvScore = useCallback(async (loc: { lat: number; lng: number }) => {
+    try {
+      const params = new URLSearchParams({ lat: String(loc.lat), lng: String(loc.lng) });
+      const res = await fetch(`/api/ev-score?${params}`);
+      if (!res.ok) { setEvScore(null); setEvBreakdown(null); return; }
+      const data = await res.json();
+      setEvScore(data.score ?? null);
+      setEvBreakdown(data.breakdown ?? null);
+    } catch {
+      setEvScore(null);
+      setEvBreakdown(null);
     }
   }, []);
 
@@ -446,166 +588,207 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       };
 
-      const categoryScores: CategoryScore[] = await Promise.all(
-        categories.map(async (category) => {
-          try {
-            const config = categoryConfigs[category.id] || { idealCount: 3, searchRadius: 2, thresholdType: 'standard' as ThresholdType };
+      // Fetch boundary AND raw POI data in parallel
+      const [boundaryResult, rawCategoryScores] = await Promise.all([
+        resolveBoundary(address),
+        Promise.all(
+          categories.map(async (category) => {
+            try {
+              const config = categoryConfigs[category.id] || { idealCount: 3, searchRadius: 2, thresholdType: 'standard' as ThresholdType };
 
-            // Public Transit: use HERE Stations API with a wide fetch, then
-            // prioritize subway/rail so they aren't drowned out by bus stops.
-            if (category.id === 'publicTransit') {
-              const fetchRadius = Math.round(Math.max(config.searchRadius, 2) * 1609.34);
-              const inStr = `${loc!.lat},${loc!.lng};r=${fetchRadius}`;
-              const res = await fetch(`/api/here?endpoint=stations&in=${encodeURIComponent(inStr)}&maxPlaces=50`);
-              if (!res.ok) throw new Error('Station search failed');
-              const data = await res.json();
+              if (category.id === 'publicTransit') {
+                const fetchRadius = Math.round(Math.max(config.searchRadius, 2) * 1609.34);
+                const inStr = `${loc!.lat},${loc!.lng};r=${fetchRadius}`;
+                const res = await fetch(`/api/here?endpoint=stations&in=${encodeURIComponent(inStr)}&maxPlaces=50`);
+                if (!res.ok) throw new Error('Station search failed');
+                const data = await res.json();
 
-              const RAIL_MODES = new Set(['subway', 'metro', 'lightRail', 'tram', 'monorail',
-                'regionalTrain', 'intercityTrain', 'highSpeedTrain', 'cityTrain', 'train', 'rail']);
+                const RAIL_MODES = new Set(['subway', 'metro', 'lightRail', 'tram', 'monorail',
+                  'regionalTrain', 'intercityTrain', 'highSpeedTrain', 'cityTrain', 'train', 'rail']);
 
-              interface StationPOI extends POI { isRail: boolean }
+                interface StationPOI extends POI { isRail: boolean }
 
-              const allStations: StationPOI[] = (data.stations || []).map((s: any) => {
-                const sLat = s.place?.location?.lat ?? s.place?.lat ?? 0;
-                const sLng = s.place?.location?.lng ?? s.place?.lng ?? 0;
-                const dist = haversine(loc!.lat, loc!.lng, sLat, sLng);
-                const transports: any[] = s.transports || s.place?.transports || [];
-                const modeNames = transports.map((t: any) => t.mode || t.name || '').filter(Boolean);
-                const uniqueModes = [...new Set(modeNames)];
-                const isRail = uniqueModes.some(m => RAIL_MODES.has(m));
-                const modeStr = uniqueModes.length > 0 ? ` (${uniqueModes.join(', ')})` : '';
+                const allStations: StationPOI[] = (data.stations || []).map((s: any) => {
+                  const sLat = s.place?.location?.lat ?? s.place?.lat ?? 0;
+                  const sLng = s.place?.location?.lng ?? s.place?.lng ?? 0;
+                  const dist = haversine(loc!.lat, loc!.lng, sLat, sLng);
+                  const transports: any[] = s.transports || s.place?.transports || [];
+                  const modeNames = transports.map((t: any) => t.mode || t.name || '').filter(Boolean);
+                  const uniqueModes = [...new Set(modeNames)];
+                  const isRail = uniqueModes.some(m => RAIL_MODES.has(m));
+                  const modeStr = uniqueModes.length > 0 ? ` (${uniqueModes.join(', ')})` : '';
+                  return {
+                    distance: Math.round(dist * 100) / 100,
+                    name: (s.place?.name || s.name || 'Transit Stop') + modeStr,
+                    lat: sLat || undefined,
+                    lng: sLng || undefined,
+                    isRail,
+                  };
+                }).filter((p: StationPOI) => p.distance > 0 && p.distance <= config.searchRadius);
+
+                const railStations = allStations.filter(s => s.isRail).sort((a, b) => a.distance - b.distance);
+                const busStations = allStations.filter(s => !s.isRail).sort((a, b) => a.distance - b.distance);
+                const stationPois: POI[] = [...railStations, ...busStations];
+
+                const poiCount = stationPois.length;
+                const closestDistance = poiCount > 0 ? Math.min(...stationPois.map(p => p.distance)) : Infinity;
+                const score = calculateCategoryScore(stationPois, config);
+                let description: string;
+                const railCount = railStations.length;
+                if (score >= 4) description = `Excellent transit access${railCount > 0 ? ` — ${railCount} subway/rail station${railCount > 1 ? 's' : ''}` : ''}`;
+                else if (score >= 3) description = `Good transit options${railCount > 0 ? ` — ${railCount} subway/rail` : ''}`;
+                else if (score >= 2) description = 'Some transit stops available';
+                else if (score >= 1) description = 'Limited transit in this area';
+                else description = 'No transit stops found nearby';
+                return { category, score, description, places: stationPois, poiCount, closestDistance };
+              }
+
+              const places = await searchPlaces(
+                loc!.lat,
+                loc!.lng,
+                category.mqCategory,
+                config.searchRadius,
+                100
+              );
+
+              if (!places || places.length === 0) {
                 return {
-                  distance: Math.round(dist * 100) / 100,
-                  name: (s.place?.name || s.name || 'Transit Stop') + modeStr,
-                  lat: sLat || undefined,
-                  lng: sLng || undefined,
-                  isRail,
+                  category,
+                  score: 0,
+                  description: 'None found nearby',
+                  places: [],
+                  poiCount: 0,
+                  closestDistance: Infinity,
                 };
-              }).filter((p: StationPOI) => p.distance > 0 && p.distance <= config.searchRadius);
+              }
 
-              // Prioritize: all rail/subway first, then bus stops
-              const railStations = allStations.filter(s => s.isRail).sort((a, b) => a.distance - b.distance);
-              const busStations = allStations.filter(s => !s.isRail).sort((a, b) => a.distance - b.distance);
-              const stationPois: POI[] = [...railStations, ...busStations];
+              const groceryBlocklist = [
+                'apple', 'microsoft', 'google', 'best buy', 'target mobile',
+                'verizon', 'at&t', 't-mobile', 'sprint', 'gamestop',
+                'foot locker', 'nike', 'adidas', 'lululemon', 'gap',
+                'banana republic', 'old navy', 'h&m', 'zara', 'forever 21',
+                'sephora', 'ulta', 'mac cosmetics', 'bath & body works',
+                'victoria\'s secret', 'pink', 'american eagle', 'hollister',
+                'abercrombie', 'express', 'buckle', 'zumiez', 'hot topic',
+                'spencer\'s', 'build-a-bear', 'claire\'s', 'piercing pagoda',
+                'kay jewelers', 'jared', 'zales', 'pandora', 'swarovski',
+                'tesla', 'bmw', 'mercedes', 'lexus', 'audi', 'porsche',
+              ];
 
-              const poiCount = stationPois.length;
-              const closestDistance = poiCount > 0 ? Math.min(...stationPois.map(p => p.distance)) : Infinity;
-              const score = calculateCategoryScore(stationPois, config);
+              const pois: POI[] = places
+                .map(p => {
+                  let distance = p.distance;
+                  let lat: number | undefined;
+                  let lng: number | undefined;
+
+                  if (p.place?.geometry?.coordinates) {
+                    const coords = p.place.geometry.coordinates;
+                    if (coords && coords.length >= 2) {
+                      lng = coords[0];
+                      lat = coords[1];
+                      if ((distance === undefined || distance === null || distance === 0)) {
+                        distance = haversine(loc!.lat, loc!.lng, lat, lng);
+                      }
+                    }
+                  }
+
+                  if ((distance === undefined || distance === null || distance === 0) && (p as any).distanceKm) {
+                    distance = (p as any).distanceKm * 0.621371;
+                  }
+
+                  return {
+                    distance: distance || 0,
+                    name: p.name || 'Unknown',
+                    lat,
+                    lng,
+                  };
+                })
+                .filter(p => p.distance > 0)
+                .filter(p => p.distance <= config.searchRadius)
+                .filter(p => {
+                  if (category.id === 'grocery') {
+                    const nameLower = p.name.toLowerCase();
+                    return !groceryBlocklist.some(blocked => nameLower.includes(blocked));
+                  }
+                  return true;
+                })
+                .sort((a, b) => a.distance - b.distance);
+
+              const poiCount = pois.length;
+              const closestDistance = poiCount > 0 ? pois[0].distance : Infinity;
+              const score = calculateCategoryScore(pois, config);
+
               let description: string;
-              const railCount = railStations.length;
+              if (score >= 4) description = `Excellent ${category.name.toLowerCase()} options nearby`;
+              else if (score >= 3) description = `Good variety within walking distance`;
+              else if (score >= 2) description = `Some options available`;
+              else if (score >= 1) description = `Limited options in this area`;
+              else description = `None found nearby`;
+
+              return { category, score, description, places: pois, poiCount, closestDistance };
+            } catch {
+              return {
+                category,
+                score: 0,
+                description: 'Unable to load',
+                places: [],
+                poiCount: 0,
+                closestDistance: Infinity,
+                error: true,
+              };
+            }
+          })
+        ),
+      ]);
+
+      // Set boundary state
+      if (boundaryResult === 'too_large') {
+        setBoundaryPolygon(null);
+        setBoundaryLabel('');
+        setBoundaryHint('That area is too broad — try a city, zip code, or neighborhood for a more detailed score.');
+      } else if (boundaryResult) {
+        setBoundaryPolygon(boundaryResult.polygon);
+        setBoundaryLabel(boundaryResult.label);
+        setBoundaryHint('');
+      } else {
+        setBoundaryPolygon(null);
+        setBoundaryLabel('');
+        setBoundaryHint('');
+      }
+
+      // Filter POIs to only those within the boundary, then recalculate scores
+      const ring = (boundaryResult && boundaryResult !== 'too_large') ? boundaryResult.polygon : null;
+      const categoryScores: CategoryScore[] = ring
+        ? rawCategoryScores.map(cs => {
+            if (cs.error || cs.places.length === 0) return cs;
+            const filtered = cs.places.filter(p =>
+              p.lat != null && p.lng != null
+                ? pointInPolygon({ lat: p.lat, lng: p.lng }, ring)
+                : false
+            );
+            const config = categoryConfigs[cs.category.id] || { idealCount: 3, searchRadius: 2, thresholdType: 'standard' as ThresholdType };
+            const score = filtered.length > 0 ? calculateCategoryScore(filtered, config) : 0;
+            const poiCount = filtered.length;
+            const closestDistance = poiCount > 0 ? Math.min(...filtered.map(p => p.distance)) : Infinity;
+
+            let description: string;
+            if (cs.category.id === 'publicTransit') {
+              const railCount = filtered.filter(p => p.name.includes('(subway') || p.name.includes('(metro') || p.name.includes('(light') || p.name.includes('(train') || p.name.includes('(rail')).length;
               if (score >= 4) description = `Excellent transit access${railCount > 0 ? ` — ${railCount} subway/rail station${railCount > 1 ? 's' : ''}` : ''}`;
               else if (score >= 3) description = `Good transit options${railCount > 0 ? ` — ${railCount} subway/rail` : ''}`;
               else if (score >= 2) description = 'Some transit stops available';
               else if (score >= 1) description = 'Limited transit in this area';
-              else description = 'No transit stops found nearby';
-              return { category, score, description, places: stationPois, poiCount, closestDistance };
+              else description = 'No transit stops found in this area';
+            } else {
+              if (score >= 4) description = `Excellent ${cs.category.name.toLowerCase()} options nearby`;
+              else if (score >= 3) description = `Good variety within the area`;
+              else if (score >= 2) description = `Some options available`;
+              else if (score >= 1) description = `Limited options in this area`;
+              else description = `None found in this area`;
             }
-
-            const places = await searchPlaces(
-              loc!.lat, 
-              loc!.lng, 
-              category.mqCategory, 
-              config.searchRadius, 
-              100
-            );
-
-            if (!places || places.length === 0) {
-              return {
-                category,
-                score: 0,
-                description: 'None found nearby',
-                places: [],
-                poiCount: 0,
-                closestDistance: Infinity,
-              };
-            }
-
-            // Blocklist of company names that are definitely NOT grocery stores
-            const groceryBlocklist = [
-              'apple', 'microsoft', 'google', 'best buy', 'target mobile', 
-              'verizon', 'at&t', 't-mobile', 'sprint', 'gamestop',
-              'foot locker', 'nike', 'adidas', 'lululemon', 'gap',
-              'banana republic', 'old navy', 'h&m', 'zara', 'forever 21',
-              'sephora', 'ulta', 'mac cosmetics', 'bath & body works',
-              'victoria\'s secret', 'pink', 'american eagle', 'hollister',
-              'abercrombie', 'express', 'buckle', 'zumiez', 'hot topic',
-              'spencer\'s', 'build-a-bear', 'claire\'s', 'piercing pagoda',
-              'kay jewelers', 'jared', 'zales', 'pandora', 'swarovski',
-              'tesla', 'bmw', 'mercedes', 'lexus', 'audi', 'porsche',
-            ];
-
-            const pois: POI[] = places
-              .map(p => {
-                let distance = p.distance;
-                let lat: number | undefined;
-                let lng: number | undefined;
-                
-                if (p.place?.geometry?.coordinates) {
-                  const coords = p.place.geometry.coordinates;
-                  if (coords && coords.length >= 2) {
-                    lng = coords[0];
-                    lat = coords[1];
-                    if ((distance === undefined || distance === null || distance === 0)) {
-                      distance = haversine(loc!.lat, loc!.lng, lat, lng);
-                    }
-                  }
-                }
-                
-                if ((distance === undefined || distance === null || distance === 0) && (p as any).distanceKm) {
-                  distance = (p as any).distanceKm * 0.621371;
-                }
-                
-                return {
-                  distance: distance || 0,
-                  name: p.name || 'Unknown',
-                  lat,
-                  lng,
-                };
-              })
-              .filter(p => p.distance > 0)
-              .filter(p => p.distance <= config.searchRadius)
-              .filter(p => {
-                if (category.id === 'grocery') {
-                  const nameLower = p.name.toLowerCase();
-                  return !groceryBlocklist.some(blocked => nameLower.includes(blocked));
-                }
-                return true;
-              })
-              .sort((a, b) => a.distance - b.distance);
-
-            const poiCount = pois.length;
-            const closestDistance = poiCount > 0 ? pois[0].distance : Infinity;
-
-            const score = calculateCategoryScore(pois, config);
-
-            let description: string;
-            if (score >= 4) description = `Excellent ${category.name.toLowerCase()} options nearby`;
-            else if (score >= 3) description = `Good variety within walking distance`;
-            else if (score >= 2) description = `Some options available`;
-            else if (score >= 1) description = `Limited options in this area`;
-            else description = `None found nearby`;
-
-            return {
-              category,
-              score,
-              description,
-              places: pois,
-              poiCount,
-              closestDistance,
-            };
-          } catch (err) {
-            return {
-              category,
-              score: 0,
-              description: 'Unable to load',
-              places: [],
-              poiCount: 0,
-              closestDistance: Infinity,
-              error: true,
-            };
-          }
-        })
-      );
+            return { ...cs, places: filtered, score, poiCount, closestDistance, description };
+          })
+        : rawCategoryScores;
 
       setScores(categoryScores);
 
@@ -616,6 +799,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         setMapZoomToLocation({ lat: loc.lat, lng: loc.lng, zoom: 14 });
         setMapFitBounds(undefined);
         fetchWalkabilityIsolines(loc);
+        fetchEvScore(loc);
       }
 
       onScoreCalculated?.({ overall, categories: categoryScores });
@@ -770,12 +954,20 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
               return markers;
             })()}
-            polygons={showWalkability ? walkabilityPolygons.map(p => ({
-              coordinates: p.coordinates,
-              color: p.color,
-              fillOpacity: 0.12,
-              strokeWidth: 2,
-            })) : []}
+            polygons={[
+              ...(boundaryPolygon ? [{
+                coordinates: boundaryPolygon,
+                color: accentColor,
+                fillOpacity: 0.08,
+                strokeWidth: 2,
+              }] : []),
+              ...(showWalkability ? walkabilityPolygons.map(p => ({
+                coordinates: p.coordinates,
+                color: p.color,
+                fillOpacity: 0.12,
+                strokeWidth: 2,
+              })) : []),
+            ]}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
           />
@@ -954,7 +1146,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     setLocation({ lat: result.lat, lng: result.lng });
                   }
                 }}
-                placeholder="Enter an address..."
+                placeholder="Enter a city, zip code, or neighborhood to get started"
                 darkMode={darkMode}
                 inputBg={inputBg}
                 textColor={textColor}
@@ -995,6 +1187,16 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
           {/* Scrollable content area */}
           <div className="flex-1 overflow-y-auto prism-scrollbar">
 
+            {boundaryHint && (
+              <div
+                className="mx-4 mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg text-xs leading-relaxed"
+                style={{ background: '#f59e0b12', border: '1px solid #f59e0b30', color: '#92400e' }}
+              >
+                <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
+                <span>{boundaryHint}</span>
+              </div>
+            )}
+
             {/* Overall Score + Quick Tools */}
             {overallScore !== null && (
               <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -1022,6 +1224,93 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     </div>
                   </div>
                 </div>
+
+                {/* EV Readiness Score */}
+                {evScore !== null && (
+                  <div
+                    className="mt-3 p-3 rounded-xl"
+                    style={{
+                      background: 'var(--bg-panel)',
+                      border: '1.5px solid var(--border-subtle)',
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style={{
+                          background: (evScore >= 70 ? '#22c55e' : evScore >= 45 ? '#eab308' : '#ef4444') + '18',
+                        }}
+                      >
+                        <BatteryCharging
+                          className="w-6 h-6"
+                          style={{ color: evScore >= 70 ? '#22c55e' : evScore >= 45 ? '#eab308' : '#ef4444' }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+                          EV Readiness
+                        </div>
+                        <div className="flex items-baseline gap-1.5">
+                          <span
+                            className="text-2xl font-extrabold leading-none"
+                            style={{ color: evScore >= 70 ? '#22c55e' : evScore >= 45 ? '#eab308' : '#ef4444' }}
+                          >
+                            {evScore}
+                          </span>
+                          <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>/ 100</span>
+                          <span
+                            className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                            style={{
+                              background: (evScore >= 70 ? '#22c55e' : evScore >= 45 ? '#eab308' : '#ef4444') + '18',
+                              color: evScore >= 70 ? '#22c55e' : evScore >= 45 ? '#eab308' : '#ef4444',
+                            }}
+                          >
+                            {evScore >= 80 ? 'Excellent' : evScore >= 60 ? 'Good' : evScore >= 40 ? 'Fair' : 'Limited'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--border-default)' }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${evScore}%`,
+                          background: evScore >= 70 ? '#22c55e' : evScore >= 45 ? '#eab308' : '#ef4444',
+                        }}
+                      />
+                    </div>
+                    {/* Compact breakdown */}
+                    {evBreakdown && (
+                      <div className="flex gap-3 mt-2 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <Zap className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            {evBreakdown.chargerCount} chargers
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Zap className="w-3 h-3" style={{ color: '#f59e0b' }} />
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            {evBreakdown.dcFastCount} DC fast
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            {evBreakdown.solarPermits} solar permits
+                          </span>
+                        </div>
+                        {evBreakdown.permitGrowthRate > 0 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] font-medium" style={{ color: '#22c55e' }}>
+                              +{evBreakdown.permitGrowthRate}% growth
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Quick tool cards — side by side */}
                 {location && (
