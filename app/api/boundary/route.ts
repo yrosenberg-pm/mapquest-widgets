@@ -78,7 +78,8 @@ async function fetchZillowNeighborhood(
     if (d < bestDist) { bestDist = d; bestMatch = f; }
   }
 
-  if (!bestMatch) return null;
+  // Reject matches that are too far from the expected location (~35 mi / 0.5°)
+  if (!bestMatch || bestDist > 0.5) return null;
   const city = bestMatch.properties?.CITY || '';
   const label = city ? `${bestMatch.properties.NAME}, ${city}` : bestMatch.properties.NAME;
   return { label, geometry: bestMatch.geometry };
@@ -293,19 +294,17 @@ export async function GET(request: NextRequest) {
       const lat = parseFloat(item.lat);
       const lon = parseFloat(item.lon);
 
-      // 1. Nominatim has a real polygon — use it if it's actually a neighborhood/suburb
-      //    Skip city/admin-level results so the city handler (with Census TIGER) handles them
-      const nomType = (item.type || '').toLowerCase();
-      const nomClass = (item.class || '').toLowerCase();
-      const isNeighborhoodLevel = ['suburb', 'neighbourhood', 'quarter', 'residential', 'hamlet', 'village'].includes(nomType)
-        || (nomClass === 'place' && !['city', 'town', 'state', 'county'].includes(nomType));
+      // 1. Nominatim has a real polygon — use it if it's sub-city level.
+      //    Nominatim's addresstype distinguishes neighborhoods/suburbs from cities reliably.
+      const addrType = (item.addresstype || '').toLowerCase();
+      const isCityOrLarger = ['city', 'town', 'state', 'county', 'country'].includes(addrType);
 
-      if (isNeighborhoodLevel && item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon')) {
+      if (!isCityOrLarger && item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon')) {
         return NextResponse.json({ label, geometry: item.geojson }, { headers: CACHE_HEADER });
       }
 
       // Nominatim matched a city/admin boundary, not a neighborhood — bail so the city handler can take over
-      if (!isNeighborhoodLevel) {
+      if (isCityOrLarger) {
         return NextResponse.json({ error: 'Not a neighborhood' }, { status: 404 });
       }
 

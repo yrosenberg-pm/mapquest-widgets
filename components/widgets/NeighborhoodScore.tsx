@@ -6,7 +6,7 @@ import {
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
   Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft,
-  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase, BatteryCharging
+  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase, BatteryCharging, Bike, Car
 } from 'lucide-react';
 import { geocode, searchPlaces, getDirections } from '@/lib/mapquest';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
@@ -304,7 +304,11 @@ export default function NeighborhoodScore({
   // Commute time state
   const [workAddress, setWorkAddress] = useState('');
   const [workLocation, setWorkLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [commuteData, setCommuteData] = useState<{ driveMinutes: number; transitMinutes: number | null; distanceMiles: number } | null>(null);
+  const [commuteData, setCommuteData] = useState<{
+    driveMinutes: number; transitMinutes: number | null;
+    walkMinutes: number | null; bikeMinutes: number | null;
+    distanceMiles: number;
+  } | null>(null);
   const [commuteLoading, setCommuteLoading] = useState(false);
 
   // Chat state
@@ -341,7 +345,7 @@ export default function NeighborhoodScore({
       }).join('\n\n');
 
       const commuteStr = commuteData
-        ? `COMMUTE: ${commuteData.driveMinutes} min drive (${commuteData.distanceMiles} mi)${commuteData.transitMinutes != null ? `, ${commuteData.transitMinutes} min transit` : ''} to ${workAddress || 'work'}`
+        ? `COMMUTE: ${commuteData.driveMinutes} min drive (${commuteData.distanceMiles} mi)${commuteData.transitMinutes != null ? `, ${commuteData.transitMinutes} min transit` : ''}${commuteData.walkMinutes != null ? `, ${commuteData.walkMinutes} min walk` : ''}${commuteData.bikeMinutes != null ? `, ${commuteData.bikeMinutes} min bike` : ''} to ${workAddress || 'work'}`
         : '';
       const walkStr = walkabilityPolygons.length > 0 ? 'WALKABILITY: 10-min and 20-min walk zones available on map' : '';
 
@@ -444,7 +448,10 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     } else {
       if (zipMatch) attempts.push({ type: 'zip', q: zipMatch[1] });
       attempts.push({ type: 'neighborhood', q: trimmed });
-      attempts.push({ type: 'neighborhood', q: primaryName });
+      // Only try the bare name when the user didn't provide location context
+      if (parts.length === 1) {
+        attempts.push({ type: 'neighborhood', q: primaryName });
+      }
     }
 
     const seen = new Set<string>();
@@ -519,8 +526,14 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     try {
       const fromStr = `${location.lat},${location.lng}`;
       const toStr = `${workLocation.lat},${workLocation.lng}`;
-      const driveResult = await getDirections(fromStr, toStr, 'fastest');
-      const driveSec = (driveResult?.time || 0) * 60; // getDirections returns minutes
+
+      const [driveResult, walkResult, bikeResult] = await Promise.all([
+        getDirections(fromStr, toStr, 'fastest'),
+        getDirections(fromStr, toStr, 'pedestrian').catch(() => null),
+        getDirections(fromStr, toStr, 'bicycle').catch(() => null),
+      ]);
+
+      const driveSec = (driveResult?.time || 0) * 60;
       const driveDist = driveResult?.distance || 0;
 
       let transitMin: number | null = null;
@@ -539,9 +552,14 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         }
       } catch { /* transit not always available */ }
 
+      const walkMin = walkResult?.time ? Math.round((walkResult.time * 60) / 60) : null;
+      const bikeMin = bikeResult?.time ? Math.round((bikeResult.time * 60) / 60) : null;
+
       setCommuteData({
         driveMinutes: Math.round(driveSec / 60),
         transitMinutes: transitMin,
+        walkMinutes: walkMin,
+        bikeMinutes: bikeMin,
         distanceMiles: Math.round(driveDist * 10) / 10,
       });
     } catch {
@@ -1378,7 +1396,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                       {commuteData ? (
                         <div className="flex flex-col gap-1 w-full">
                           <div className="flex items-center gap-1">
-                            <Navigation className="w-2.5 h-2.5" style={{ color: accentColor }} />
+                            <Car className="w-2.5 h-2.5" style={{ color: accentColor }} />
                             <span className="text-[11px] font-bold" style={{ color: accentColor }}>{commuteData.driveMinutes}m</span>
                             <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>drive</span>
                           </div>
@@ -1387,6 +1405,20 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                               <Bus className="w-2.5 h-2.5" style={{ color: '#0ea5e9' }} />
                               <span className="text-[11px] font-bold" style={{ color: '#0ea5e9' }}>{commuteData.transitMinutes}m</span>
                               <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>transit</span>
+                            </div>
+                          )}
+                          {commuteData.walkMinutes != null && (
+                            <div className="flex items-center gap-1">
+                              <Footprints className="w-2.5 h-2.5" style={{ color: '#16a34a' }} />
+                              <span className="text-[11px] font-bold" style={{ color: '#16a34a' }}>{commuteData.walkMinutes}m</span>
+                              <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>walk</span>
+                            </div>
+                          )}
+                          {commuteData.bikeMinutes != null && (
+                            <div className="flex items-center gap-1">
+                              <Bike className="w-2.5 h-2.5" style={{ color: '#9333ea' }} />
+                              <span className="text-[11px] font-bold" style={{ color: '#9333ea' }}>{commuteData.bikeMinutes}m</span>
+                              <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>bike</span>
                             </div>
                           )}
                           <button
