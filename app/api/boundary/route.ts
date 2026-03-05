@@ -352,7 +352,23 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ label, geometry: overpassGeo }, { headers: CACHE_HEADER });
       }
 
-      // 4. Last resort: approximate circle (~0.5 mi radius)
+      // 4. ZIP code fallback — Nominatim often includes the postcode even when no polygon exists
+      const postcode = item.address?.postcode;
+      if (postcode && /^\d{5}$/.test(postcode)) {
+        try {
+          const tigerUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_ACS2023/MapServer/2/query?where=ZCTA5%3D%27${encodeURIComponent(postcode)}%27&outFields=ZCTA5&f=geojson&geometryType=esriGeometryPolygon&outSR=4326`;
+          const tigerRes = await fetch(tigerUrl);
+          if (tigerRes.ok) {
+            const tigerData = await tigerRes.json();
+            const feat = tigerData.features?.[0];
+            if (feat?.geometry) {
+              return NextResponse.json({ label, geometry: feat.geometry }, { headers: CACHE_HEADER });
+            }
+          }
+        } catch { /* fall through to circle */ }
+      }
+
+      // 5. Last resort: approximate circle (~0.5 mi radius)
       const radiusMiles = 0.5;
       const nPts = 48;
       const coords: [number, number][] = [];
