@@ -432,7 +432,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     const attempts: { type: string; q: string }[] = [];
 
     if (primaryIsZip) {
-      // Primary part is a ZIP code — prioritize zip boundary lookup
       attempts.push({ type: 'zip', q: primaryName });
     } else if (isStreetAddress) {
       if (zipMatch) attempts.push({ type: 'zip', q: zipMatch[1] });
@@ -441,18 +440,11 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
       );
       if (cityPart) {
         attempts.push({ type: 'neighborhood', q: cityPart });
-        attempts.push({ type: 'city', q: cityPart });
       }
     } else {
-      // Check for a ZIP anywhere in the string (e.g. "San Diego, CA 92122")
       if (zipMatch) attempts.push({ type: 'zip', q: zipMatch[1] });
-      const hasCity = parts.length >= 2 && parts.some((p, i) => i > 0 && /^[A-Za-z]/.test(p) && !/united states/i.test(p) && !/^[A-Z]{2}$/.test(p));
       attempts.push({ type: 'neighborhood', q: trimmed });
       attempts.push({ type: 'neighborhood', q: primaryName });
-      attempts.push({ type: 'city', q: trimmed });
-      if (!hasCity) {
-        attempts.push({ type: 'city', q: primaryName });
-      }
     }
 
     const seen = new Set<string>();
@@ -500,6 +492,10 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         }
       }
     } catch { /* boundary unavailable */ }
+    // If all neighborhood attempts failed (e.g. user searched a city name), hint to narrow
+    if (!primaryIsZip && !isStreetAddress && !rejectedAsLarge && unique.length > 0) {
+      rejectedAsLarge = true;
+    }
     return rejectedAsLarge ? 'too_large' : null;
   }, []);
 
@@ -757,7 +753,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
       if (boundaryResult === 'too_large') {
         setBoundaryPolygon(null);
         setBoundaryLabel('');
-        setBoundaryHint('That area is too broad — try a city, zip code, or neighborhood for a more detailed score.');
+        setBoundaryHint('That area is too broad — try a zip code or neighborhood for a more detailed score.');
       } else if (boundaryResult) {
         setBoundaryPolygon(boundaryResult.polygon);
         setBoundaryLabel(boundaryResult.label);
