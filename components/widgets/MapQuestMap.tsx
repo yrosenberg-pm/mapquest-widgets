@@ -572,11 +572,10 @@ export default function MapQuestMap({
     const L = window.L;
     const mapDiv = document.getElementById(mapIdRef.current);
     
-    // Remove ALL existing layers first (tiles, etc.)
+    // Remove only tile layers (not polylines, markers, etc.)
     const layersToRemove: any[] = [];
     mapRef.current.eachLayer((layer: any) => {
-      // Check if it's a tile layer by looking for _url property or checking constructor
-      if (layer._url || layer._tiles || (layer.options && layer.options.tileSize)) {
+      if (layer._tiles || (layer.options && layer.options.tileSize) || layer instanceof L.TileLayer) {
         layersToRemove.push(layer);
       }
     });
