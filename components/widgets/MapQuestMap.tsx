@@ -1357,8 +1357,13 @@ export default function MapQuestMap({
     
     // Don't run if we have transit segments - that's handled by the other useEffect
     if (transitSegments && transitSegments.length > 0) return;
-    if (!showRoute || !routeStart || !routeEnd) {
-      // Clear stale route when showRoute is disabled (e.g. switching to transit/pedestrian mode)
+
+    // Only manage the route layer when this effect owns it (routeStart/routeEnd provided).
+    // When the route comes from pre-calculated routePolyline/routeSegments, the other
+    // effect handles drawing — clearing here would wipe it on darkMode toggle.
+    if (!routeStart || !routeEnd) return;
+
+    if (!showRoute) {
       routeLayerRef.current.clearLayers();
       return;
     }
@@ -1729,7 +1734,7 @@ export default function MapQuestMap({
     if (mapRef.current && latLngs.length > 1) {
       mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
     }
-  }, [routePolyline, routeSegments, transitSegments, routeColor, accentColor, showRoute, showTraffic, routeStart, routeEnd, mapReady, onRouteLineClick, onRouteLineDrag]);
+  }, [routePolyline, routeSegments, transitSegments, routeColor, accentColor, showRoute, showTraffic, routeStart, routeEnd, darkMode, mapReady, onRouteLineClick, onRouteLineDrag]);
 
   return (
     <div

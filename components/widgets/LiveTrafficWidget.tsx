@@ -1270,7 +1270,7 @@ export default function LiveTrafficWidget({
               clusterRadiusPx={56}
               circles={[]}
               polygons={[]}
-              polylines={showFlow ? flowPolylines : []}
+              polylines={showFlow && mode === 'area' ? flowPolylines : []}
               interactive={true}
               zoomToLocation={zoomToLocation}
               onBoundsChange={handleBoundsChange}
@@ -1719,14 +1719,16 @@ export default function LiveTrafficWidget({
                       <button
                         type="button"
                         onClick={() => void calcRoute()}
-                        className="rounded-lg border px-3 py-2 text-xs font-semibold hover:brightness-110 transition-all"
+                        className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold hover:brightness-110 transition-all"
                         style={{
                           borderColor: 'transparent',
                           background: 'var(--brand-primary)',
                           color: 'white',
                         }}
+                        disabled={routeState.status === 'loading'}
                       >
-                        {routeState.status === 'loading' ? 'Building route…' : 'Show route'}
+                        {routeState.status === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        Route
                       </button>
                       <button
                         type="button"
