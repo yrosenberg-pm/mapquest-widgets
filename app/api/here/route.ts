@@ -26,6 +26,7 @@ const ENDPOINTS: Record<string, string> = {
   truckrestrictions: 'https://fleet.ls.hereapi.com/2/overlays.json',
   // EV charging (we'll try dedicated EV endpoints first, then fall back to Search/Discover)
   evchargers: 'https://ev-chargepoints.search.hereapi.com/v1/chargepoints',
+  trafficflow: 'https://data.traffic.hereapi.com/v7/flow',
 };
 
 export async function GET(request: NextRequest) {
@@ -566,6 +567,17 @@ export async function GET(request: NextRequest) {
         if (departureTime) u.searchParams.set('departureTime', departureTime);
 
         url = u.toString();
+        break;
+      }
+
+      case 'trafficflow': {
+        const inParam = searchParams.get('in');
+        const locRef = searchParams.get('locationReferencing') || 'shape';
+        const fc = searchParams.get('functionalClasses') || '1,2,3';
+        if (!inParam) {
+          return NextResponse.json({ error: 'in parameter is required (e.g. bbox:west,south,east,north)' }, { status: 400 });
+        }
+        url = `${ENDPOINTS.trafficflow}?apiKey=${HERE_API_KEY}&in=${encodeURIComponent(inParam)}&locationReferencing=${locRef}&functionalClasses=${encodeURIComponent(fc)}`;
         break;
       }
 

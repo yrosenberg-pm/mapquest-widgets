@@ -2,9 +2,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, MapPin, RefreshCw, Route, MessageCircle, Send, X, Sparkles, CornerDownLeft, Search, Navigation2, Milestone } from 'lucide-react';
+import { AlertTriangle, Loader2, MapPin, RefreshCw, Route, MessageCircle, Send, X, Sparkles, CornerDownLeft, Search, Navigation2, Milestone, Layers } from 'lucide-react';
 import WidgetHeader from './WidgetHeader';
-import CollapsibleSection from './CollapsibleSection';
 import * as turf from '@turf/turf';
 import MapQuestMap from './MapQuestMap';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -50,11 +49,12 @@ type NormalizedIncident = {
   delayMinutes?: number;
 };
 
-const DEFAULT_ZOOM = 14;
+const DEFAULT_ZOOM = 7;
 const DEFAULT_WIDTH = 400;
 const DEFAULT_HEIGHT = 500;
 const DEFAULT_REFRESH_S = 120;
 const DEFAULT_FILTERS: TrafficWidgetProps['incidentFilters'] = ['construction', 'incidents', 'event', 'congestion'];
+const ZOOM_CROSSOVER = 12;
 
 const severityMeta: Record<Severity, { label: string; dot: string }> = {
   4: { label: 'Critical', dot: 'bg-red-500' },
@@ -352,20 +352,63 @@ function incidentIconDataUri(kind: IncidentKind, color: string) {
 }
 
 function kindToMarkerColor(kind: IncidentKind) {
-  // Per request: kind-based map marker colors (independent of severity color-coding in the list UI).
-  if (kind === 'closure') return '#eab308'; // slightly darker yellow
-  if (kind === 'construction') return '#f97316'; // orange
-  return '#3b82f6'; // blue (traffic)
+  if (kind === 'closure') return '#7C3AED'; // purple
+  if (kind === 'construction') return '#D97706'; // darker amber
+  return '#0EA5E9'; // sky blue
 }
 
 function congestionColorFromSpeedMph(mph: number) {
-  // Requested palette: clear = blue; congestion ramps yellow → orange → red.
   if (!Number.isFinite(mph)) return '#9CA3AF';
-  if (mph >= 45) return '#3b82f6'; // blue (clear)
-  if (mph >= 30) return '#facc15'; // yellow (light congestion)
-  if (mph >= 18) return '#f97316'; // orange (moderate)
-  if (mph >= 10) return '#ef4444'; // red (heavy)
-  return '#b91c1c'; // deep red (severe)
+  if (mph >= 45) return '#3b82f6';
+  if (mph >= 30) return '#facc15';
+  if (mph >= 18) return '#f97316';
+  if (mph >= 10) return '#ef4444';
+  return '#b91c1c';
+}
+
+// --------------- Incident density heatmap grid (zoomed-out view) ---------------
+
+const TRAFFIC_GRID_CELL_DEG = 0.008; // ~0.55 mi per cell
+
+const TRAFFIC_GRID_COLORS = [
+  { min: 1, max: 2, fill: '#3B82F6', opacity: 0.20 },
+  { min: 3, max: 5, fill: '#06B6D4', opacity: 0.28 },
+  { min: 6, max: 10, fill: '#F59E0B', opacity: 0.35 },
+  { min: 11, max: 20, fill: '#F97316', opacity: 0.45 },
+  { min: 21, max: Infinity, fill: '#EF4444', opacity: 0.55 },
+];
+
+function gridColorForCount(count: number) {
+  for (const g of TRAFFIC_GRID_COLORS) {
+    if (count >= g.min && count <= g.max) return g;
+  }
+  return TRAFFIC_GRID_COLORS[TRAFFIC_GRID_COLORS.length - 1];
+}
+
+function buildIncidentGrid(incidents: NormalizedIncident[]) {
+  const cells = new Map<string, { count: number; rowLat: number; colLng: number }>();
+  for (const inc of incidents) {
+    const row = Math.floor(inc.lat / TRAFFIC_GRID_CELL_DEG);
+    const col = Math.floor(inc.lng / TRAFFIC_GRID_CELL_DEG);
+    const key = `${row}:${col}`;
+    if (!cells.has(key)) {
+      cells.set(key, { count: 0, rowLat: row * TRAFFIC_GRID_CELL_DEG, colLng: col * TRAFFIC_GRID_CELL_DEG });
+    }
+    cells.get(key)!.count++;
+  }
+  return [...cells.values()];
+}
+
+// --------------- HERE Traffic Flow color from km/h ---------------
+
+function flowColorFromKmh(currentSpeed: number, freeFlowSpeed: number) {
+  if (!Number.isFinite(currentSpeed) || !Number.isFinite(freeFlowSpeed) || freeFlowSpeed <= 0) return '#9CA3AF';
+  const ratio = currentSpeed / freeFlowSpeed;
+  if (ratio >= 0.85) return '#22c55e'; // green — free flow
+  if (ratio >= 0.65) return '#facc15'; // yellow — light congestion
+  if (ratio >= 0.45) return '#f97316'; // orange — moderate
+  if (ratio >= 0.25) return '#ef4444'; // red — heavy
+  return '#b91c1c'; // deep red — severe / near standstill
 }
 
 async function fetchTrafficSegments(opts: {
@@ -568,11 +611,24 @@ export default function LiveTrafficWidget({
 
   const isDark = theme === 'dark';
 
+  // Traffic flow overlay toggle — controls both the flow polylines AND the heatmap
+  const [showFlow, setShowFlow] = useState(true);
+  // Track whether user has searched so we can start zoomed out
+  const [hasSearched, setHasSearched] = useState(false);
+  // Current map zoom level — drives heatmap vs markers+flow crossover
+  const [currentZoom, setCurrentZoom] = useState(z);
+
+  // HERE Traffic Flow polylines for major roads (fetched when zoomed in)
+  const [flowPolylines, setFlowPolylines] = useState<{ coords: { lat: number; lng: number }[]; color: string; weight: number }[]>([]);
+
   // Area mode center can be changed by the user (starting location).
   const [areaCenter, setAreaCenter] = useState<{ lat: number; lng: number }>(center);
+  // Stable ref for the map's initial center — prevents the MapQuestMap center/zoom
+  // effect from re-firing and fighting the user's zoom level.
+  const initialCenterRef = useRef(center);
   const [areaQuery, setAreaQuery] = useState('');
-  const [areaRadiusMiles, setAreaRadiusMiles] = useState(5);
-  const [areaSettingsOpen, setAreaSettingsOpen] = useState(true);
+  // Viewport bbox updated on every pan/zoom via onBoundsChange
+  const [viewportBbox, setViewportBbox] = useState<{ lat1: number; lng1: number; lat2: number; lng2: number } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -630,7 +686,6 @@ export default function LiveTrafficWidget({
 
     if (mode === 'area') {
       parts.push(`AREA CENTER: ${areaCenter.lat.toFixed(5)}, ${areaCenter.lng.toFixed(5)}`);
-      parts.push(`RADIUS: ${areaRadiusMiles} miles`);
     } else {
       if (routeFrom) parts.push(`ROUTE FROM: ${routeFrom}`);
       if (routeTo) parts.push(`ROUTE TO: ${routeTo}`);
@@ -664,7 +719,7 @@ export default function LiveTrafficWidget({
     }
 
     return parts.join('\n');
-  }, [mode, areaCenter, areaRadiusMiles, routeFrom, routeTo, routeState, incidents, lastUpdated, exitPin]);
+  }, [mode, areaCenter, routeFrom, routeTo, routeState, incidents, lastUpdated, exitPin]);
 
   const sendChatMessage = useCallback(async (text?: string) => {
     const msg = text ?? chatInput.trim();
@@ -715,16 +770,11 @@ export default function LiveTrafficWidget({
     return counts;
   }, [incidents]);
 
-  const mapPolygons = useMemo(() => {
-    // Per request: no isochrone overlays by default. Keep the map focused on traffic-on-roads.
-    return [];
-  }, []);
+  // (heatmap grid removed — zoomed-out view just shows a clean map)
 
-  const areaBbox = useMemo(() => bboxFromRadiusMiles(areaCenter, areaRadiusMiles), [areaCenter, areaRadiusMiles]);
-  const areaFitBounds = useMemo(
-    () => ({ south: areaBbox.lat1, west: areaBbox.lng1, north: areaBbox.lat2, east: areaBbox.lng2 }),
-    [areaBbox]
-  );
+  // Default bbox (2.5 mi) used only for the initial search; after that viewport bbox takes over.
+  const defaultBbox = useMemo(() => bboxFromRadiusMiles(areaCenter, 2.5), [areaCenter]);
+  const areaBbox = viewportBbox ?? defaultBbox;
 
   const routeFilteredIncidents = useMemo(() => {
     if (mode !== 'route') return incidents;
@@ -831,20 +881,79 @@ export default function LiveTrafficWidget({
     selectedId,
   ]);
 
-  const radiusCircle = useMemo(() => {
-    if (mode !== 'area') return [];
-    return [
-      {
-        lat: areaCenter.lat,
-        lng: areaCenter.lng,
-        radius: Math.max(0.25, areaRadiusMiles) * 1609.34,
-        color: accentColor,
-        fillOpacity: 0.06,
-        strokeOpacity: 0.35,
-        strokeWeight: 2,
-      },
-    ];
-  }, [mode, areaCenter.lat, areaCenter.lng, areaRadiusMiles, accentColor]);
+  // Fetch HERE Traffic Flow for major roads in the current viewport
+  const flowAbortRef = useRef<AbortController | null>(null);
+  const fetchHereFlow = useCallback(async (bounds: { north: number; south: number; east: number; west: number }) => {
+    try {
+      flowAbortRef.current?.abort();
+      const ac = new AbortController();
+      flowAbortRef.current = ac;
+
+      const bbox = `bbox:${bounds.west},${bounds.south},${bounds.east},${bounds.north}`;
+      const url = new URL('/api/here', window.location.origin);
+      url.searchParams.set('endpoint', 'trafficflow');
+      url.searchParams.set('in', bbox);
+      url.searchParams.set('locationReferencing', 'shape');
+      url.searchParams.set('functionalClasses', '1,2,3');
+
+      const res = await fetch(url.toString(), { signal: ac.signal });
+      if (!res.ok) { setFlowPolylines([]); return; }
+      const data = await res.json();
+      const results: any[] = data?.results || [];
+
+      const lines: { coords: { lat: number; lng: number }[]; color: string; weight: number }[] = [];
+      for (const r of results) {
+        const flow = r?.currentFlow;
+        if (!flow) continue;
+        const speed = flow.speed ?? 0;
+        const freeFlow = flow.freeFlow ?? 1;
+        const color = flowColorFromKmh(speed * 3.6, freeFlow * 3.6); // API returns m/s
+
+        const links: any[] = r?.location?.shape?.links || [];
+        for (const link of links) {
+          const pts: any[] = link?.points || [];
+          if (pts.length < 2) continue;
+          const coords = pts
+            .filter((p: any) => typeof p.lat === 'number' && typeof p.lng === 'number')
+            .map((p: any) => ({ lat: p.lat, lng: p.lng }));
+          if (coords.length >= 2) {
+            lines.push({ coords, color, weight: 4 });
+          }
+        }
+      }
+      setFlowPolylines(lines);
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') setFlowPolylines([]);
+    }
+  }, []);
+
+  // Debounced viewport-change handler: updates incidents when user pans/zooms.
+  // Uses a ref-based stable callback so the map's init-time listener always
+  // calls the latest version (avoids stale closure over hasSearched/showFlow).
+  const viewportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boundsHandlerRef = useRef<(bounds: { north: number; south: number; east: number; west: number; zoom: number }) => void>();
+  boundsHandlerRef.current = (bounds) => {
+    const bbox = { lat1: bounds.south, lng1: bounds.west, lat2: bounds.north, lng2: bounds.east };
+    setViewportBbox(bbox);
+    setCurrentZoom(bounds.zoom);
+    if (!hasSearched) return;
+    if (viewportTimerRef.current) clearTimeout(viewportTimerRef.current);
+    viewportTimerRef.current = setTimeout(() => {
+      void loadRef.current();
+    }, 600);
+    if (showFlow) {
+      if (flowTimerRef.current) clearTimeout(flowTimerRef.current);
+      flowTimerRef.current = setTimeout(() => {
+        void fetchHereFlow(bounds);
+      }, 800);
+    } else {
+      setFlowPolylines([]);
+    }
+  };
+  const handleBoundsChange = useCallback((bounds: { north: number; south: number; east: number; west: number; zoom: number }) => {
+    boundsHandlerRef.current?.(bounds);
+  }, []);
 
   const searchExitOrMileMarker = useCallback(async (query: string) => {
     const q = query.trim();
@@ -907,6 +1016,7 @@ export default function LiveTrafficWidget({
   function selectExitResult(result: ExitSearchResult) {
     setExitPin({ lat: result.lat, lng: result.lng, label: result.title });
     setAreaCenter({ lat: result.lat, lng: result.lng });
+    setHasSearched(true);
     setZoomToLocation({ lat: result.lat, lng: result.lng, zoom: 15 });
     setSelectedId(null);
     setExitResults([]);
@@ -951,19 +1061,28 @@ export default function LiveTrafficWidget({
     }
   }
 
+  // Keep a stable ref so the debounced viewport handler always calls the latest version
+  const loadRef = useRef(load);
+  useEffect(() => { loadRef.current = load; });
+
   useEffect(() => {
+    if (mode === 'area' && !hasSearched) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey, areaCenter.lat, areaCenter.lng, areaRadiusMiles, z, filters.join('|'), mode, routeState.status]);
+  }, [apiKey, areaCenter.lat, areaCenter.lng, z, filters.join('|'), mode, routeState.status, hasSearched]);
 
   useEffect(() => {
+    if (mode === 'area' && !hasSearched) return;
     const id = window.setInterval(() => {
       void load();
     }, refreshMs);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshMs, apiKey, areaCenter.lat, areaCenter.lng, areaRadiusMiles, z, filters.join('|'), mode, routeState.status]);
+  }, [refreshMs, apiKey, areaCenter.lat, areaCenter.lng, z, filters.join('|'), mode, routeState.status, hasSearched]);
 
   const widgetH = Math.max(520, Math.round(height));
   const widgetW = isFiniteNumber(width) ? Math.max(280, Math.round(width)) : undefined;
@@ -1056,9 +1175,11 @@ export default function LiveTrafficWidget({
         layout="inline"
         icon={<AlertTriangle className="w-4 h-4" />}
         subtitle={
-          lastUpdated
-            ? `Last updated: ${minutesAgo(lastUpdated)}`
-            : `Fetching latest conditions…`
+          !hasSearched && mode === 'area'
+            ? 'Search a location to view traffic'
+            : lastUpdated
+              ? `Last updated: ${minutesAgo(lastUpdated)}`
+              : `Fetching latest conditions…`
         }
       />
 
@@ -1068,43 +1189,24 @@ export default function LiveTrafficWidget({
         <div className="h-[380px] md:h-full md:flex-1 md:order-2 min-h-0 relative">
           {/* Map-top-right controls */}
           <div className="absolute top-3 right-3 z-[500] flex items-center gap-2">
-            <div
-              className="inline-flex overflow-hidden rounded-lg border shadow-sm"
+            <button
+              type="button"
+              onClick={() => setShowFlow((v) => !v)}
+              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm hover:opacity-80"
               style={{
                 borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
-                background: isDark ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.92)',
+                background: showFlow
+                  ? 'var(--brand-primary)'
+                  : isDark ? 'rgba(30,41,59,0.9)' : 'rgba(255,255,255,0.92)',
+                color: showFlow ? 'white' : 'var(--text-main)',
                 backdropFilter: 'blur(10px)',
               }}
+              aria-label="Toggle traffic flow layer"
+              title={showFlow ? 'Hide traffic layer' : 'Show traffic layer'}
             >
-              <button
-                type="button"
-                onClick={() => setMode('area')}
-                className="px-3 py-2 text-xs font-semibold hover:opacity-80"
-                style={{
-                  background: mode === 'area' ? 'var(--brand-primary)' : 'transparent',
-                  color: mode === 'area' ? 'white' : 'var(--text-main)',
-                }}
-                aria-label="Area mode"
-              >
-                Area
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('route')}
-                className="px-3 py-2 text-xs font-semibold border-l hover:opacity-80"
-                style={{
-                  borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
-                  background: mode === 'route' ? 'var(--brand-primary)' : 'transparent',
-                  color: mode === 'route' ? 'white' : 'var(--text-main)',
-                }}
-                aria-label="Route mode"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Route className="h-3.5 w-3.5" aria-hidden="true" />
-                  Route
-                </span>
-              </button>
-            </div>
+              <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+              Traffic
+            </button>
 
             <button
               type="button"
@@ -1128,7 +1230,7 @@ export default function LiveTrafficWidget({
             {/** Area mode always shows incident markers. */}
             <MapQuestMap
               apiKey={apiKey}
-              center={areaCenter}
+              center={initialCenterRef.current}
               zoom={z}
               darkMode={isDark}
               height="100%"
@@ -1166,14 +1268,16 @@ export default function LiveTrafficWidget({
               ]}
               clusterMarkers={mode === 'area' || (mode === 'route' && routeState.status === 'ready')}
               clusterRadiusPx={56}
-              circles={mode === 'area' ? radiusCircle : []}
-              polygons={mapPolygons}
+              circles={[]}
+              polygons={[]}
+              polylines={showFlow ? flowPolylines : []}
               interactive={true}
               zoomToLocation={zoomToLocation}
-              fitBounds={mode === 'area' ? areaFitBounds : undefined}
+              onBoundsChange={handleBoundsChange}
               routePolyline={routeState.status === 'ready' ? routeState.polyline : undefined}
               routeSegments={routeState.status === 'ready' ? routeState.segments : undefined}
               showRoute={routeState.status === 'ready'}
+              showTraffic={false}
             />
           </div>
 
@@ -1323,6 +1427,43 @@ export default function LiveTrafficWidget({
         >
           {/* Fixed controls header */}
           <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            {/* Area / Route toggle */}
+            <div
+              className="inline-flex w-full overflow-hidden rounded-lg border mb-4"
+              style={{
+                borderColor: 'var(--border-subtle)',
+                background: 'var(--bg-panel)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setMode('area')}
+                className="flex-1 px-4 py-2.5 text-xs font-semibold hover:opacity-80 inline-flex items-center justify-center gap-2"
+                style={{
+                  background: mode === 'area' ? 'var(--brand-primary)' : 'transparent',
+                  color: mode === 'area' ? 'white' : 'var(--text-main)',
+                }}
+                aria-label="Area mode"
+              >
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+                Area
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('route')}
+                className="flex-1 px-4 py-2.5 text-xs font-semibold border-l hover:opacity-80 inline-flex items-center justify-center gap-2"
+                style={{
+                  borderColor: 'var(--border-subtle)',
+                  background: mode === 'route' ? 'var(--brand-primary)' : 'transparent',
+                  color: mode === 'route' ? 'white' : 'var(--text-main)',
+                }}
+                aria-label="Route mode"
+              >
+                <Route className="h-3.5 w-3.5" aria-hidden="true" />
+                Route
+              </button>
+            </div>
+
             {/* Status */}
             {(loading || error) && (
               <div className="mb-3">
@@ -1343,106 +1484,47 @@ export default function LiveTrafficWidget({
               </div>
             )}
 
-            {/* Area starting location */}
+            {/* Area search */}
             {mode === 'area' && (
               <div
                 className="mb-4 rounded-xl border p-3"
                 style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}
               >
-                <CollapsibleSection
-                  title="Area settings"
-                  summary={
-                    areaQuery?.trim()
-                      ? `${areaQuery.trim()} · ${areaRadiusMiles} mi`
-                      : `${areaCenter.lat.toFixed(3)}, ${areaCenter.lng.toFixed(3)} · ${areaRadiusMiles} mi`
-                  }
-                  open={areaSettingsOpen}
-                  defaultOpen={true}
-                  onOpenChange={setAreaSettingsOpen}
+                <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
+                  Search location
+                </div>
+                <div
+                  className="rounded-xl flex items-center gap-2.5"
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border-subtle)',
+                    padding: '10px 12px',
+                  }}
                 >
-                  <div className="mt-3">
-                    <div className="text-xs font-semibold mb-1.5" style={{ color: 'var(--text-muted)' }}>
-                      Starting location
-                    </div>
-                    <div
-                      className="rounded-xl flex items-center gap-2.5"
-                      style={{
-                        background: 'var(--bg-input)',
-                        border: '1px solid var(--border-subtle)',
-                        padding: '10px 12px',
-                      }}
-                    >
-                      <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
-                      <AddressAutocomplete
-                        value={areaQuery}
-                        onChange={setAreaQuery}
-                        placeholder="Search address or place…"
-                        darkMode={isDark}
-                        className="flex-1"
-                        hideIcon
-                        onSelect={(a) => {
-                          if (typeof a.lat === 'number' && typeof a.lng === 'number') {
-                            setAreaCenter({ lat: a.lat, lng: a.lng });
-                            setZoomToLocation({ lat: a.lat, lng: a.lng, zoom: 12 });
-                            setSelectedId(null);
-                            setTimeout(() => void load(), 0);
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-end justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                        Radius (mi)
-                      </div>
-                      <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                        Showing events within{' '}
-                        <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{areaRadiusMiles} mi</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={50}
-                        step={1}
-                        value={areaRadiusMiles}
-                        onChange={(e) => setAreaRadiusMiles(Math.max(1, Math.min(50, Number(e.target.value) || 5)))}
-                        className="w-20 rounded-md border px-2 py-2 text-xs"
-                        style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-input)', color: 'var(--text-main)' }}
-                        aria-label="Radius miles"
-                      />
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        mi
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {[2, 5, 10, 20].map((v) => {
-                      const active = areaRadiusMiles === v;
-                      return (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setAreaRadiusMiles(v)}
-                          className="rounded-full border px-2.5 py-1 text-xs font-semibold hover:opacity-80"
-                          style={{
-                            borderColor: active ? 'transparent' : 'var(--border-subtle)',
-                            background: active ? 'var(--brand-primary)' : 'transparent',
-                            color: active ? 'white' : 'var(--text-muted)',
-                          }}
-                          aria-label={`Set radius to ${v} miles`}
-                        >
-                          {v} mi
-                        </button>
-                      );
-                    })}
-                  </div>
-                </CollapsibleSection>
+                  <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
+                  <AddressAutocomplete
+                    value={areaQuery}
+                    onChange={setAreaQuery}
+                    placeholder="Search address or place…"
+                    darkMode={isDark}
+                    className="flex-1"
+                    hideIcon
+                    onSelect={(a) => {
+                      if (typeof a.lat === 'number' && typeof a.lng === 'number') {
+                        setAreaCenter({ lat: a.lat, lng: a.lng });
+                        setHasSearched(true);
+                        setZoomToLocation({ lat: a.lat, lng: a.lng, zoom: 13 });
+                        setSelectedId(null);
+                        setTimeout(() => void load(), 0);
+                      }
+                    }}
+                  />
+                </div>
+                {hasSearched && (
+                  <p className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Pan or zoom the map to update traffic in view.
+                  </p>
+                )}
               </div>
             )}
 
@@ -1687,7 +1769,7 @@ export default function LiveTrafficWidget({
             )}
 
             {/* Summary + Filter */}
-            <div>
+            {(hasSearched || mode === 'route') && <div>
               <div className="flex items-center justify-between gap-3">
                 <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   Events:{' '}
@@ -1730,12 +1812,18 @@ export default function LiveTrafficWidget({
                   <option value="minor">Minor+ ({(countsForListBase[2] ?? 0) + (countsForListBase[3] ?? 0) + (countsForListBase[4] ?? 0)})</option>
                 </select>
               </div>
-            </div>
+            </div>}
           </div>
 
           {/* Scrollable events list */}
           <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar p-4">
-            {(!loading && !error && list.length === 0) ? (
+            {(mode === 'area' && !hasSearched) ? (
+              <div className="rounded-xl border px-5 py-6 text-center" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)' }}>
+                <Search className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.5 }} />
+                <p className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>Search for a location</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Enter an address or city above to view nearby traffic conditions and incidents.</p>
+              </div>
+            ) : (!loading && !error && list.length === 0) ? (
               <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: 'var(--border-subtle)', background: 'var(--bg-panel)', color: 'var(--text-main)' }}>
                 No events reported — traffic is clear!
               </div>

@@ -91,7 +91,7 @@ interface MapQuestMapProps {
   // Drag the route line to "shape" the route by dropping a waypoint on release.
   // Leaflet core doesn't support true polyline editing, so this is implemented as a drag-to-insert waypoint gesture.
   onRouteLineDrag?: (evt: { phase: 'start' | 'move' | 'end'; lat: number; lng: number }) => void;
-  onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
+  onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number; zoom: number }) => void;
   showZoomControls?: boolean;
   interactive?: boolean;
   className?: string;
@@ -529,6 +529,7 @@ export default function MapQuestMap({
             south: bounds.getSouth(),
             east: bounds.getEast(),
             west: bounds.getWest(),
+            zoom: map.getZoom(),
           });
         };
         map.on('moveend', notifyBounds);
