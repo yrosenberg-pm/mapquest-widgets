@@ -932,7 +932,7 @@ export default function LiveTrafficWidget({
   // calls the latest version (avoids stale closure over hasSearched/showFlow).
   const viewportTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const boundsHandlerRef = useRef<(bounds: { north: number; south: number; east: number; west: number; zoom: number }) => void>();
+  const boundsHandlerRef = useRef<(bounds: { north: number; south: number; east: number; west: number; zoom: number }) => void>(undefined);
   boundsHandlerRef.current = (bounds) => {
     const bbox = { lat1: bounds.south, lng1: bounds.west, lat2: bounds.north, lng2: bounds.east };
     setViewportBbox(bbox);
