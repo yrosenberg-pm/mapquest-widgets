@@ -423,7 +423,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     }
   }, []);
 
-  const resolveBoundary = useCallback(async (addr: string): Promise<{ polygon: { lat: number; lng: number }[]; label: string } | 'too_large' | null> => {
+  const resolveBoundary = useCallback(async (addr: string, loc?: { lat: number; lng: number } | null): Promise<{ polygon: { lat: number; lng: number }[]; label: string } | 'too_large' | null> => {
     if (!addr.trim()) return null;
     const trimmed = addr.trim();
     const parts = trimmed.split(',').map(s => s.trim());
@@ -432,6 +432,41 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     const isStreetAddress = /^\d+\s/.test(primaryName);
     const primaryIsZip = /^\d{5}$/.test(primaryName);
     const zipMatch = trimmed.match(/\b(\d{5})\b/);
+
+    const isTooLarge = (coords: { lat: number; lng: number }[]) => {
+      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+      for (const c of coords) {
+        if (c.lat < minLat) minLat = c.lat;
+        if (c.lat > maxLat) maxLat = c.lat;
+        if (c.lng < minLng) minLng = c.lng;
+        if (c.lng > maxLng) maxLng = c.lng;
+      }
+      return (maxLat - minLat) > 1.5 || (maxLng - minLng) > 1.5;
+    };
+
+    // ATTOM-enhanced resolution (try first for street addresses)
+    if (loc && isStreetAddress) {
+      try {
+        const commaIdx = trimmed.indexOf(',');
+        const a1 = commaIdx > 0 ? trimmed.slice(0, commaIdx).trim() : trimmed;
+        const a2 = commaIdx > 0 ? trimmed.slice(commaIdx + 1).trim() : '';
+        const params = new URLSearchParams({ type: 'attom-neighborhood', q: trimmed });
+        if (a1) { params.set('address1', a1); params.set('address2', a2); }
+        params.set('lat', String(loc.lat));
+        params.set('lng', String(loc.lng));
+
+        const res = await fetch(`/api/boundary?${params}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.approximate) {
+            const coords = geojsonToMapCoords(data.geometry);
+            if (coords && coords.length >= 3 && !isTooLarge(coords)) {
+              return { polygon: coords, label: data.label || primaryName };
+            }
+          }
+        }
+      } catch { /* ATTOM boundary unavailable, fall through */ }
+    }
 
     const attempts: { type: string; q: string }[] = [];
 
@@ -461,18 +496,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
       seen.add(key);
       return true;
     });
-
-    // Reject polygons too large for a neighborhood-level score (e.g. entire states)
-    const isTooLarge = (coords: { lat: number; lng: number }[]) => {
-      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-      for (const c of coords) {
-        if (c.lat < minLat) minLat = c.lat;
-        if (c.lat > maxLat) maxLat = c.lat;
-        if (c.lng < minLng) minLng = c.lng;
-        if (c.lng > maxLng) maxLng = c.lng;
-      }
-      return (maxLat - minLat) > 1.5 || (maxLng - minLng) > 1.5;
-    };
 
     let rejectedAsLarge = false;
 
@@ -616,7 +639,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
       // Fetch boundary AND raw POI data in parallel
       const [boundaryResult, rawCategoryScores] = await Promise.all([
-        resolveBoundary(address),
+        resolveBoundary(address, loc),
         Promise.all(
           categories.map(async (category) => {
             try {

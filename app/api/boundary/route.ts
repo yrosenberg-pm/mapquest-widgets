@@ -384,7 +384,183 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ error: 'Invalid type — use zip, city, state, or neighborhood' }, { status: 400 });
+    if (type === 'attom-neighborhood') {
+      // Use ATTOM to resolve the authoritative neighborhood for a lat/lng or address,
+      // then look up the boundary using Zillow / Overpass / TIGER.
+      const lat = parseFloat(searchParams.get('lat') || '');
+      const lng = parseFloat(searchParams.get('lng') || '');
+      const address1 = searchParams.get('address1') || '';
+      const address2 = searchParams.get('address2') || '';
+      const stateHint = searchParams.get('state') || '';
+
+      const ATTOM_API_KEY = process.env.ATTOM_API_KEY;
+      if (!ATTOM_API_KEY) {
+        return NextResponse.json({ error: 'ATTOM API key not configured' }, { status: 500 });
+      }
+
+      // Step 1: Get property geoIdV4 — either by address or lat/lng
+      let geoIdV4N2: string | null = null;
+      let geoIdV4ZI: string | null = null;
+      let propLat = lat;
+      let propLng = lng;
+      let propState: string | null = stateHint || null;
+
+      const tryAttomProperty = async (url: string): Promise<any> => {
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json', apikey: ATTOM_API_KEY! },
+          signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data?.property?.[0] || null;
+      };
+
+      try {
+        let prop: any = null;
+
+        // Try address lookup first, then fall back to lat/lng radius search
+        if (address1) {
+          prop = await tryAttomProperty(
+            `https://api.gateway.attomdata.com/propertyapi/v1.0.0/property/basicprofile?address1=${encodeURIComponent(address1)}&address2=${encodeURIComponent(address2)}`,
+          );
+        }
+        if (!prop && Number.isFinite(lat) && Number.isFinite(lng)) {
+          prop = await tryAttomProperty(
+            `https://api.gateway.attomdata.com/propertyapi/v1.0.0/property/basicprofile?latitude=${lat}&longitude=${lng}&radius=0.1&pagesize=1`,
+          );
+        }
+        if (!prop && !address1 && !Number.isFinite(lat)) {
+          return NextResponse.json({ error: 'Need address1+address2 or lat+lng' }, { status: 400 });
+        }
+
+        if (prop) {
+          const gv4 = prop.location?.geoIdV4 || {};
+          geoIdV4N2 = gv4.N2 || gv4.N1 || null;
+          geoIdV4ZI = gv4.ZI || null;
+          if (prop.location?.latitude) propLat = parseFloat(prop.location.latitude);
+          if (prop.location?.longitude) propLng = parseFloat(prop.location.longitude);
+          if (prop.address?.countrySubd) propState = prop.address.countrySubd;
+        }
+      } catch { /* ATTOM unavailable, fall through */ }
+
+      // Step 2: Resolve neighborhood name from ATTOM community endpoint
+      let nbName: string | null = null;
+      let nbLabel: string | null = null;
+
+      if (geoIdV4N2) {
+        try {
+          const commRes = await fetch(
+            `https://api.gateway.attomdata.com/v4/neighborhood/community?geoidv4=${geoIdV4N2}`,
+            { headers: { Accept: 'application/json', apikey: ATTOM_API_KEY }, signal: AbortSignal.timeout(6000) },
+          );
+          if (commRes.ok) {
+            const commData = await commRes.json();
+            const geo = commData?.community?.geography;
+            if (geo?.geographyName) {
+              // geographyName is like "Berkeley, Denver, Denver County, CO"
+              nbLabel = geo.geographyName;
+              nbName = geo.geographyName.split(',')[0].trim();
+            }
+          }
+        } catch { /* community unavailable */ }
+      }
+
+      const stateCode = propState ? toStateCode(propState) : null;
+
+      // Step 3: Try boundary sources with the ATTOM-resolved name (+ variants)
+      if (nbName && Number.isFinite(propLat) && Number.isFinite(propLng)) {
+        // Generate name variants: "Inner Mission" -> try "Inner Mission", then "Mission"
+        const DIR_PREFIXES = /^(inner|outer|north|south|east|west|upper|lower|central|old|new|greater)\s+/i;
+        const nameVariants = [nbName];
+        const stripped = nbName.replace(DIR_PREFIXES, '').trim();
+        if (stripped && stripped !== nbName) nameVariants.push(stripped);
+        // Also try "X / Y" split names individually
+        if (nbName.includes('/')) {
+          for (const part of nbName.split('/')) {
+            const p = part.trim();
+            if (p && !nameVariants.includes(p)) nameVariants.push(p);
+          }
+        }
+
+        // Try Zillow with each name variant
+        for (const variant of nameVariants) {
+          const zillow = await fetchZillowNeighborhood(variant, propLat, propLng, stateCode);
+          if (zillow) {
+            return NextResponse.json(
+              { label: zillow.label || nbLabel || nbName, geometry: zillow.geometry, source: 'attom+zillow' },
+              { headers: CACHE_HEADER },
+            );
+          }
+        }
+
+        // Try Overpass with each name variant
+        for (const variant of nameVariants) {
+          const overpassGeo = await fetchOverpassBoundary(variant, propLat, propLng);
+          if (overpassGeo) {
+            return NextResponse.json(
+              { label: nbLabel || nbName, geometry: overpassGeo, source: 'attom+overpass' },
+              { headers: CACHE_HEADER },
+            );
+          }
+        }
+      }
+
+      // Step 4: Fall back to ZIP boundary from ATTOM's geoIdV4 ZI or from Census TIGER
+      const zipCode = geoIdV4ZI
+        ? await (async () => {
+            try {
+              const ziRes = await fetch(
+                `https://api.gateway.attomdata.com/v4/neighborhood/community?geoidv4=${geoIdV4ZI}`,
+                { headers: { Accept: 'application/json', apikey: ATTOM_API_KEY }, signal: AbortSignal.timeout(5000) },
+              );
+              if (ziRes.ok) {
+                const ziData = await ziRes.json();
+                const zipName = ziData?.community?.geography?.geographyName;
+                return zipName && /^\d{5}$/.test(zipName) ? zipName : null;
+              }
+            } catch {}
+            return null;
+          })()
+        : null;
+
+      if (zipCode) {
+        try {
+          const tigerUrl = `https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_ACS2023/MapServer/2/query?where=ZCTA5%3D%27${encodeURIComponent(zipCode)}%27&outFields=ZCTA5&f=geojson&geometryType=esriGeometryPolygon&outSR=4326`;
+          const tigerRes = await fetch(tigerUrl, { signal: AbortSignal.timeout(8000) });
+          if (tigerRes.ok) {
+            const tigerData = await tigerRes.json();
+            const feat = tigerData.features?.[0];
+            if (feat?.geometry) {
+              return NextResponse.json(
+                { label: nbLabel || `ZIP ${zipCode}`, geometry: feat.geometry, source: 'attom+tiger-zip' },
+                { headers: CACHE_HEADER },
+              );
+            }
+          }
+        } catch { /* TIGER unavailable */ }
+      }
+
+      // Step 5: Approximate circle as last resort
+      if (Number.isFinite(propLat) && Number.isFinite(propLng)) {
+        const radiusMiles = 0.5;
+        const nPts = 48;
+        const coords: [number, number][] = [];
+        for (let i = 0; i <= nPts; i++) {
+          const angle = (i / nPts) * 2 * Math.PI;
+          const dLat = (radiusMiles / 69.0) * Math.cos(angle);
+          const dLon = (radiusMiles / (69.0 * Math.cos(propLat * Math.PI / 180))) * Math.sin(angle);
+          coords.push([propLng + dLon, propLat + dLat]);
+        }
+        return NextResponse.json(
+          { label: nbLabel || nbName || q, geometry: { type: 'Polygon', coordinates: [coords] }, approximate: true, source: 'attom+approx' },
+          { headers: CACHE_HEADER },
+        );
+      }
+
+      return NextResponse.json({ error: 'Could not resolve neighborhood boundary' }, { status: 404 });
+    }
+
+    return NextResponse.json({ error: 'Invalid type — use zip, city, state, neighborhood, or attom-neighborhood' }, { status: 400 });
   } catch (error) {
     console.error('[Boundary API] Error:', error);
     return NextResponse.json(

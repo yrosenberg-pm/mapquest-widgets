@@ -102,6 +102,7 @@ interface MapQuestMapProps {
   stops?: { lat: number; lng: number }[]; // All stops for segment-by-segment routing
   driverPosition?: { lat: number; lng: number }; // Live driver position for tracking
   showTruckRestrictions?: boolean; // Show truck restriction overlay on map
+  skipPolygonFitBounds?: boolean;
 }
 
 declare global {
@@ -151,6 +152,7 @@ export default function MapQuestMap({
   stops = [],
   driverPosition,
   showTruckRestrictions = false,
+  skipPolygonFitBounds = false,
 }: MapQuestMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -984,10 +986,10 @@ export default function MapQuestMap({
     });
 
     // Fit bounds to show all polygons (if any). If fitBounds prop is set, that still takes precedence elsewhere.
-    if (mapRef.current && combinedBounds && !fitBounds) {
+    if (mapRef.current && combinedBounds && !fitBounds && !skipPolygonFitBounds) {
       mapRef.current.fitBounds(combinedBounds, { padding: [30, 30] });
     }
-  }, [polygons, accentColor, mapReady]);
+  }, [polygons, accentColor, mapReady, skipPolygonFitBounds]);
 
   // Update polylines (generic overlay lines: closures, highlights, etc.)
   useEffect(() => {

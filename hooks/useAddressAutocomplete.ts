@@ -17,6 +17,7 @@ interface AddressResult {
 
 interface UseAddressAutocompleteOptions {
   onSelect?: (address: AddressResult) => void;
+  onEnter?: () => void;
   minChars?: number;
   minAlnumChars?: number;
   maxSuggestions?: number;
@@ -164,7 +165,13 @@ export function useAddressAutocomplete(
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isOpen || suggestions.length === 0) return;
+    if (!isOpen || suggestions.length === 0) {
+      if (e.key === 'Enter' && options.onEnter) {
+        e.preventDefault();
+        options.onEnter();
+      }
+      return;
+    }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();

@@ -9,6 +9,7 @@ interface AddressAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
   onSelect?: (address: { displayString: string; lat?: number; lng?: number }) => void;
+  onEnter?: () => void;
   placeholder?: string;
   darkMode?: boolean;
   inputBg?: string;
@@ -26,6 +27,7 @@ export default function AddressAutocomplete({
   value,
   onChange,
   onSelect,
+  onEnter,
   placeholder = 'Enter an address...',
   darkMode = false,
   inputBg,
@@ -49,7 +51,7 @@ export default function AddressAutocomplete({
     closeDropdown,
     handleFocus,
     handleBlur,
-  } = useAddressAutocomplete(value, onChange, { onSelect, disabled: readOnly });
+  } = useAddressAutocomplete(value, onChange, { onSelect, onEnter, disabled: readOnly });
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

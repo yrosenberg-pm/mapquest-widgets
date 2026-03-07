@@ -25,6 +25,7 @@ export { default as PublicTransitDepartures } from './PublicTransitDepartures';
 export { default as ParkingFinder } from './ParkingFinder';
 export { default as ContractorFinder } from './ContractorFinder';
 export { default as MultiZoneCoverage } from './MultiZoneCoverage';
+export { default as PropertyIntelligence } from './PropertyIntelligence';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

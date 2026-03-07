@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, LucideIcon } from 'lucide-react';
 import {
   SmartAddressInput,
   StarbucksFinder,
@@ -29,6 +29,7 @@ import {
   ConstructionHeatmap,
   ContractorFinder,
   MultiZoneCoverage,
+  PropertyIntelligence,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -57,10 +58,11 @@ type WidgetId =
   | 'parking'
   | 'construction'
   | 'contractor-finder'
-  | 'zone-coverage';
+  | 'zone-coverage'
+  | 'property-intel';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
-const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'nhl', 'starbucks', 'instacart', 'citibike']);
+const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'nhl', 'starbucks', 'instacart', 'citibike']);
 
 type MenuSection = 'routing' | 'other' | 'branded';
 
@@ -86,6 +88,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'parking' as WidgetId, name: 'Parking Finder', description: 'Find on-street and off-street parking near a destination', section: 'other', menuLucide: ParkingCircle },
   { id: 'construction' as WidgetId, name: 'Construction Heatmap', description: 'Building permit activity heat map powered by Shovels.ai', section: 'other', menuLucide: Hammer },
   { id: 'contractor-finder' as WidgetId, name: 'Contractor Finder', description: 'Find contractors by specialty with coverage maps', section: 'other', menuLucide: HardHat },
+  { id: 'property-intel' as WidgetId, name: 'Property Intelligence', description: 'Property data, valuations & AVM heat map powered by ATTOM', section: 'other', menuLucide: LandPlot },
   // — Branded / partner demos ————————————————————————————————
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuIcon: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png' },
@@ -157,7 +160,12 @@ function HomeContent() {
   const [brandingMode, setBrandingMode] = useState<'mapquest' | 'cobranded' | 'whitelabel'>('mapquest');
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
-  const [showInternal, setShowInternal] = useState(false);
+  const [showInternal, setShowInternal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('mq_internal_unlocked') === '1';
+    }
+    return false;
+  });
   const [internalPassInput, setInternalPassInput] = useState('');
   const [internalPassError, setInternalPassError] = useState(false);
 
@@ -474,6 +482,8 @@ function HomeContent() {
         return <ContractorFinder {...commonProps} />;
       case 'zone-coverage':
         return <MultiZoneCoverage {...commonProps} />;
+      case 'property-intel':
+        return <PropertyIntelligence {...commonProps} />;
       default:
         return null;
     }
@@ -919,7 +929,7 @@ function HomeContent() {
                         <label className="flex items-center justify-between cursor-pointer">
                           <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Show internal widgets</span>
                           <button
-                            onClick={() => { setShowInternal(false); setInternalPassInput(''); }}
+                            onClick={() => { setShowInternal(false); setInternalPassInput(''); localStorage.removeItem('mq_internal_unlocked'); }}
                             className="relative w-10 h-5 rounded-full transition-colors bg-blue-500"
                           >
                             <div className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow translate-x-5 transition-transform" />
@@ -937,7 +947,7 @@ function HomeContent() {
                               onChange={(e) => { setInternalPassInput(e.target.value); setInternalPassError(false); }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
-                                  if (internalPassInput === 'mapquest2026') { setShowInternal(true); setInternalPassError(false); }
+                                  if (internalPassInput === 'mapquest2026') { setShowInternal(true); setInternalPassError(false); localStorage.setItem('mq_internal_unlocked', '1'); }
                                   else setInternalPassError(true);
                                 }
                               }}
@@ -950,7 +960,7 @@ function HomeContent() {
                             />
                             <button
                               onClick={() => {
-                                if (internalPassInput === 'mapquest2026') { setShowInternal(true); setInternalPassError(false); }
+                                if (internalPassInput === 'mapquest2026') { setShowInternal(true); setInternalPassError(false); localStorage.setItem('mq_internal_unlocked', '1'); }
                                 else setInternalPassError(true);
                               }}
                               className={`px-3 py-1.5 text-sm rounded-lg font-medium ${darkMode ? 'bg-gray-700 text-white hover:bg-gray-600' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'} transition-colors`}

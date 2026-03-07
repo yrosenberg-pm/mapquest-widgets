@@ -29,6 +29,7 @@ import {
   ConstructionHeatmap,
   ContractorFinder,
   MultiZoneCoverage,
+  PropertyIntelligence,
 } from '@/components/widgets';
 
 const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -57,6 +58,7 @@ const VALID_WIDGETS = [
   'construction',
   'contractor-finder',
   'zone-coverage',
+  'property-intel',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -303,6 +305,8 @@ export default function WidgetPage() {
         return <ContractorFinder {...commonProps} />;
       case 'zone-coverage':
         return <MultiZoneCoverage {...commonProps} />;
+      case 'property-intel':
+        return <PropertyIntelligence {...commonProps} />;
       default:
         return null;
     }
