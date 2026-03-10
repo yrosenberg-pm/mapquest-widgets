@@ -595,7 +595,7 @@ export default function ComparableSalesMap({
       />
 
       <div className="flex flex-col md:flex-row md:h-[755px]">
-        {/* ── Left panel — Search & Filters ──────────────────── */}
+        {/* ── Left panel — Search, Filters & Comps List ────────── */}
         <div
           className="w-full flex flex-col border-t md:border-t-0 md:border-r md:order-1 overflow-hidden"
           style={{ borderColor: border, flex: '0 0 30%', maxWidth: '30%' }}
@@ -773,8 +773,119 @@ export default function ComparableSalesMap({
             )}
           </div>
 
-          {/* Empty / loading state in left panel */}
-          {!subject && !loading && (
+          {/* Comps list — sort bar + scrollable rows */}
+          {comps.length > 0 && (
+            <div
+              className="flex items-center gap-3 px-4 py-2 flex-shrink-0"
+              style={{ borderBottom: `1px solid ${border}` }}
+            >
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: textMuted }}>
+                Sort
+              </span>
+              <SortButton label="Date" sk="date" />
+              <SortButton label="Price" sk="price" />
+              <SortButton label="Dist" sk="distance" />
+              <span className="ml-auto flex items-center gap-2">
+                {selectedCompIds.size > 0 && (
+                  <button
+                    onClick={clearSelection}
+                    className="flex items-center gap-1 text-[10px] font-semibold rounded px-1.5 py-0.5 transition-colors"
+                    style={{ color: accentColor, background: `color-mix(in srgb, ${accentColor} 8%, transparent)` }}
+                  >
+                    <X className="w-3 h-3" />
+                    {selectedCompIds.size} selected
+                  </button>
+                )}
+                <span className="text-[10px] tabular-nums" style={{ color: textMuted }}>
+                  {comps.length} sale{comps.length !== 1 ? 's' : ''}
+                </span>
+              </span>
+            </div>
+          )}
+
+          <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
+            {!loading && subject && comps.length === 0 && !compsLoading && (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm" style={{ color: textMuted }}>
+                  No comparable sales found. Try adjusting your filters.
+                </p>
+              </div>
+            )}
+
+            {compsLoading && !loading && (
+              <div className="flex items-center justify-center gap-2 py-6">
+                <Loader2 className="w-4 h-4 animate-spin" style={{ color: accentColor }} />
+                <span className="text-xs" style={{ color: textMuted }}>Loading comps…</span>
+              </div>
+            )}
+
+            {sortedComps.map((comp) => {
+              const color = priceToColor(comp.salePrice, minPrice, maxPrice);
+              const isSelected = selectedCompIds.has(comp.id);
+              const canSelect = isSelected || selectedCompIds.size < 3;
+              return (
+                <div
+                  key={comp.id}
+                  className="px-3 py-2 flex items-center gap-2 cursor-pointer transition-colors"
+                  style={{
+                    borderBottom: `1px solid ${border}`,
+                    background: isSelected
+                      ? `color-mix(in srgb, ${accentColor} 8%, transparent)`
+                      : hoveredCompId === comp.id
+                        ? `color-mix(in srgb, ${accentColor} 4%, transparent)`
+                        : 'transparent',
+                  }}
+                  onClick={() => canSelect && toggleCompSelection(comp.id)}
+                  onMouseEnter={() => setHoveredCompId(comp.id)}
+                  onMouseLeave={() => setHoveredCompId(null)}
+                >
+                  <div
+                    className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center transition-colors"
+                    style={{
+                      border: isSelected ? 'none' : `1.5px solid ${border}`,
+                      background: isSelected ? accentColor : 'transparent',
+                      opacity: canSelect ? 1 : 0.3,
+                    }}
+                  >
+                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ background: color }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold truncate" style={{ color: textMain }}>
+                        {comp.address.split(',')[0]}
+                      </span>
+                      <span className="text-xs font-bold tabular-nums flex-shrink-0 ml-auto" style={{ color }}>
+                        {fmtPrice(comp.salePrice)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] tabular-nums" style={{ color: textMuted }}>
+                        {fmtDateShort(comp.saleDate)}
+                      </span>
+                      <span className="text-[10px]" style={{ color: textMuted }}>
+                        {comp.beds != null ? `${comp.beds}bd` : '—'}/{comp.baths != null ? `${comp.baths}ba` : '—'}
+                      </span>
+                      {comp.sqft != null && (
+                        <span className="text-[10px] tabular-nums" style={{ color: textMuted }}>
+                          {comp.sqft.toLocaleString()}sf
+                        </span>
+                      )}
+                      <span className="text-[10px] tabular-nums ml-auto" style={{ color: textMuted }}>
+                        {comp.distanceMi.toFixed(2)}mi
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Empty / loading state */}
+          {!subject && !loading && comps.length === 0 && (
             <div className="flex-1 flex items-center justify-center px-4">
               <div className="text-center">
                 <MapPin className="w-8 h-8 mx-auto mb-3 opacity-30" style={{ color: textMuted }} />
@@ -789,19 +900,19 @@ export default function ComparableSalesMap({
             </div>
           )}
           {!loading && error && (
-            <div className="flex-1 flex items-center justify-center px-4">
+            <div className="flex-shrink-0 px-4 py-3">
               <p className="text-sm text-center" style={{ color: '#EF4444' }}>{error}</p>
             </div>
           )}
         </div>
 
-        {/* ── Right panel — Map + Comps List (70%) ───────────── */}
+        {/* ── Right panel — Map + Comparison (70%) ───────────── */}
         <div
           className="w-full flex flex-col md:order-2 overflow-hidden"
           style={{ flex: '0 0 70%', maxWidth: '70%' }}
         >
-          {/* Map */}
-          <div className="relative" style={{ flex: '0 0 55%', minHeight: 0 }}>
+          {/* Map — fills available space, no gap */}
+          <div className="relative flex-1" style={{ minHeight: 0 }}>
             <MapQuestMap
               apiKey={apiKey}
               center={
@@ -812,6 +923,7 @@ export default function ComparableSalesMap({
               zoom={subject ? 14 : 10}
               markers={markers}
               darkMode={darkMode}
+              height="100%"
             />
 
             {/* Price legend */}
@@ -863,172 +975,60 @@ export default function ComparableSalesMap({
             )}
           </div>
 
-          {/* Comps list below map */}
-          <div
-            className="flex-1 min-h-0 flex flex-col overflow-hidden"
-            style={{ borderTop: `1px solid ${border}` }}
-          >
-            {/* Sort + selection controls */}
-            {comps.length > 0 && (
-              <div
-                className="flex items-center gap-3 px-4 py-2 flex-shrink-0"
-                style={{ borderBottom: `1px solid ${border}` }}
-              >
-                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: textMuted }}>
-                  Sort
-                </span>
-                <SortButton label="Date" sk="date" />
-                <SortButton label="Price" sk="price" />
-                <SortButton label="Dist" sk="distance" />
-                <span className="ml-auto flex items-center gap-2">
-                  {selectedCompIds.size > 0 && (
-                    <button
-                      onClick={clearSelection}
-                      className="flex items-center gap-1 text-[10px] font-semibold rounded px-1.5 py-0.5 transition-colors"
-                      style={{ color: accentColor, background: `color-mix(in srgb, ${accentColor} 8%, transparent)` }}
-                    >
-                      <X className="w-3 h-3" />
-                      {selectedCompIds.size} selected
-                    </button>
-                  )}
-                  <span className="text-[10px] tabular-nums" style={{ color: textMuted }}>
-                    {comps.length} sale{comps.length !== 1 ? 's' : ''}
+          {/* Comparison panel — shows below map when 2+ selected */}
+          {selectedComps.length >= 2 && (
+            <div
+              className="flex-shrink-0 overflow-x-auto"
+              style={{ borderTop: `1px solid ${border}` }}
+            >
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accentColor }}>
+                    Comparison
                   </span>
-                </span>
-              </div>
-            )}
-
-            {/* Comparison panel */}
-            {selectedComps.length >= 2 && (
-              <div
-                className="flex-shrink-0 overflow-x-auto"
-                style={{ borderBottom: `1px solid ${border}` }}
-              >
-                <div className="px-4 py-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accentColor }}>
-                      Comparison
-                    </span>
-                    <button onClick={clearSelection} className="text-[10px] ml-auto" style={{ color: textMuted }}>
-                      Clear
-                    </button>
-                  </div>
-                  <div className="grid gap-px rounded-lg overflow-hidden" style={{ gridTemplateColumns: `100px repeat(${selectedComps.length}, 1fr)`, background: border }}>
-                    {/* Header row */}
-                    <div className="text-[10px] font-semibold px-2.5 py-1.5" style={{ background: 'var(--bg-widget)', color: textMuted }} />
-                    {selectedComps.map((c) => {
-                      const color = priceToColor(c.salePrice, minPrice, maxPrice);
-                      return (
-                        <div key={c.id} className="px-2.5 py-1.5" style={{ background: 'var(--bg-widget)' }}>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
-                            <span className="text-[11px] font-bold truncate" style={{ color: textMain }}>{c.address.split(',')[0]}</span>
-                          </div>
+                  <button onClick={clearSelection} className="text-[10px] ml-auto" style={{ color: textMuted }}>
+                    Clear
+                  </button>
+                </div>
+                <div className="grid gap-px rounded-lg overflow-hidden" style={{ gridTemplateColumns: `100px repeat(${selectedComps.length}, 1fr)`, background: border }}>
+                  {/* Header row */}
+                  <div className="text-[10px] font-semibold px-2.5 py-1.5" style={{ background: 'var(--bg-widget)', color: textMuted }} />
+                  {selectedComps.map((c) => {
+                    const color = priceToColor(c.salePrice, minPrice, maxPrice);
+                    return (
+                      <div key={c.id} className="px-2.5 py-1.5" style={{ background: 'var(--bg-widget)' }}>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
+                          <span className="text-[11px] font-bold truncate" style={{ color: textMain }}>{c.address.split(',')[0]}</span>
                         </div>
-                      );
-                    })}
-                    {/* Data rows */}
-                    {[
-                      { label: 'Sale Price', fn: (c: CompSale) => fmtPriceFull(c.salePrice) },
-                      { label: 'Sale Date', fn: (c: CompSale) => fmtDate(c.saleDate) },
-                      { label: 'Beds', fn: (c: CompSale) => c.beds != null ? String(c.beds) : 'N/A' },
-                      { label: 'Baths', fn: (c: CompSale) => c.baths != null ? String(c.baths) : 'N/A' },
-                      { label: 'Sq Ft', fn: (c: CompSale) => c.sqft != null ? c.sqft.toLocaleString() : 'N/A' },
-                      { label: '$/Sq Ft', fn: (c: CompSale) => c.sqft && c.salePrice ? `$${Math.round(c.salePrice / c.sqft)}` : 'N/A' },
-                      { label: 'Distance', fn: (c: CompSale) => `${c.distanceMi.toFixed(2)} mi` },
-                    ].map((row) => (
-                      <React.Fragment key={row.label}>
-                        <div className="text-[10px] font-semibold px-2.5 py-1 flex items-center" style={{ background: 'var(--bg-widget)', color: textMuted }}>
-                          {row.label}
+                      </div>
+                    );
+                  })}
+                  {/* Data rows */}
+                  {[
+                    { label: 'Sale Price', fn: (c: CompSale) => fmtPriceFull(c.salePrice) },
+                    { label: 'Sale Date', fn: (c: CompSale) => fmtDate(c.saleDate) },
+                    { label: 'Beds', fn: (c: CompSale) => c.beds != null ? String(c.beds) : 'N/A' },
+                    { label: 'Baths', fn: (c: CompSale) => c.baths != null ? String(c.baths) : 'N/A' },
+                    { label: 'Sq Ft', fn: (c: CompSale) => c.sqft != null ? c.sqft.toLocaleString() : 'N/A' },
+                    { label: '$/Sq Ft', fn: (c: CompSale) => c.sqft && c.salePrice ? `$${Math.round(c.salePrice / c.sqft)}` : 'N/A' },
+                    { label: 'Distance', fn: (c: CompSale) => `${c.distanceMi.toFixed(2)} mi` },
+                  ].map((row) => (
+                    <React.Fragment key={row.label}>
+                      <div className="text-[10px] font-semibold px-2.5 py-1 flex items-center" style={{ background: 'var(--bg-widget)', color: textMuted }}>
+                        {row.label}
+                      </div>
+                      {selectedComps.map((c) => (
+                        <div key={c.id} className="text-[11px] tabular-nums px-2.5 py-1 flex items-center" style={{ background: 'var(--bg-widget)', color: textMain }}>
+                          {row.fn(c)}
                         </div>
-                        {selectedComps.map((c) => (
-                          <div key={c.id} className="text-[11px] tabular-nums px-2.5 py-1 flex items-center" style={{ background: 'var(--bg-widget)', color: textMain }}>
-                            {row.fn(c)}
-                          </div>
-                        ))}
-                      </React.Fragment>
-                    ))}
-                  </div>
+                      ))}
+                    </React.Fragment>
+                  ))}
                 </div>
               </div>
-            )}
-
-            <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
-              {!loading && subject && comps.length === 0 && !compsLoading && (
-                <div className="px-4 py-6 text-center">
-                  <p className="text-sm" style={{ color: textMuted }}>
-                    No comparable sales found. Try adjusting your filters.
-                  </p>
-                </div>
-              )}
-
-              {compsLoading && !loading && (
-                <div className="flex items-center justify-center gap-2 py-6">
-                  <Loader2 className="w-4 h-4 animate-spin" style={{ color: accentColor }} />
-                  <span className="text-xs" style={{ color: textMuted }}>Loading comps…</span>
-                </div>
-              )}
-
-              {sortedComps.map((comp) => {
-                const color = priceToColor(comp.salePrice, minPrice, maxPrice);
-                const isSelected = selectedCompIds.has(comp.id);
-                const canSelect = isSelected || selectedCompIds.size < 3;
-                return (
-                  <div
-                    key={comp.id}
-                    className="px-4 py-2 flex items-center gap-2 cursor-pointer transition-colors"
-                    style={{
-                      borderBottom: `1px solid ${border}`,
-                      background: isSelected
-                        ? `color-mix(in srgb, ${accentColor} 8%, transparent)`
-                        : hoveredCompId === comp.id
-                          ? `color-mix(in srgb, ${accentColor} 4%, transparent)`
-                          : 'transparent',
-                    }}
-                    onClick={() => canSelect && toggleCompSelection(comp.id)}
-                    onMouseEnter={() => setHoveredCompId(comp.id)}
-                    onMouseLeave={() => setHoveredCompId(null)}
-                  >
-                    {/* Selection checkbox */}
-                    <div
-                      className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center transition-colors"
-                      style={{
-                        border: isSelected ? 'none' : `1.5px solid ${border}`,
-                        background: isSelected ? accentColor : 'transparent',
-                        opacity: canSelect ? 1 : 0.3,
-                      }}
-                    >
-                      {isSelected && <Check className="w-3 h-3 text-white" />}
-                    </div>
-                    <div
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ background: color }}
-                    />
-                    <div className="flex-1 min-w-0 flex items-center gap-4">
-                      <div className="text-xs font-semibold truncate" style={{ color: textMain, flex: '1 1 0', minWidth: 0 }}>
-                        {comp.address.split(',')[0]}
-                      </div>
-                      <div className="text-xs font-bold tabular-nums flex-shrink-0" style={{ color }}>
-                        {fmtPrice(comp.salePrice)}
-                      </div>
-                      <div className="text-[10px] tabular-nums flex-shrink-0" style={{ color: textMuted, width: '60px' }}>
-                        {fmtDateShort(comp.saleDate)}
-                      </div>
-                      <div className="text-[10px] flex-shrink-0 hidden md:block" style={{ color: textMuted, width: '55px' }}>
-                        {comp.beds != null ? `${comp.beds}bd` : '—'} / {comp.baths != null ? `${comp.baths}ba` : '—'}
-                      </div>
-                      <div className="text-[10px] tabular-nums flex-shrink-0 hidden md:block" style={{ color: textMuted, width: '60px' }}>
-                        {comp.sqft != null ? `${comp.sqft.toLocaleString()}sf` : '—'}
-                      </div>
-                      <div className="text-[10px] tabular-nums flex-shrink-0" style={{ color: textMuted, width: '45px', textAlign: 'right' }}>
-                        {comp.distanceMi.toFixed(2)}mi
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
