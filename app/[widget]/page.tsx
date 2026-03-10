@@ -30,6 +30,7 @@ import {
   ContractorFinder,
   MultiZoneCoverage,
   PropertyIntelligence,
+  NeighborhoodProfile,
 } from '@/components/widgets';
 
 const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -59,6 +60,7 @@ const VALID_WIDGETS = [
   'contractor-finder',
   'zone-coverage',
   'property-intel',
+  'neighborhood-profile',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -307,6 +309,8 @@ export default function WidgetPage() {
         return <MultiZoneCoverage {...commonProps} />;
       case 'property-intel':
         return <PropertyIntelligence {...commonProps} />;
+      case 'neighborhood-profile':
+        return <NeighborhoodProfile {...commonProps} />;
       default:
         return null;
     }

@@ -26,6 +26,7 @@ export { default as ParkingFinder } from './ParkingFinder';
 export { default as ContractorFinder } from './ContractorFinder';
 export { default as MultiZoneCoverage } from './MultiZoneCoverage';
 export { default as PropertyIntelligence } from './PropertyIntelligence';
+export { default as NeighborhoodProfile } from './NeighborhoodProfile';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

@@ -30,6 +30,7 @@ import {
   ContractorFinder,
   MultiZoneCoverage,
   PropertyIntelligence,
+  NeighborhoodProfile,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -59,10 +60,11 @@ type WidgetId =
   | 'construction'
   | 'contractor-finder'
   | 'zone-coverage'
-  | 'property-intel';
+  | 'property-intel'
+  | 'neighborhood-profile';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
-const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'nhl', 'starbucks', 'instacart', 'citibike']);
+const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'nhl', 'starbucks', 'instacart', 'citibike']);
 
 type MenuSection = 'routing' | 'other' | 'branded';
 
@@ -89,6 +91,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'construction' as WidgetId, name: 'Construction Heatmap', description: 'Building permit activity heat map powered by Shovels.ai', section: 'other', menuLucide: Hammer },
   { id: 'contractor-finder' as WidgetId, name: 'Contractor Finder', description: 'Find contractors by specialty with coverage maps', section: 'other', menuLucide: HardHat },
   { id: 'property-intel' as WidgetId, name: 'Property Intelligence', description: 'Property data, valuations & AVM heat map powered by ATTOM', section: 'other', menuLucide: LandPlot },
+  { id: 'neighborhood-profile' as WidgetId, name: 'Neighborhood Profile', description: 'Demographics, housing, amenities & walkability powered by ATTOM', section: 'other', menuLucide: MapPin },
   // — Branded / partner demos ————————————————————————————————
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuIcon: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png' },
@@ -484,6 +487,8 @@ function HomeContent() {
         return <MultiZoneCoverage {...commonProps} />;
       case 'property-intel':
         return <PropertyIntelligence {...commonProps} />;
+      case 'neighborhood-profile':
+        return <NeighborhoodProfile {...commonProps} />;
       default:
         return null;
     }
