@@ -136,21 +136,25 @@ function indexLabel(idx: number): { text: string; color: string } {
 // ---------------------------------------------------------------------------
 
 async function fetchGeoIdV4(lat: number, lng: number): Promise<string | null> {
-  const params = new URLSearchParams({
-    endpoint: 'attomavm-detail',
-    latitude: String(lat),
-    longitude: String(lng),
-    radius: '1',
-    propertytype: 'SFR',
-    pagesize: '1',
-  });
-  try {
-    const res = await fetch(`/api/attom?${params}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const prop = data?.property?.[0];
-    return prop?.location?.geoIdV4?.N2 || prop?.location?.geoIdV4?.N1 || null;
-  } catch { return null; }
+  for (const radius of ['1', '3', '5']) {
+    const params = new URLSearchParams({
+      endpoint: 'attomavm-detail',
+      latitude: String(lat),
+      longitude: String(lng),
+      radius,
+      propertytype: 'SFR',
+      pagesize: '1',
+    });
+    try {
+      const res = await fetch(`/api/attom?${params}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const prop = data?.property?.[0];
+      const id = prop?.location?.geoIdV4?.N2 || prop?.location?.geoIdV4?.N1 || null;
+      if (id) return id;
+    } catch { continue; }
+  }
+  return null;
 }
 
 async function fetchCommunity(geoIdV4: string): Promise<CommunityData | null> {
@@ -230,6 +234,76 @@ async function fetchPOIs(lat: number, lng: number, query: string, category: POIC
   } catch { return []; }
 }
 
+function geojsonToCoords(geometry: any): { lat: number; lng: number }[] | null {
+  if (!geometry) return null;
+  const { type, coordinates } = geometry;
+  if (type === 'Polygon' && coordinates?.[0]) {
+    return coordinates[0].map(([lng, lat]: [number, number]) => ({ lat, lng }));
+  }
+  if (type === 'MultiPolygon' && coordinates?.length) {
+    let best: [number, number][] = [];
+    let bestLen = 0;
+    for (const poly of coordinates) {
+      if (poly[0] && poly[0].length > bestLen) { best = poly[0]; bestLen = poly[0].length; }
+    }
+    return best.map(([lng, lat]: [number, number]) => ({ lat, lng }));
+  }
+  return null;
+}
+
+async function fetchNeighborhoodBoundary(
+  neighborhoodName: string,
+  lat: number,
+  lng: number,
+  rawQuery?: string,
+): Promise<{ lat: number; lng: number }[] | null> {
+  const zipMatch = rawQuery?.match(/\b(\d{5})\b/);
+
+  // If the query is a zip code, try the zip boundary first
+  if (zipMatch) {
+    try {
+      const res = await fetch(`/api/boundary?type=zip&q=${zipMatch[1]}`);
+      if (res.ok) {
+        const data = await res.json();
+        const coords = geojsonToCoords(data.geometry);
+        if (coords && coords.length >= 3) return coords;
+      }
+    } catch {}
+  }
+
+  // Try ATTOM-enhanced boundary (uses geoIdV4 for authoritative name -> Zillow/Overpass/TIGER)
+  try {
+    const params = new URLSearchParams({
+      type: 'attom-neighborhood',
+      q: neighborhoodName,
+      lat: String(lat),
+      lng: String(lng),
+    });
+    const res = await fetch(`/api/boundary?${params}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.approximate) {
+        const coords = geojsonToCoords(data.geometry);
+        if (coords && coords.length >= 3) return coords;
+      }
+    }
+  } catch {}
+
+  // Fallback: plain neighborhood boundary
+  try {
+    const res = await fetch(`/api/boundary?type=neighborhood&q=${encodeURIComponent(neighborhoodName)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.approximate) {
+        const coords = geojsonToCoords(data.geometry);
+        if (coords && coords.length >= 3) return coords;
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
 async function fetchIsoline(lat: number, lng: number, minutes: number, mode: 'driving' | 'walking'): Promise<{ lat: number; lng: number }[] | null> {
   const params = new URLSearchParams({
     endpoint: 'isoline',
@@ -292,6 +366,8 @@ export default function NeighborhoodProfile({
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
   const [walkIsoline, setWalkIsoline] = useState<{ lat: number; lng: number }[] | null>(null);
   const [driveIsoline, setDriveIsoline] = useState<{ lat: number; lng: number }[] | null>(null);
+  const [boundaryPolygon, setBoundaryPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
+  const [showBoundary, setShowBoundary] = useState(true);
 
   const [enabledCategories, setEnabledCategories] = useState<Record<POICategory, boolean>>({
     school: true, food: true, shopping: true, bank: true, park: true,
@@ -313,6 +389,7 @@ export default function NeighborhoodProfile({
     setPois([]);
     setWalkIsoline(null);
     setDriveIsoline(null);
+    setBoundaryPolygon(null);
     setCenter(null);
 
     try {
@@ -338,12 +415,15 @@ export default function NeighborhoodProfile({
       setCommunity(communityData);
       setPois(poiResults.flat());
 
-      const [walk, drive] = await Promise.all([
+      const boundaryName = communityData.name || text;
+      const [walk, drive, boundary] = await Promise.all([
         fetchIsoline(lat, lng, 10, 'walking'),
         fetchIsoline(lat, lng, 5, 'driving'),
+        fetchNeighborhoodBoundary(boundaryName, lat, lng, text),
       ]);
       setWalkIsoline(walk);
       setDriveIsoline(drive);
+      setBoundaryPolygon(boundary);
     } catch (e: any) {
       setError(e.message || 'Failed to load neighborhood data');
     } finally {
@@ -379,12 +459,16 @@ export default function NeighborhoodProfile({
   }, [center, pois, enabledCategories, accentColor]);
 
   const polygons = useMemo(() => {
-    if (!showIsolines) return undefined;
     const p: Array<{ coordinates: { lat: number; lng: number }[]; color: string; fillOpacity: number; strokeWidth: number }> = [];
-    if (driveIsoline) p.push({ coordinates: driveIsoline, color: '#3B82F6', fillOpacity: 0.06, strokeWidth: 2 });
-    if (walkIsoline) p.push({ coordinates: walkIsoline, color: '#10B981', fillOpacity: 0.08, strokeWidth: 2 });
+    if (showBoundary && boundaryPolygon) {
+      p.push({ coordinates: boundaryPolygon, color: accentColor, fillOpacity: 0.05, strokeWidth: 2.5 });
+    }
+    if (showIsolines) {
+      if (driveIsoline) p.push({ coordinates: driveIsoline, color: '#3B82F6', fillOpacity: 0.06, strokeWidth: 2 });
+      if (walkIsoline) p.push({ coordinates: walkIsoline, color: '#10B981', fillOpacity: 0.08, strokeWidth: 2 });
+    }
     return p.length ? p : undefined;
-  }, [walkIsoline, driveIsoline, showIsolines]);
+  }, [walkIsoline, driveIsoline, showIsolines, boundaryPolygon, showBoundary, accentColor]);
 
   const subtitle = community
     ? community.name
@@ -426,7 +510,7 @@ export default function NeighborhoodProfile({
                 onChange={setQuery}
                 onSelect={handleSelect}
                 onEnter={handleEnter}
-                placeholder="Enter an address…"
+                placeholder="Address, neighborhood, or zip code…"
                 darkMode={darkMode}
                 className="flex-1"
                 hideIcon
@@ -626,6 +710,21 @@ export default function NeighborhoodProfile({
                   </button>
                 );
               })}
+              {boundaryPolygon && (
+                <button
+                  onClick={() => setShowBoundary(!showBoundary)}
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold shadow-md transition-opacity"
+                  style={{
+                    background: 'var(--bg-widget)',
+                    border: `1px solid ${border}`,
+                    color: showBoundary ? accentColor : textMuted,
+                    opacity: showBoundary ? 1 : 0.5,
+                  }}
+                >
+                  {showBoundary ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                  Boundary
+                </button>
+              )}
               {(walkIsoline || driveIsoline) && (
                 <button
                   onClick={() => setShowIsolines(!showIsolines)}
@@ -644,19 +743,25 @@ export default function NeighborhoodProfile({
             </div>
           )}
 
-          {/* Isoline legend */}
-          {community && (walkIsoline || driveIsoline) && showIsolines && (
+          {/* Map legend */}
+          {community && ((showBoundary && boundaryPolygon) || ((walkIsoline || driveIsoline) && showIsolines)) && (
             <div
               className="absolute left-3 bottom-10 z-[500] rounded-xl px-3 py-2 shadow-lg flex flex-col gap-1"
               style={{ background: 'var(--bg-widget)', border: `1px solid ${border}`, backdropFilter: 'blur(8px)' }}
             >
-              {walkIsoline && (
+              {showBoundary && boundaryPolygon && (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-0.5 rounded" style={{ background: accentColor }} />
+                  <span className="text-[10px] font-semibold" style={{ color: textMuted }}>Neighborhood</span>
+                </div>
+              )}
+              {showIsolines && walkIsoline && (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-0.5 rounded" style={{ background: '#10B981' }} />
                   <span className="text-[10px] font-semibold" style={{ color: textMuted }}>10-min walk</span>
                 </div>
               )}
-              {driveIsoline && (
+              {showIsolines && driveIsoline && (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-0.5 rounded" style={{ background: '#3B82F6' }} />
                   <span className="text-[10px] font-semibold" style={{ color: textMuted }}>5-min drive</span>
