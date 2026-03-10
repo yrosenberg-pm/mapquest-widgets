@@ -103,6 +103,7 @@ interface MapQuestMapProps {
   driverPosition?: { lat: number; lng: number }; // Live driver position for tracking
   showTruckRestrictions?: boolean; // Show truck restriction overlay on map
   skipPolygonFitBounds?: boolean;
+  mapType?: 'map' | 'dark' | 'satellite' | 'hybrid';
 }
 
 declare global {
@@ -153,6 +154,7 @@ export default function MapQuestMap({
   driverPosition,
   showTruckRestrictions = false,
   skipPolygonFitBounds = false,
+  mapType,
 }: MapQuestMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -595,8 +597,17 @@ export default function MapQuestMap({
       mapDiv?.classList.remove('dark-map');
     }
 
-    // Add MapQuest tile layer
-    const newTileLayer = L.mapquest.tileLayer(darkMode ? 'dark' : 'map');
+    // Resolve tile layer type: explicit mapType overrides dark/light default
+    let tileType: string;
+    if (mapType === 'satellite' || mapType === 'hybrid') {
+      tileType = 'hybrid';
+    } else if (mapType === 'dark' || (!mapType && darkMode)) {
+      tileType = 'dark';
+    } else {
+      tileType = 'map';
+    }
+
+    const newTileLayer = L.mapquest.tileLayer(tileType);
     newTileLayer.addTo(mapRef.current);
     tileLayerRef.current = newTileLayer;
     
@@ -606,7 +617,7 @@ export default function MapQuestMap({
         mapRef.current.invalidateSize();
       }
     }, 100);
-  }, [darkMode, mapReady]);
+  }, [darkMode, mapReady, mapType]);
 
   // Update center and zoom
   useEffect(() => {

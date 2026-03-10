@@ -6,7 +6,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { setApiKey } from '@/lib/mapquest';
 import { 
-  SmartAddressInput,
   StarbucksFinder,
   CitiBikeFinder,
   DirectionsEmbed,
@@ -31,6 +30,7 @@ import {
   MultiZoneCoverage,
   PropertyIntelligence,
   NeighborhoodProfile,
+  ComparableSalesMap,
 } from '@/components/widgets';
 
 const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -38,7 +38,6 @@ const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 // Valid widget IDs
 const VALID_WIDGETS = [
   'nhl',
-  'address',
   'starbucks',
   'citibike',
   'directions',
@@ -61,6 +60,7 @@ const VALID_WIDGETS = [
   'zone-coverage',
   'property-intel',
   'neighborhood-profile',
+  'comp-sales',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -225,8 +225,6 @@ export default function WidgetPage() {
     switch (widgetId) {
       case 'nhl':
         return <NHLArenaExplorer {...commonProps} />;
-      case 'address':
-        return <SmartAddressInput {...commonProps} onAddressSelect={(a) => console.log('Selected:', a)} />;
       case 'starbucks':
         return <StarbucksFinder {...commonProps} />;
       case 'citibike':
@@ -311,6 +309,8 @@ export default function WidgetPage() {
         return <PropertyIntelligence {...commonProps} />;
       case 'neighborhood-profile':
         return <NeighborhoodProfile {...commonProps} />;
+      case 'comp-sales':
+        return <ComparableSalesMap {...commonProps} />;
       default:
         return null;
     }

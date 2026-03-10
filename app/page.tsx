@@ -4,9 +4,8 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, DollarSign, LucideIcon } from 'lucide-react';
 import {
-  SmartAddressInput,
   StarbucksFinder,
   CitiBikeFinder,
   DirectionsEmbed,
@@ -31,6 +30,7 @@ import {
   MultiZoneCoverage,
   PropertyIntelligence,
   NeighborhoodProfile,
+  ComparableSalesMap,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -38,7 +38,6 @@ const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
 type WidgetId =
   | 'nhl'
-  | 'address'
   | 'starbucks'
   | 'citibike'
   | 'directions'
@@ -61,10 +60,11 @@ type WidgetId =
   | 'contractor-finder'
   | 'zone-coverage'
   | 'property-intel'
-  | 'neighborhood-profile';
+  | 'neighborhood-profile'
+  | 'comp-sales';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
-const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'nhl', 'starbucks', 'instacart', 'citibike']);
+const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike']);
 
 type MenuSection = 'routing' | 'other' | 'branded';
 
@@ -80,8 +80,6 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
   { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
-  { id: 'address' as WidgetId, name: 'Smart Address Input', description: 'Autocomplete address entry with validation', section: 'other', menuLucide: MapPin },
-
   { id: 'zone-coverage' as WidgetId, name: 'Coverage Zone Builder', description: 'Multi-zone boundary visualization tool', section: 'other', menuLucide: Layers },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', section: 'other', menuLucide: Package },
@@ -91,7 +89,8 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'construction' as WidgetId, name: 'Construction Heatmap', description: 'Building permit activity heat map powered by Shovels.ai', section: 'other', menuLucide: Hammer },
   { id: 'contractor-finder' as WidgetId, name: 'Contractor Finder', description: 'Find contractors by specialty with coverage maps', section: 'other', menuLucide: HardHat },
   { id: 'property-intel' as WidgetId, name: 'Property Intelligence', description: 'Property data, valuations & AVM heat map powered by ATTOM', section: 'other', menuLucide: LandPlot },
-  { id: 'neighborhood-profile' as WidgetId, name: 'Neighborhood Profile', description: 'Demographics, housing, amenities & walkability powered by ATTOM', section: 'other', menuLucide: MapPin },
+  { id: 'neighborhood-profile' as WidgetId, name: 'Neighborhood Profile', description: 'Demographics, housing, amenities & walkability powered by ATTOM', section: 'other', menuLucide: Building2 },
+  { id: 'comp-sales' as WidgetId, name: 'Comparable Sales', description: 'Recent sales near a property, color-coded on a map', section: 'other', menuLucide: DollarSign },
   // — Branded / partner demos ————————————————————————————————
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuIcon: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png' },
@@ -163,12 +162,7 @@ function HomeContent() {
   const [brandingMode, setBrandingMode] = useState<'mapquest' | 'cobranded' | 'whitelabel'>('mapquest');
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
-  const [showInternal, setShowInternal] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('mq_internal_unlocked') === '1';
-    }
-    return false;
-  });
+  const [showInternal, setShowInternal] = useState(false);
   const [internalPassInput, setInternalPassInput] = useState('');
   const [internalPassError, setInternalPassError] = useState(false);
 
@@ -195,6 +189,9 @@ function HomeContent() {
       }
     } catch (e) {
       console.error('Failed to load preferences:', e);
+    }
+    if (localStorage.getItem('mq_internal_unlocked') === '1') {
+      setShowInternal(true);
     }
     setPrefsLoaded(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -402,8 +399,6 @@ function HomeContent() {
     switch (activeWidget) {
       case 'nhl':
         return <NHLArenaExplorer {...commonProps} />;
-      case 'address':
-        return <SmartAddressInput {...commonProps} onAddressSelect={(a) => console.log('Selected:', a)} />;
       case 'starbucks':
         return <StarbucksFinder {...commonProps} />;
       case 'citibike':
@@ -489,6 +484,8 @@ function HomeContent() {
         return <PropertyIntelligence {...commonProps} />;
       case 'neighborhood-profile':
         return <NeighborhoodProfile {...commonProps} />;
+      case 'comp-sales':
+        return <ComparableSalesMap {...commonProps} />;
       default:
         return null;
     }
@@ -845,18 +842,6 @@ function HomeContent() {
                   {renderWidget()}
                 </div>
               </div>
-              {activeWidget === 'address' && (
-                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-3`}>
-                  <span className="inline-flex items-center gap-2" aria-label="Powered by MapQuest">
-                    <span>Powered by</span>
-                    <img
-                      src={darkMode ? '/brand/mapquest-footer-dark.svg' : '/brand/mapquest-footer-light.svg'}
-                      alt="MapQuest"
-                      className="h-3.5 w-auto opacity-90"
-                    />
-                  </span>
-                </div>
-              )}
             </div>
           </div>
         </div>

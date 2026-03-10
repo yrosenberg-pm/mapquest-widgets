@@ -65,7 +65,8 @@ async function fetchZillowNeighborhood(
   for (const f of features) {
     const fName: string = (f.properties?.NAME || '').toLowerCase();
     const match = fName === needle || fName === needleStripped
-      || (fName.length >= 4 && needle === fName);
+      || fName.replace(/\s+/g, '') === needle.replace(/\s+/g, '')
+      || (fName.length >= 4 && (fName.startsWith(needle) || needle.startsWith(fName)));
     if (!match) continue;
     const geo = f.geometry;
     if (!geo || (geo.type !== 'Polygon' && geo.type !== 'MultiPolygon')) continue;
@@ -144,6 +145,64 @@ function removePeninsulas(ring: Pt[], widthThreshold = 0.001, maxLookahead = 12)
 }
 
 /**
+ * Remove water extensions from coastal/waterfront boundaries.
+ * Detects wide protrusions where the boundary extends over water by
+ * looking for sequences of vertices that are outliers relative to
+ * the polygon's "core" shape (the median radius from centroid).
+ */
+function removeWaterExtensions(ring: Pt[]): Pt[] {
+  if (ring.length <= 10) return ring;
+  const isClosed = ptsEqual(ring[0], ring[ring.length - 1]);
+  const pts = isClosed ? ring.slice(0, -1) : [...ring];
+  if (pts.length <= 10) return ring;
+
+  // Compute centroid
+  let cx = 0, cy = 0;
+  for (const p of pts) { cx += p[0]; cy += p[1]; }
+  cx /= pts.length; cy /= pts.length;
+
+  // Compute distances from centroid
+  const dists = pts.map((p) => ptDist(p, [cx, cy]));
+
+  // Compute median distance (this represents the "core" polygon radius)
+  const sorted = [...dists].sort((a, b) => a - b);
+  const q75 = sorted[Math.floor(sorted.length * 0.75)];
+  // Threshold: a vertex is "extended" if it's beyond 1.5× the 75th percentile
+  const extThresh = q75 * 1.5;
+  if (extThresh < 0.002) return ring; // polygon too small to clip
+
+  // Find contiguous runs of extended vertices
+  const extended = dists.map((d) => d > extThresh);
+  const runs: { start: number; end: number }[] = [];
+  let runStart = -1;
+  for (let i = 0; i < pts.length; i++) {
+    if (extended[i]) {
+      if (runStart === -1) runStart = i;
+    } else if (runStart !== -1) {
+      if (i - runStart >= 3) runs.push({ start: runStart, end: i - 1 });
+      runStart = -1;
+    }
+  }
+  // Handle wrap-around
+  if (runStart !== -1 && pts.length - runStart >= 3) {
+    runs.push({ start: runStart, end: pts.length - 1 });
+  }
+
+  if (runs.length === 0) return ring;
+
+  // Remove extended runs — keep start and end points, remove interior
+  const keep = new Set<number>();
+  for (let i = 0; i < pts.length; i++) keep.add(i);
+  for (const run of runs) {
+    for (let i = run.start + 1; i < run.end; i++) keep.delete(i);
+  }
+
+  const result = pts.filter((_, i) => keep.has(i));
+  if (isClosed && result.length > 0) result.push([...result[0]]);
+  return result.length >= 4 ? result : ring;
+}
+
+/**
  * Stitch an unordered set of ways into a closed ring by matching endpoints.
  * Ways may need to be reversed to connect properly.
  */
@@ -185,9 +244,11 @@ function stitchRing(ways: Pt[][]): Pt[] | null {
 }
 
 async function fetchOverpassBoundary(name: string, lat: number, lon: number): Promise<object | null> {
-  const delta = 0.04;
+  const delta = 0.08; // ~5.5 miles — wide enough for city-level relations
   const bbox = `${lat - delta},${lon - delta},${lat + delta},${lon + delta}`;
-  const query = `[out:json][timeout:12];relation["boundary"="place"]["name"="${name.replace(/"/g, '')}"](${bbox});out geom;`;
+  const esc = name.replace(/"/g, '');
+  // Search for both place and administrative boundaries
+  const query = `[out:json][timeout:12];(relation["boundary"="place"]["name"="${esc}"](${bbox});relation["boundary"="administrative"]["name"="${esc}"](${bbox}););out geom;`;
   try {
     const res = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
@@ -199,20 +260,39 @@ async function fetchOverpassBoundary(name: string, lat: number, lon: number): Pr
     const text = await res.text();
     let data: any;
     try { data = JSON.parse(text); } catch { return null; }
-    const elem = data.elements?.[0];
-    if (!elem?.members) return null;
+    const elements = data.elements;
+    if (!Array.isArray(elements) || !elements.length) return null;
 
-    const outerWays: Pt[][] = [];
-    for (const m of elem.members) {
-      if (m.role !== 'outer' || !m.geometry?.length) continue;
-      outerWays.push(m.geometry.map((g: { lon: number; lat: number }): Pt => [g.lon, g.lat]));
+    // Try each matching relation, keep the best (smallest valid polygon —
+    // smaller polygons are less likely to include water extensions)
+    let bestRing: Pt[] | null = null;
+    let bestArea = Infinity;
+
+    for (const elem of elements) {
+      if (!elem?.members) continue;
+      const outerWays: Pt[][] = [];
+      for (const m of elem.members) {
+        if (m.role !== 'outer' || !m.geometry?.length) continue;
+        outerWays.push(m.geometry.map((g: { lon: number; lat: number }): Pt => [g.lon, g.lat]));
+      }
+      const raw = stitchRing(outerWays);
+      if (!raw || raw.length < 4) continue;
+      let ring = removePeninsulas(raw);
+      ring = removeWaterExtensions(ring);
+      if (ring.length < 4) continue;
+
+      // Approximate area using the shoelace formula
+      let area = 0;
+      for (let i = 0; i < ring.length - 1; i++) {
+        area += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+      }
+      area = Math.abs(area) / 2;
+
+      if (area < bestArea) { bestArea = area; bestRing = ring; }
     }
 
-    const raw = stitchRing(outerWays);
-    if (!raw) return null;
-    const ring = removePeninsulas(raw);
-    if (ring.length < 4) return null;
-    return { type: 'Polygon', coordinates: [ring] };
+    if (!bestRing) return null;
+    return { type: 'Polygon', coordinates: [bestRing] };
   } catch {
     return null;
   }

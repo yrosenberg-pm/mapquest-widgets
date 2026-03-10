@@ -135,26 +135,44 @@ function indexLabel(idx: number): { text: string; color: string } {
 // API helpers
 // ---------------------------------------------------------------------------
 
-async function fetchGeoIdV4(lat: number, lng: number): Promise<string | null> {
-  for (const radius of ['1', '3', '5']) {
+interface GeoIdResult {
+  neighborhoodId: string | null;
+  zipId: string | null;
+  placeId: string | null;
+  locality: string | null;
+}
+
+async function fetchGeoIds(
+  lat: number,
+  lng: number,
+): Promise<GeoIdResult> {
+  const empty: GeoIdResult = { neighborhoodId: null, zipId: null, placeId: null, locality: null };
+
+  for (const radius of ['0.1', '0.25', '0.5', '1', '3']) {
     const params = new URLSearchParams({
       endpoint: 'attomavm-detail',
       latitude: String(lat),
       longitude: String(lng),
       radius,
-      propertytype: 'SFR',
-      pagesize: '1',
+      pagesize: '5',
     });
     try {
       const res = await fetch(`/api/attom?${params}`);
       if (!res.ok) continue;
       const data = await res.json();
       const prop = data?.property?.[0];
-      const id = prop?.location?.geoIdV4?.N2 || prop?.location?.geoIdV4?.N1 || null;
-      if (id) return id;
+      if (!prop) continue;
+
+      const gv4 = prop.location?.geoIdV4 || {};
+      return {
+        neighborhoodId: gv4.N2 || gv4.N1 || null,
+        zipId: gv4.ZI || null,
+        placeId: gv4.PL || null,
+        locality: prop.address?.locality || null,
+      };
     } catch { continue; }
   }
-  return null;
+  return empty;
 }
 
 async function fetchCommunity(geoIdV4: string): Promise<CommunityData | null> {
@@ -289,7 +307,7 @@ async function fetchNeighborhoodBoundary(
     }
   } catch {}
 
-  // Fallback: plain neighborhood boundary
+  // Fallback: plain neighborhood boundary (using the ATTOM community name)
   try {
     const res = await fetch(`/api/boundary?type=neighborhood&q=${encodeURIComponent(neighborhoodName)}`);
     if (res.ok) {
@@ -298,6 +316,31 @@ async function fetchNeighborhoodBoundary(
         const coords = geojsonToCoords(data.geometry);
         if (coords && coords.length >= 3) return coords;
       }
+    }
+  } catch {}
+
+  // Try the raw search text as a neighborhood name (may differ from ATTOM name)
+  if (rawQuery && rawQuery.toLowerCase() !== neighborhoodName.toLowerCase()) {
+    try {
+      const res = await fetch(`/api/boundary?type=neighborhood&q=${encodeURIComponent(rawQuery)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.approximate) {
+          const coords = geojsonToCoords(data.geometry);
+          if (coords && coords.length >= 3) return coords;
+        }
+      }
+    } catch {}
+  }
+
+  // Try city boundary (for cases like Highland Park IL where the area is a city)
+  const cityName = rawQuery || neighborhoodName;
+  try {
+    const res = await fetch(`/api/boundary?type=city&q=${encodeURIComponent(cityName)}`);
+    if (res.ok) {
+      const data = await res.json();
+      const coords = geojsonToCoords(data.geometry);
+      if (coords && coords.length >= 3) return coords;
     }
   } catch {}
 
@@ -373,10 +416,20 @@ export default function NeighborhoodProfile({
     school: true, food: true, shopping: true, bank: true, park: true,
   });
   const [showIsolines, setShowIsolines] = useState(true);
+  const [mapZoom, setMapZoom] = useState(14);
+
+  const zoomToLocation = useMemo(
+    () => (center ? { lat: center.lat, lng: center.lng, zoom: 14 } : undefined),
+    [center?.lat, center?.lng],
+  );
+
+  const derivedMapType = mapZoom >= 18 ? 'hybrid' as const : undefined;
 
   const border = 'var(--border-subtle)';
   const textMain = 'var(--text-main)';
   const textMuted = 'var(--text-muted)';
+
+  const handleBoundsChange = useCallback((b: { zoom: number }) => setMapZoom(b.zoom), []);
 
   const toggleCategory = useCallback((cat: POICategory) => {
     setEnabledCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
@@ -401,17 +454,74 @@ export default function NeighborhoodProfile({
       }
       setCenter({ lat, lng });
 
-      const geoId = await fetchGeoIdV4(lat, lng);
-      if (!geoId) { setError('Could not determine neighborhood. Try a more specific address.'); return; }
+      const geoIds = await fetchGeoIds(lat, lng);
+      if (!geoIds.neighborhoodId && !geoIds.zipId && !geoIds.placeId) {
+        setError('Could not determine neighborhood. Try a more specific address.');
+        return;
+      }
 
-      const [communityData, ...poiResults] = await Promise.all([
-        fetchCommunity(geoId),
-        ...Object.entries(CATEGORY_CONFIG).map(([cat, cfg]) =>
-          fetchPOIs(lat!, lng!, cfg.query, cat as POICategory)
-        ),
-      ]);
+      // Helper: check if a community name loosely matches the search text
+      const searchWords = text.toLowerCase().replace(/[,.\s]+/g, ' ').trim()
+        .split(/\s+/).filter((w) => w.length >= 3);
+      const nameMatches = (name: string) => {
+        if (!searchWords.length) return true;
+        const lower = name.toLowerCase();
+        return searchWords.some((w) => lower.includes(w));
+      };
+
+      // Try neighborhood-level community first
+      let communityData: CommunityData | null = null;
+      if (geoIds.neighborhoodId) {
+        communityData = await fetchCommunity(geoIds.neighborhoodId);
+      }
+
+      // If the neighborhood name doesn't match the search, try
+      // alternative geographic levels (ZIP, Place) which may be
+      // more specific (e.g. Marina Del Rey vs Venice).
+      if (communityData && !nameMatches(communityData.name) && searchWords.length > 0) {
+        // Also check if the property locality matches — if ATTOM says
+        // the address is in Venice but user searched Marina Del Rey,
+        // the ZIP or Place level is likely more accurate.
+        const localityMatches = geoIds.locality
+          ? nameMatches(geoIds.locality)
+          : false;
+
+        if (!localityMatches) {
+          // Try ZIP-code level community (often more precise for
+          // unincorporated areas like Marina Del Rey)
+          for (const altId of [geoIds.zipId, geoIds.placeId]) {
+            if (!altId) continue;
+            const altData = await fetchCommunity(altId);
+            if (altData && nameMatches(altData.name)) {
+              communityData = altData;
+              break;
+            }
+            // Even if the name doesn't match, ZIP data is usually
+            // geographically accurate, so prefer it over a wrong neighborhood
+            if (altData && altId === geoIds.zipId) {
+              communityData = altData;
+              break;
+            }
+          }
+        }
+      }
+
+      // Last resort: if we still have nothing, try any available level
+      if (!communityData) {
+        for (const altId of [geoIds.zipId, geoIds.placeId]) {
+          if (!altId) continue;
+          communityData = await fetchCommunity(altId);
+          if (communityData) break;
+        }
+      }
 
       if (!communityData) { setError('No community data available for this area.'); return; }
+
+      const poiResults = await Promise.all(
+        Object.entries(CATEGORY_CONFIG).map(([cat, cfg]) =>
+          fetchPOIs(lat!, lng!, cfg.query, cat as POICategory)
+        ),
+      );
       setCommunity(communityData);
       setPois(poiResults.flat());
 
@@ -683,7 +793,9 @@ export default function NeighborhoodProfile({
             height="100%"
             interactive
             showZoomControls
-            zoomToLocation={center ? { lat: center.lat, lng: center.lng, zoom: 14 } : undefined}
+            zoomToLocation={zoomToLocation}
+            mapType={derivedMapType}
+            onBoundsChange={handleBoundsChange}
           />
 
           {/* Category filter toggles */}
