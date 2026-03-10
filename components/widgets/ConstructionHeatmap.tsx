@@ -259,6 +259,8 @@ export default function ConstructionHeatmap({
 }) {
   const [location, setLocation] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [heatMapZoom, setHeatMapZoom] = useState(13);
+  const handleHeatBoundsChange = useCallback((b: { zoom: number }) => setHeatMapZoom(b.zoom), []);
 
   const today = new Date();
   const oneYearAgo = new Date(today);
@@ -773,6 +775,8 @@ export default function ConstructionHeatmap({
             fitBounds={fitBounds}
             showZoomControls
             interactive
+            mapType={heatMapZoom >= 18 ? 'hybrid' : undefined}
+            onBoundsChange={handleHeatBoundsChange}
           />
         </div>
       </div>

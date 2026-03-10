@@ -282,6 +282,8 @@ export default function NeighborhoodScore({
   const [error, setError] = useState<string | null>(null);
   const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
+  const [mapZoom, setMapZoom] = useState(14);
+  const handleMapBoundsChange = useCallback((b: { zoom: number }) => setMapZoom(b.zoom), []);
   const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   // Walkability isoline state
@@ -1019,6 +1021,8 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
             ]}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
+            mapType={mapZoom >= 18 ? 'hybrid' : undefined}
+            onBoundsChange={handleMapBoundsChange}
           />
 
           {/* Chat overlay — bottom-right of map */}

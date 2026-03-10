@@ -388,6 +388,9 @@ export default function ContractorFinder({
     [searchCenter],
   );
 
+  const [liveMapZoom, setLiveMapZoom] = useState(4);
+  const handleContractorBoundsChange = useCallback((b: { zoom: number }) => setLiveMapZoom(b.zoom), []);
+
   const mapZoom = useMemo(() => {
     if (!searchCenter) return 4;
     if (radius <= 5) return 12;
@@ -887,6 +890,8 @@ export default function ContractorFinder({
             darkMode={darkMode}
             markers={markers}
             height="100%"
+            mapType={liveMapZoom >= 18 ? 'hybrid' : undefined}
+            onBoundsChange={handleContractorBoundsChange}
           />
         </div>
       </div>

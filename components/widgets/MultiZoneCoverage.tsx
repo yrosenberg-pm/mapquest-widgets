@@ -158,6 +158,10 @@ export default function MultiZoneCoverage({
 }: MultiZoneCoverageProps) {
   // ── zone config state ──
   const [zones, setZones] = useState<Zone[]>([]);
+  const [configMapZoom, setConfigMapZoom] = useState(10);
+  const handleConfigBoundsChange = useCallback((b: { zoom: number }) => setConfigMapZoom(b.zoom), []);
+  const [previewMapZoom, setPreviewMapZoom] = useState(10);
+  const handlePreviewBoundsChange = useCallback((b: { zoom: number }) => setPreviewMapZoom(b.zoom), []);
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState<{ name: string; displayString: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -517,6 +521,8 @@ export default function MultiZoneCoverage({
               polygons={configPolygons}
               height="100%"
               fitBounds={configBounds}
+              mapType={configMapZoom >= 18 ? 'hybrid' : undefined}
+              onBoundsChange={handleConfigBoundsChange}
             />
             {zones.length > 0 && (
               <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold shadow" style={{ background: 'var(--bg-widget)', color: 'var(--text-main)', border: '1px solid var(--border-subtle)' }}>
@@ -585,6 +591,8 @@ export default function MultiZoneCoverage({
                   polygons={previewPolygons}
                   height="100%"
                   fitBounds={previewBounds}
+                  mapType={previewMapZoom >= 18 ? 'hybrid' : undefined}
+                  onBoundsChange={handlePreviewBoundsChange}
                 />
                 {!custResult && zones.length > 0 && (
                   <div className="absolute inset-x-0 bottom-0 px-3 py-2 text-center text-[11px] font-medium" style={{ background: 'var(--bg-widget)', color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}>

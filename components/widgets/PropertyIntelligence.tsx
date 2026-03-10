@@ -1173,6 +1173,7 @@ export default function PropertyIntelligence({
             polygons={allPolygons}
             skipPolygonFitBounds={initialFitDone}
             onBoundsChange={handleBoundsChange}
+            mapType={mapZoomLevel >= 18 ? 'hybrid' : undefined}
             height="100%"
             interactive
             showZoomControls

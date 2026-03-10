@@ -1,7 +1,7 @@
 // components/widgets/TruckRouting.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2 } from 'lucide-react';
 import { geocode, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
@@ -326,6 +326,8 @@ export default function TruckRouting({
   const [truckPois, setTruckPois] = useState<Array<{ lat: number; lng: number; title: string }>>([]);
   const [truckPoisLoading, setTruckPoisLoading] = useState(false);
   const [truckPoisError, setTruckPoisError] = useState<string | null>(null);
+  const [truckMapZoom, setTruckMapZoom] = useState(10);
+  const handleTruckBoundsChange = useCallback((b: { zoom: number }) => setTruckMapZoom(b.zoom), []);
   const [demoMode, setDemoMode] = useState(false);
   const [demoScenario, setDemoScenario] = useState<'durham' | 'donner' | null>(null);
   const [maxElevationFt, setMaxElevationFt] = useState<number | null>(
@@ -1039,6 +1041,8 @@ export default function TruckRouting({
             routeEnd={toCoords || undefined}
             routeType="fastest"
             routePolyline={routePolyline}
+            mapType={truckMapZoom >= 18 ? 'hybrid' : undefined}
+            onBoundsChange={handleTruckBoundsChange}
           />
         </div>
         {/* Sidebar */}
