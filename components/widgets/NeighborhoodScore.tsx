@@ -600,6 +600,11 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
+  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
 
   const calculateScores = async () => {
     let loc = location;
@@ -1033,23 +1038,23 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                 style={{
                   width: 320,
                   height: 380,
-                  background: 'var(--bg-widget)',
-                  border: '1px solid var(--border-subtle)',
+                  background: bgWidget,
+                  border: `1px solid ${border}`,
                   backdropFilter: 'blur(12px)',
                 }}
               >
                 <div
                   className="flex items-center gap-2 px-3 py-2.5 flex-shrink-0"
-                  style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                  style={{ borderBottom: `1px solid ${border}`, background: 'var(--bg-panel)' }}
                 >
                   <Sparkles className="w-4 h-4" style={{ color: accentColor }} />
-                  <span className="text-xs font-semibold flex-1" style={{ color: 'var(--text-main)' }}>
+                  <span className="text-xs font-semibold flex-1" style={{ color: textMain }}>
                     Neighborhood Assistant
                   </span>
                   <button
                     onClick={() => setChatOpen(false)}
                     className="p-1 rounded-md transition-colors hover:bg-black/5"
-                    style={{ color: 'var(--text-muted)' }}
+                    style={{ color: buttonMuted }}
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1059,7 +1064,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                   {chatMessages.length === 0 && (
                     <div className="text-center py-6">
                       <Sparkles className="w-6 h-6 mx-auto mb-2" style={{ color: accentColor, opacity: 0.5 }} />
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <p className="text-xs" style={{ color: textMuted }}>
                         Ask me anything about this neighborhood
                       </p>
                       <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
@@ -1094,7 +1099,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                         style={
                           msg.role === 'user'
                             ? { background: accentColor, color: 'white', borderBottomRightRadius: 4 }
-                            : { background: 'var(--bg-input)', color: 'var(--text-main)', borderBottomLeftRadius: 4 }
+                            : { background: 'var(--bg-input)', color: textMain, borderBottomLeftRadius: 4 }
                         }
                       >
                         {msg.content}
@@ -1105,7 +1110,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     <div className="flex justify-start">
                       <div
                         className="px-3 py-2 rounded-xl text-xs"
-                        style={{ background: 'var(--bg-input)', color: 'var(--text-muted)', borderBottomLeftRadius: 4 }}
+                        style={{ background: 'var(--bg-input)', color: textMuted, borderBottomLeftRadius: 4 }}
                       >
                         <span className="inline-flex gap-1">
                           <span className="animate-bounce" style={{ animationDelay: '0ms' }}>·</span>
@@ -1120,7 +1125,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
                 <div
                   className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
-                  style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}
+                  style={{ borderTop: `1px solid ${border}`, background: 'var(--bg-panel)' }}
                 >
                   <input
                     ref={chatInputRef}
@@ -1132,8 +1137,8 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     className="flex-1 text-xs px-3 py-2 rounded-lg outline-none"
                     style={{
                       background: 'var(--bg-input)',
-                      color: 'var(--text-main)',
-                      border: '1px solid var(--border-subtle)',
+                      color: textMain,
+                      border: `1px solid ${border}`,
                     }}
                     disabled={chatLoading}
                   />
@@ -1152,8 +1157,8 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                 onClick={() => setChatOpen(true)}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg transition-all hover:scale-105"
                 style={{
-                  background: 'var(--bg-widget)',
-                  border: '1px solid var(--border-subtle)',
+                  background: bgWidget,
+                  border: `1px solid ${border}`,
                   color: accentColor,
                 }}
               >

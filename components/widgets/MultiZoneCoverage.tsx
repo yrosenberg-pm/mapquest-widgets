@@ -173,6 +173,12 @@ export default function MultiZoneCoverage({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const colorIndexRef = useRef(0);
 
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
+  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+
   // ── customer preview state ──
   const [custAddress, setCustAddress] = useState('');
   const [custLoading, setCustLoading] = useState(false);
@@ -396,7 +402,7 @@ export default function MultiZoneCoverage({
           <div className="p-3 pb-2">
             <div className="flex gap-2">
               <div className="relative flex-1" style={{ zIndex: 1000 }}>
-                <div className="rounded-xl flex items-center gap-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '8px 12px' }}>
+                <div className="rounded-xl flex items-center gap-2" style={{ background: 'var(--bg-input)', border: `1px solid ${border}`, padding: '8px 12px' }}>
                   <Search className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
                   <input
                     type="text"
@@ -419,17 +425,17 @@ export default function MultiZoneCoverage({
                 </div>
                 {/* Suggestions dropdown */}
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl shadow-xl overflow-hidden" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+                  <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl shadow-xl overflow-hidden" style={{ background: bgWidget, border: `1px solid ${border}` }}>
                     {suggestions.map((s, i) => (
                       <button
                         key={i} type="button"
                         onMouseDown={e => { e.preventDefault(); addZone(s.displayString || s.name); }}
                         className="w-full px-3 py-2.5 text-left text-sm transition-colors hover:bg-[var(--bg-hover)]"
-                        style={{ color: 'var(--text-main)', borderBottom: i < suggestions.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}
+                        style={{ color: textMain, borderBottom: i < suggestions.length - 1 ? `1px solid ${border}` : 'none' }}
                       >
                         <div className="font-medium truncate">{s.name}</div>
                         {s.displayString && s.displayString !== s.name && (
-                          <div className="text-xs truncate mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.displayString}</div>
+                          <div className="text-xs truncate mt-0.5" style={{ color: textMuted }}>{s.displayString}</div>
                         )}
                       </button>
                     ))}
@@ -459,8 +465,8 @@ export default function MultiZoneCoverage({
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-2" style={{ background: `${accentColor}15` }}>
                   <MapPin className="w-4 h-4" style={{ color: accentColor }} />
                 </div>
-                <div className="text-xs font-semibold mb-0.5" style={{ color: 'var(--text-main)' }}>No zones added</div>
-                <div className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                <div className="text-xs font-semibold mb-0.5" style={{ color: textMain }}>No zones added</div>
+                <div className="text-[11px] leading-relaxed" style={{ color: textMuted }}>
                   Search above or paste a list of ZIP codes to define your coverage area.
                 </div>
               </div>
@@ -477,14 +483,14 @@ export default function MultiZoneCoverage({
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: zone.color, opacity: zone.visible ? 1 : 0.3 }} />
-                        <div className="text-xs font-medium truncate flex-1" style={{ color: zone.visible ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                        <div className="text-xs font-medium truncate flex-1" style={{ color: zone.visible ? textMain : textMuted }}>
                           {zone.name}
                         </div>
                         <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: `${zone.color}15`, color: zone.color }}>
                           {typeLabel(zone.type)}
                         </span>
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button type="button" onClick={e => { e.stopPropagation(); toggleVisibility(zone.id); }} className="p-0.5 hover:opacity-60" style={{ color: 'var(--text-muted)' }} title={zone.visible ? 'Hide' : 'Show'}>
+                          <button type="button" onClick={e => { e.stopPropagation(); toggleVisibility(zone.id); }} className="p-0.5 hover:opacity-60" style={{ color: buttonMuted }} title={zone.visible ? 'Hide' : 'Show'}>
                             {zone.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                           </button>
                           <button type="button" onClick={e => { e.stopPropagation(); removeZone(zone.id); }} className="p-0.5 hover:opacity-60" style={{ color: 'var(--color-error, #ef4444)' }} title="Remove">
@@ -501,7 +507,7 @@ export default function MultiZoneCoverage({
 
           {/* Zone footer */}
           {zones.length > 0 && (
-            <div className="px-3 py-1.5 text-[11px] flex items-center justify-between border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
+            <div className="px-3 py-1.5 text-[11px] flex items-center justify-between border-t" style={{ borderColor: border, color: textMuted }}>
               <span>{zones.length} zone{zones.length !== 1 ? 's' : ''} · {zones.filter(z => z.visible).length} visible</span>
               <button type="button" onClick={() => { setZones([]); colorIndexRef.current = 0; }} className="font-medium hover:opacity-70" style={{ color: 'var(--color-error, #ef4444)' }}>
                 Clear all
@@ -525,7 +531,7 @@ export default function MultiZoneCoverage({
               onBoundsChange={handleConfigBoundsChange}
             />
             {zones.length > 0 && (
-              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold shadow" style={{ background: 'var(--bg-widget)', color: 'var(--text-main)', border: '1px solid var(--border-subtle)' }}>
+              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold shadow" style={{ background: bgWidget, color: textMain, border: `1px solid ${border}` }}>
                 {zones.filter(z => z.visible).length} zone{zones.filter(z => z.visible).length !== 1 ? 's' : ''}
               </div>
             )}
@@ -541,16 +547,16 @@ export default function MultiZoneCoverage({
             </div>
 
             {/* Simulated widget card */}
-            <div className="rounded-2xl overflow-hidden shadow-lg" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+            <div className="rounded-2xl overflow-hidden shadow-lg" style={{ background: bgWidget, border: `1px solid ${border}` }}>
               {/* Widget header */}
               <div className="px-4 pt-4 pb-3">
-                <div className="text-sm font-bold" style={{ color: 'var(--text-main)' }}>Check if we service your area</div>
-                <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Enter your address to see if you're in our coverage zone.</div>
+                <div className="text-sm font-bold" style={{ color: textMain }}>Check if we service your area</div>
+                <div className="text-[11px] mt-0.5" style={{ color: textMuted }}>Enter your address to see if you're in our coverage zone.</div>
               </div>
 
               {/* Address input */}
               <div className="px-4 pb-3">
-                <div className="rounded-xl flex items-center gap-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '8px 12px' }}>
+                <div className="rounded-xl flex items-center gap-2" style={{ background: 'var(--bg-input)', border: `1px solid ${border}`, padding: '8px 12px' }}>
                   <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
                   <AddressAutocomplete
                     value={custAddress}
@@ -595,13 +601,13 @@ export default function MultiZoneCoverage({
                   onBoundsChange={handlePreviewBoundsChange}
                 />
                 {!custResult && zones.length > 0 && (
-                  <div className="absolute inset-x-0 bottom-0 px-3 py-2 text-center text-[11px] font-medium" style={{ background: 'var(--bg-widget)', color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}>
+                  <div className="absolute inset-x-0 bottom-0 px-3 py-2 text-center text-[11px] font-medium" style={{ background: bgWidget, color: textMuted, borderTop: `1px solid ${border}` }}>
                     Enter your address above to check coverage
                   </div>
                 )}
                 {zones.length === 0 && (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'var(--bg-widget)' }}>
-                    <div className="text-xs text-center px-6" style={{ color: 'var(--text-muted)' }}>
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: bgWidget }}>
+                    <div className="text-xs text-center px-6" style={{ color: textMuted }}>
                       Add zones on the left to activate the coverage checker.
                     </div>
                   </div>

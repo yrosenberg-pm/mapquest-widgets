@@ -281,9 +281,10 @@ export default function ConstructionHeatmap({
   const [filtersOpen, setFiltersOpen] = useState(true);
 
   const bgPanel = 'var(--bg-panel)';
-  const border = 'var(--border-subtle)';
-  const textMain = 'var(--text-main)';
-  const textMuted = 'var(--text-muted)';
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
 
   const handleSearch = useCallback(async (lat: number, lng: number) => {
     setLoading(true);
@@ -354,6 +355,7 @@ export default function ConstructionHeatmap({
   const polygons = useMemo(() => {
     return gridCells.map(cell => {
       const gc = gridColorForCount(cell.count);
+      const fillOpacity = darkMode ? Math.min(0.75, gc.opacity + 0.15) : gc.opacity;
       return {
         coordinates: [
           { lat: cell.rowLat, lng: cell.colLng },
@@ -362,11 +364,11 @@ export default function ConstructionHeatmap({
           { lat: cell.rowLat, lng: cell.colLng + CELL_DEG },
         ],
         color: gc.fill,
-        fillOpacity: gc.opacity,
+        fillOpacity,
         strokeWidth: 1,
       };
     });
-  }, [gridCells]);
+  }, [gridCells, darkMode]);
 
   const fitBounds = useMemo(() => {
     if (gridCells.length === 0) return undefined;

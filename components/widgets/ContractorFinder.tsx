@@ -287,9 +287,10 @@ export default function ContractorFinder({
   companyName,
   companyLogo,
 }: ContractorFinderProps) {
-  const border = 'var(--border-subtle)';
-  const textMain = 'var(--text-main)';
-  const textMuted = 'var(--text-muted)';
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
   const bgPanel = 'var(--bg-panel)';
 
   const [locationInput, setLocationInput] = useState('');

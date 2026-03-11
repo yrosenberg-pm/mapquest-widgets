@@ -111,6 +111,11 @@ export default function MultiStopPlanner({
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   // In dark mode the input bg is also gray-700, so we need a lighter border to keep fields visible.
   const borderColor = darkMode ? 'border-gray-500/60' : 'border-gray-200';
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
+  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
 
   const pad2 = (n: number) => n.toString().padStart(2, '0');
   const departureDateValue = `${departureTime.getFullYear()}-${pad2(departureTime.getMonth() + 1)}-${pad2(departureTime.getDate())}`;
@@ -868,9 +873,9 @@ export default function MultiStopPlanner({
                 onClick={() => setSidebarView('stops')}
                 className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all hover:opacity-80"
                 style={{ 
-                  background: sidebarView === 'stops' ? 'var(--bg-widget)' : 'transparent',
-                  color: sidebarView === 'stops' ? accentColor : 'var(--text-muted)',
-                  boxShadow: sidebarView === 'stops' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  background: sidebarView === 'stops' ? bgWidget : 'transparent',
+                  color: darkMode ? '#fff' : (sidebarView === 'stops' ? accentColor : textMuted),
+                  boxShadow: sidebarView === 'stops' ? (darkMode ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)') : 'none',
                 }}
               >
                 <List className="w-3.5 h-3.5" />
@@ -881,9 +886,9 @@ export default function MultiStopPlanner({
                 disabled={!routeResult}
                 className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all hover:opacity-80 disabled:opacity-40"
                 style={{ 
-                  background: sidebarView === 'segments' ? 'var(--bg-widget)' : 'transparent',
-                  color: sidebarView === 'segments' ? accentColor : 'var(--text-muted)',
-                  boxShadow: sidebarView === 'segments' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  background: sidebarView === 'segments' ? bgWidget : 'transparent',
+                  color: darkMode ? '#fff' : (sidebarView === 'segments' ? accentColor : textMuted),
+                  boxShadow: sidebarView === 'segments' ? (darkMode ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)') : 'none',
                 }}
               >
                 <Edit3 className="w-3.5 h-3.5" />
@@ -897,9 +902,9 @@ export default function MultiStopPlanner({
                 disabled={!routeResult}
                 className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-medium transition-all hover:opacity-80 disabled:opacity-40"
                 style={{ 
-                  background: sidebarView === 'route' ? 'var(--bg-widget)' : 'transparent',
-                  color: sidebarView === 'route' ? accentColor : 'var(--text-muted)',
-                  boxShadow: sidebarView === 'route' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  background: sidebarView === 'route' ? bgWidget : 'transparent',
+                  color: darkMode ? '#fff' : (sidebarView === 'route' ? accentColor : textMuted),
+                  boxShadow: sidebarView === 'route' ? (darkMode ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.1)') : 'none',
                 }}
               >
                 <Route className="w-3.5 h-3.5" />
@@ -912,7 +917,7 @@ export default function MultiStopPlanner({
               <button
                 onClick={() => setShowMoreMenu(!showMoreMenu)}
                 className="p-2 rounded-lg transition-colors hover:bg-black/5"
-                style={{ color: 'var(--text-muted)' }}
+                style={{ color: textMuted }}
               >
                 <MoreHorizontal className="w-5 h-5" />
               </button>
@@ -920,23 +925,23 @@ export default function MultiStopPlanner({
               {showMoreMenu && (
                 <div 
                   className="absolute right-0 top-full mt-1 w-48 py-1 rounded-xl shadow-xl z-50"
-                  style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}
+                  style={{ background: bgWidget, border: `1px solid ${border}` }}
                 >
-                  <button onClick={addRandomStops} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
+                  <button onClick={addRandomStops} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: textMain }}>
                     <Shuffle className="w-4 h-4" /> Add Demo Stops
                   </button>
                   {routeResult && (
                     <>
-                      <button onClick={downloadRouteSheet} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: 'var(--text-secondary)' }}>
+                      <button onClick={downloadRouteSheet} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: textMain }}>
                         <Download className="w-4 h-4" /> Download Route
                       </button>
-                      <button onClick={generateShareUrl} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: copySuccess ? 'var(--color-success)' : 'var(--text-secondary)' }}>
+                      <button onClick={generateShareUrl} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: copySuccess ? 'var(--color-success)' : textMain }}>
                         {copySuccess ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
                         {copySuccess ? 'Copied!' : 'Copy Share Link'}
                       </button>
                     </>
                   )}
-                  <div style={{ borderTop: '1px solid var(--border-subtle)', margin: '4px 0' }} />
+                  <div style={{ borderTop: `1px solid ${border}`, margin: '4px 0' }} />
                   <button onClick={clearAllStops} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: 'var(--color-error)' }}>
                     <Trash2 className="w-4 h-4" /> Clear All
                   </button>

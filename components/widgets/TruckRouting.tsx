@@ -367,6 +367,11 @@ export default function TruckRouting({
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
+  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
 
   // Get truck directions using routing API (better truck restrictions support)
   const getHereTruckDirections = async (
@@ -975,7 +980,7 @@ export default function TruckRouting({
     const constraint = constraints[field];
     return (
       <div>
-        <label className="text-[11px] font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
+        <label className="text-[11px] font-medium mb-1 block" style={{ color: textMuted }}>
           {label}
         </label>
         <div className="flex items-center gap-2">
@@ -994,11 +999,11 @@ export default function TruckRouting({
             className="w-20 px-2.5 py-1.5 rounded-lg text-sm font-medium tabular-nums"
             style={{
               background: 'var(--bg-input)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-main)',
+              border: `1px solid ${border}`,
+              color: textMain,
             }}
           />
-          <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+          <span className="text-xs font-medium flex-shrink-0" style={{ color: textMuted }}>
             {unit}
           </span>
         </div>
@@ -1048,14 +1053,14 @@ export default function TruckRouting({
         {/* Sidebar */}
         <div 
           className="w-full md:w-[500px] flex flex-col border-t md:border-t-0 md:border-r md:order-1"
-          style={{ borderColor: 'var(--border-subtle)' }}
+          style={{ borderColor: border }}
         >
           {/* Body: fixed controls + scrollable results + fixed CTA footer */}
           <div className="flex-1 min-h-0 flex flex-col">
             {/* Controls (fixed) */}
-            <div className="p-3 space-y-2 flex-shrink-0" style={{ borderBottom: route ? '1px solid var(--border-subtle)' : undefined }}>
+            <div className="p-3 space-y-2 flex-shrink-0" style={{ borderBottom: route ? `1px solid ${border}` : undefined }}>
           {/* Vehicle Profile Section */}
-              <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+              <div className="rounded-2xl overflow-hidden" style={{ background: bgWidget, border: `1px solid ${border}` }}>
                 <div className="px-4 py-3">
                   <CollapsibleSection
                     title="Vehicle Profile"
@@ -1075,7 +1080,7 @@ export default function TruckRouting({
                         <VehicleInput label="Length" value={vehicle.length} unit="ft" field="length" step={1} />
                         {/* Elevation constraint – inline with Length */}
                         <div>
-                          <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-muted)' }}>
+                          <label className="text-xs font-medium mb-1 block" style={{ color: textMuted }}>
                             Max elevation
                           </label>
                           <div className="flex items-center gap-2">
@@ -1097,11 +1102,11 @@ export default function TruckRouting({
                               className="w-full px-3 py-2 rounded-lg text-sm font-medium"
                               style={{
                                 background: 'var(--bg-input)',
-                                border: '1px solid var(--border-subtle)',
-                                color: 'var(--text-main)',
+                                border: `1px solid ${border}`,
+                                color: textMain,
                               }}
                             />
-                            <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--text-muted)', width: '30px' }}>
+                            <span className="text-xs font-medium flex-shrink-0" style={{ color: textMuted, width: '30px' }}>
                               ft
                             </span>
                           </div>
@@ -1111,18 +1116,18 @@ export default function TruckRouting({
                       {/* Truck POIs layer toggle */}
                       <div className="mt-2 flex items-center justify-between gap-3" style={{ paddingRight: 35 }}>
                         <div className="min-w-0">
-                          <div className="text-xs font-medium" style={{ color: 'var(--text-main)' }}>
+                          <div className="text-xs font-medium" style={{ color: textMain }}>
                             Truck POIs
                           </div>
-                          <div className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
+                          <div className="text-[11px] truncate" style={{ color: textMuted }}>
                             Rest areas and truck stops along the route
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           {truckPoisLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" style={{ color: 'var(--text-muted)' }} aria-hidden="true" />
+                            <Loader2 className="h-4 w-4 animate-spin" style={{ color: textMuted }} aria-hidden="true" />
                           ) : (
-                            <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                            <span className="text-xs tabular-nums" style={{ color: textMuted }}>
                               {truckPois.length || 0}
                             </span>
                           )}
@@ -1134,7 +1139,7 @@ export default function TruckRouting({
                             disabled={!routePolyline || routePolyline.length < 2}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${routePolyline && routePolyline.length >= 2 ? 'hover:opacity-80' : ''}`}
                             style={{
-                              borderColor: 'var(--border-subtle)',
+                              borderColor: border,
                               background: showTruckPois ? 'var(--brand-primary)' : 'var(--bg-input)',
                               opacity: routePolyline && routePolyline.length > 1 ? 1 : 0.55,
                             }}
@@ -1151,7 +1156,7 @@ export default function TruckRouting({
                       </div>
 
                       {showTruckPois && routePolyline && routePolyline.length > 1 && truckPoisError && truckPois.length === 0 ? (
-                        <div className="mt-2 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        <div className="mt-2 text-[11px]" style={{ color: textMuted }}>
                           Truck POIs unavailable. {truckPoisError}
                         </div>
                       ) : null}
@@ -1162,9 +1167,9 @@ export default function TruckRouting({
           </div>
 
           {/* Address Inputs */}
-              <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
+              <div className="rounded-2xl p-3" style={{ background: bgWidget, border: `1px solid ${border}` }}>
                 <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>
+                  <div className="text-xs font-semibold tracking-wider uppercase" style={{ color: textMuted }}>
                     Route
                   </div>
                   <div className="flex items-center gap-2">
@@ -1180,8 +1185,8 @@ export default function TruckRouting({
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!loading ? 'hover:brightness-110' : ''}`}
                       style={{
                         background: loading ? 'var(--bg-panel)' : `${accentColor}15`,
-                        border: `1px solid ${loading ? 'var(--border-subtle)' : `${accentColor}35`}`,
-                        color: loading ? 'var(--text-muted)' : accentColor,
+                        border: `1px solid ${loading ? border : `${accentColor}35`}`,
+                        color: loading ? textMuted : accentColor,
                       }}
                       title="Bridge clearance demo (Durham, NC)"
                     >
@@ -1199,8 +1204,8 @@ export default function TruckRouting({
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!loading ? 'hover:brightness-110' : ''}`}
                       style={{
                         background: loading ? 'var(--bg-panel)' : `${accentColor}15`,
-                        border: `1px solid ${loading ? 'var(--border-subtle)' : `${accentColor}35`}`,
-                        color: loading ? 'var(--text-muted)' : accentColor,
+                        border: `1px solid ${loading ? border : `${accentColor}35`}`,
+                        color: loading ? textMuted : accentColor,
                       }}
                       title="Elevation-sensitive freight demo (Sacramento → Reno)"
                     >
@@ -1214,7 +1219,7 @@ export default function TruckRouting({
                 className="rounded-xl flex items-center gap-2.5"
                 style={{
                   background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
+                  border: `1px solid ${border}`,
                   padding: '10px 12px',
                 }}
               >
@@ -1257,7 +1262,7 @@ export default function TruckRouting({
                 className="rounded-xl flex items-center gap-2.5"
                 style={{
                   background: 'var(--bg-input)',
-                  border: '1px solid var(--border-subtle)',
+                  border: `1px solid ${border}`,
                   padding: '10px 12px',
                 }}
               >
@@ -1303,18 +1308,18 @@ export default function TruckRouting({
                 className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl transition-all hover:opacity-80"
                 style={{
                   background: 'var(--bg-panel)',
-                  border: '1px solid var(--border-subtle)',
+                  border: `1px solid ${border}`,
                 }}
               >
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4" style={{ color: accentColor }} />
-                  <span className="text-sm font-medium" style={{ color: 'var(--text-main)' }}>
+                  <span className="text-sm font-medium" style={{ color: textMain }}>
                     {formatDepartureTime(departureTime)}
                   </span>
                 </div>
                 <ChevronDown 
                   className={`w-4 h-4 transition-transform ${showDepartureOptions ? 'rotate-180' : ''}`} 
-                  style={{ color: 'var(--text-muted)' }} 
+                  style={{ color: textMuted }} 
                 />
               </button>
 
@@ -1322,8 +1327,8 @@ export default function TruckRouting({
                 <div 
                     className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-40"
                   style={{
-                    background: 'var(--bg-widget)',
-                    border: '1px solid var(--border-subtle)',
+                    background: bgWidget,
+                    border: `1px solid ${border}`,
                     boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                   }}
                 >
@@ -1332,7 +1337,7 @@ export default function TruckRouting({
                     className="w-full px-3 py-2.5 text-left text-sm transition-colors hover:opacity-80"
                     style={{ 
                       background: departureTime === 'now' ? `${accentColor}15` : 'transparent',
-                      color: departureTime === 'now' ? accentColor : 'var(--text-main)',
+                      color: departureTime === 'now' ? accentColor : textMain,
                     }}
                   >
                     Leave now
@@ -1345,7 +1350,7 @@ export default function TruckRouting({
                         key={mins}
                         onClick={() => { setDepartureTime(time); setShowDepartureOptions(false); }}
                         className="w-full px-3 py-2.5 text-left text-sm transition-colors hover:opacity-80"
-                        style={{ color: 'var(--text-main)' }}
+                        style={{ color: textMain }}
                       >
                         {label}
                       </button>
@@ -1353,9 +1358,9 @@ export default function TruckRouting({
                   })}
                   <div 
                     className="px-3 py-2.5"
-                    style={{ borderTop: '1px solid var(--border-subtle)' }}
+                    style={{ borderTop: `1px solid ${border}` }}
                   >
-                    <label className="text-xs font-medium mb-1.5 block" style={{ color: 'var(--text-muted)' }}>
+                    <label className="text-xs font-medium mb-1.5 block" style={{ color: textMuted }}>
                       Custom time
                     </label>
                     <input
@@ -1364,8 +1369,8 @@ export default function TruckRouting({
                       className="w-full px-2 py-1.5 rounded-lg text-sm"
                       style={{
                         background: 'var(--bg-input)',
-                        border: '1px solid var(--border-subtle)',
-                        color: 'var(--text-main)',
+                        border: `1px solid ${border}`,
+                        color: textMain,
                       }}
                       onChange={(e) => {
                         if (e.target.value) {
@@ -1387,7 +1392,7 @@ export default function TruckRouting({
           {/* Route Summary */}
             <div 
               className="p-4 flex-shrink-0"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              style={{ borderBottom: `1px solid ${border}` }}
             >
                   {elevationNote && (
                     <div
@@ -1407,13 +1412,13 @@ export default function TruckRouting({
                 >
                   <p 
                     className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
-                    style={{ color: 'var(--text-muted)' }}
+                    style={{ color: textMuted }}
                   >
                     Distance
                   </p>
                   <p 
                     className="text-lg font-bold"
-                    style={{ color: 'var(--text-main)' }}
+                    style={{ color: textMain }}
                   >
                     {formatDistance(route.distance)}
                   </p>
@@ -1424,7 +1429,7 @@ export default function TruckRouting({
                 >
                   <p 
                     className="text-[10px] font-medium uppercase tracking-wide mb-0.5"
-                    style={{ color: 'var(--text-muted)' }}
+                    style={{ color: textMuted }}
                   >
                     Time
                   </p>
@@ -1466,7 +1471,7 @@ export default function TruckRouting({
                     className="text-xs font-medium px-2.5 py-1 rounded-full"
                     style={{
                       background: 'var(--bg-panel)',
-                      color: 'var(--text-muted)',
+                      color: textMuted,
                     }}
                     title="Maximum elevation along the selected route (from the route elevation profile)"
                   >
@@ -1501,18 +1506,18 @@ export default function TruckRouting({
                   rightHint={
                     <span
                       className="text-xs font-medium px-2 py-0.5 rounded-full"
-                      style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
+                      style={{ background: 'var(--bg-panel)', color: textMuted }}
                     >
                       {route.steps.length} steps
                     </span>
                   }
                 >
-                  <div className="mt-3 -mx-4" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                  <div className="mt-3 -mx-4" style={{ borderTop: `1px solid ${border}` }}>
                   {route.steps.map((step, index) => (
                     <div 
                       key={index} 
                       className="flex items-start gap-3 px-4 py-3"
-                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
+                      style={{ borderBottom: `1px solid ${border}` }}
                     >
                       <div
                         className="prism-number-badge flex-shrink-0"
@@ -1520,7 +1525,7 @@ export default function TruckRouting({
                           width: '24px', 
                           height: '24px', 
                           fontSize: '10px',
-                          background: index === 0 ? accentColor : 'var(--text-muted)',
+                          background: index === 0 ? accentColor : buttonMuted,
                         }}
                       >
                         {index + 1}
@@ -1528,13 +1533,13 @@ export default function TruckRouting({
                       <div className="flex-1 min-w-0">
                         <div 
                           className="text-sm"
-                          style={{ color: 'var(--text-main)' }}
+                          style={{ color: textMain }}
                         >
                           {step.narrative}
                         </div>
                         <div 
                           className="text-xs mt-1 flex items-center gap-2"
-                          style={{ color: 'var(--text-muted)' }}
+                          style={{ color: textMuted }}
                         >
                           <span>{formatDistance(step.distance)}</span>
                           <span>·</span>
@@ -1557,7 +1562,7 @@ export default function TruckRouting({
             <div
               className="p-4 flex-shrink-0"
               style={{
-                borderTop: '1px solid var(--border-subtle)',
+                borderTop: `1px solid ${border}`,
                 background: 'var(--bg-panel)',
               }}
             >

@@ -190,9 +190,10 @@ export default function EVChargingPlanner({
   fontFamily?: string;
 }) {
   const bgPanel = 'var(--bg-panel)';
-  const border = 'var(--border-subtle)';
-  const textMain = 'var(--text-main)';
-  const textMuted = 'var(--text-muted)';
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
 
   const [tab, setTab] = useState<'map' | 'vehicle' | 'trip'>('trip');
   const [showFilters, setShowFilters] = useState(false);
@@ -1794,7 +1795,7 @@ export default function EVChargingPlanner({
 
           {/* Mobile bottom sheet for selected station */}
           {selectedStation && (
-            <div className="md:hidden absolute left-3 right-3 bottom-3 rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: `1px solid ${border}`, boxShadow: '0 18px 50px rgba(0,0,0,0.18)' }}>
+            <div className="md:hidden absolute left-3 right-3 bottom-3 rounded-2xl p-3" style={{ background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}`, boxShadow: '0 18px 50px rgba(0,0,0,0.18)' }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold truncate" style={{ color: textMain }}>{selectedStation.name}</div>

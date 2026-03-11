@@ -516,9 +516,10 @@ export default function PropertyIntelligence({
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [isAreaSearch, setIsAreaSearch] = useState(false);
 
-  const border = 'var(--border-subtle)';
-  const textMain = 'var(--text-main)';
-  const textMuted = 'var(--text-muted)';
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
 
   // Detect whether input looks like a street address (starts with a house number)
   const isStreetAddr = useCallback((text: string) => /^\d+\s/.test(text.trim()), []);
@@ -748,6 +749,10 @@ export default function PropertyIntelligence({
   const heatPolygons = useMemo(() => {
     if (!isAreaSearch || gridCells.length === 0) return [];
     const d = gridCells[0]?.cellDeg || currentCellDeg;
+    const base = darkMode ? 0.35 : 0.3;
+    const step = darkMode ? 0.06 : 0.06;
+    const maxOp = darkMode ? 0.75 : 0.7;
+    const stroke = darkMode ? 1 : 0.5;
     return gridCells.map((cell) => ({
       coordinates: [
         { lat: cell.rowLat, lng: cell.colLng },
@@ -756,10 +761,10 @@ export default function PropertyIntelligence({
         { lat: cell.rowLat, lng: cell.colLng + d },
       ],
       color: avmColor(cell.avgAvm, avmMin, avmMax),
-      fillOpacity: Math.min(0.7, 0.3 + cell.count * 0.06),
-      strokeWidth: 0.5,
+      fillOpacity: Math.min(maxOp, base + cell.count * step),
+      strokeWidth: stroke,
     }));
-  }, [isAreaSearch, gridCells, avmMin, avmMax, currentCellDeg]);
+  }, [isAreaSearch, gridCells, avmMin, avmMax, currentCellDeg, darkMode]);
 
   // Mark initial fit as done shortly after boundary polygon renders
   useEffect(() => {
@@ -1192,13 +1197,13 @@ export default function PropertyIntelligence({
           {isAreaSearch && filteredNearby.length > 0 && avmValues.length > 0 && (
             <div
               className="absolute left-3 rounded-xl px-3 py-2 shadow-lg z-[500] flex items-center gap-2.5"
-              style={{ bottom: 37, background: 'var(--bg-widget)', border: `1px solid ${border}`, backdropFilter: 'blur(8px)' }}
+              style={{ bottom: 37, background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}`, backdropFilter: 'blur(8px)' }}
             >
               <button
                 onClick={() => setShowHeatMap(!showHeatMap)}
                 className="flex items-center gap-1 hover:opacity-80 transition-opacity"
                 title={showHeatMap ? 'Hide heat map' : 'Show heat map'}
-                style={{ color: textMuted }}
+                style={{ color: buttonMuted }}
               >
                 {showHeatMap ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
               </button>
@@ -1218,7 +1223,7 @@ export default function PropertyIntelligence({
           {isAreaSearch && nearbyLoading && (
             <div
               className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 shadow-lg flex items-center gap-1.5 z-[500]"
-              style={{ background: 'var(--bg-widget)', border: `1px solid ${border}` }}
+              style={{ background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}` }}
             >
               <Loader2 className="w-3 h-3 animate-spin" style={{ color: accentColor }} />
               <span className="text-[10px]" style={{ color: textMuted }}>Loading nearby…</span>

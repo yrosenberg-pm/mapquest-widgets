@@ -525,9 +525,10 @@ export default function ComparableSalesMap({
   const [mapZoom, setMapZoom] = useState(14);
   const handleMapBoundsChange = useCallback((b: { zoom: number }) => setMapZoom(b.zoom), []);
 
-  const border = 'var(--border-subtle)';
-  const textMain = 'var(--text-main)';
-  const textMuted = 'var(--text-muted)';
+  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
+  const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
+  const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
 
   const subjectRef = useRef<SubjectProperty | null>(null);
 
@@ -831,6 +832,9 @@ export default function ComparableSalesMap({
 
   const heatPolygons = useMemo(() => {
     if (!showHeatView || compHeatGrid.length === 0) return [];
+    const baseOpacity = darkMode ? 0.35 : 0.25;
+    const opacityStep = darkMode ? 0.06 : 0.04;
+    const maxOpacity = darkMode ? 0.75 : 0.6;
     return compHeatGrid.map((cell) => ({
       coordinates: [
         { lat: cell.rowLat, lng: cell.colLng },
@@ -839,10 +843,10 @@ export default function ComparableSalesMap({
         { lat: cell.rowLat, lng: cell.colLng + cell.cellDeg },
       ],
       color: priceToColor(cell.avgPrice, minPrice, maxPrice),
-      fillOpacity: Math.min(0.6, 0.25 + cell.count * 0.04),
-      strokeWidth: 0.5,
+      fillOpacity: Math.min(maxOpacity, baseOpacity + cell.count * opacityStep),
+      strokeWidth: darkMode ? 1 : 0.5,
     }));
-  }, [showHeatView, compHeatGrid, minPrice, maxPrice]);
+  }, [showHeatView, compHeatGrid, minPrice, maxPrice, darkMode]);
 
   const allPolygons = useMemo(() => {
     const boundary = mapPolygons ?? [];
@@ -881,7 +885,8 @@ export default function ComparableSalesMap({
 
     if (!showHeatView) {
       for (const comp of compsFiltered) {
-        const color = priceToColor(comp.salePrice, minPrice, maxPrice);
+        const isSelected = selectedCompIds.has(comp.id);
+        const color = isSelected ? accentColor : priceToColor(comp.salePrice, minPrice, maxPrice);
         const bedbath = [
           comp.beds != null ? `${comp.beds}bd` : null,
           comp.baths != null ? `${comp.baths}ba` : null,
@@ -896,10 +901,38 @@ export default function ComparableSalesMap({
           <div style="font-size:13px;font-weight:600;color:${color}">${fmtPriceFull(comp.salePrice)}</div>
           <div style="font-size:11px;opacity:0.7;margin-top:2px">${fmtDate(comp.saleDate)}</div>
           ${bedbath ? `<div style="font-size:11px;opacity:0.7">${bedbath}${comp.sqft ? ` · ${comp.sqft.toLocaleString()} sqft` : ''}</div>` : ''}
+          ${isSelected ? '<div style="font-size:10px;margin-top:4px;font-weight:600;color:var(--brand-primary)">Selected for comparison</div>' : ''}
         </div>`,
           color,
           type: 'poi',
-          clusterable: true,
+          zIndexOffset: isSelected ? 950 : undefined,
+          clusterable: !isSelected,
+        });
+      }
+    } else {
+      // In heat view: still show pins for selected comps so you can see where they are
+      for (const comp of compsFiltered) {
+        if (!selectedCompIds.has(comp.id)) continue;
+        const bedbath = [
+          comp.beds != null ? `${comp.beds}bd` : null,
+          comp.baths != null ? `${comp.baths}ba` : null,
+        ]
+          .filter(Boolean)
+          .join(' / ');
+        m.push({
+          lat: comp.lat,
+          lng: comp.lng,
+          label: `<div style="min-width:200px;min-height:72px;padding:6px 8px;box-sizing:border-box">
+          <div style="font-weight:700;margin-bottom:2px">${comp.address.split(',')[0]}</div>
+          <div style="font-size:13px;font-weight:600;color:${accentColor}">${fmtPriceFull(comp.salePrice)}</div>
+          <div style="font-size:11px;opacity:0.7;margin-top:2px">${fmtDate(comp.saleDate)}</div>
+          ${bedbath ? `<div style="font-size:11px;opacity:0.7">${bedbath}${comp.sqft ? ` · ${comp.sqft.toLocaleString()} sqft` : ''}</div>` : ''}
+          <div style="font-size:10px;margin-top:4px;font-weight:600;color:var(--brand-primary)">Selected for comparison</div>
+        </div>`,
+          color: accentColor,
+          type: 'poi',
+          zIndexOffset: 950,
+          clusterable: false,
         });
       }
     }
@@ -920,7 +953,7 @@ export default function ComparableSalesMap({
     }
 
     return m;
-  }, [subject, compsFiltered, minPrice, maxPrice, poi, showHeatView]);
+  }, [subject, compsFiltered, minPrice, maxPrice, poi, showHeatView, selectedCompIds, accentColor]);
 
   const useClustering = compsFiltered.length > 0 && !showHeatView;
 
@@ -1106,7 +1139,7 @@ export default function ComparableSalesMap({
             <button
               onClick={() => setFiltersOpen(!filtersOpen)}
               className="w-full flex items-center justify-between px-4 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors"
-              style={{ color: hasActiveFilters ? accentColor : textMuted }}
+              style={{ color: hasActiveFilters ? accentColor : buttonMuted }}
             >
               <span className="flex items-center gap-1.5">
                 <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -1174,7 +1207,7 @@ export default function ComparableSalesMap({
                     Apply
                   </button>
                   {hasActiveFilters && (
-                    <button onClick={clearFilters} className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${border}`, color: textMuted }}>
+                    <button onClick={clearFilters} className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${border}`, color: buttonMuted }}>
                       <X className="w-3 h-3" /> Clear
                     </button>
                   )}
@@ -1189,7 +1222,7 @@ export default function ComparableSalesMap({
               className="flex items-center gap-3 px-4 py-2 flex-shrink-0"
               style={{ borderBottom: `1px solid ${border}` }}
             >
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: textMuted }}>
+              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: buttonMuted }}>
                 Sort
               </span>
               <SortButton label="Date" sk="date" />
@@ -1206,7 +1239,7 @@ export default function ComparableSalesMap({
                     {selectedCompIds.size} selected
                   </button>
                 )}
-                <span className="text-[10px] tabular-nums" style={{ color: textMuted }}>
+                <span className="text-[10px] tabular-nums" style={{ color: buttonMuted }}>
                   {compsFiltered.length} sale{compsFiltered.length !== 1 ? 's' : ''}
                 </span>
               </span>
@@ -1352,12 +1385,12 @@ export default function ComparableSalesMap({
               <button
                 type="button"
                 onClick={() => setShowBoundary((b) => !b)}
-                className="absolute top-3 left-3 z-[500] rounded-lg px-2.5 py-1.5 text-[10px] font-semibold shadow-lg transition-opacity"
+                className="absolute top-3 right-3 z-[500] rounded-lg px-2.5 py-1.5 text-[10px] font-semibold shadow-lg transition-opacity"
                 style={{
-                  background: 'var(--bg-widget)',
+                  background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)',
                   border: `1px solid ${border}`,
-                  color: showBoundary ? accentColor : textMuted,
-                  opacity: showBoundary ? 1 : 0.8,
+                  color: showBoundary ? accentColor : buttonMuted,
+                  opacity: showBoundary ? 1 : 0.9,
                 }}
               >
                 {showBoundary ? 'Hide' : 'Show'} boundary
@@ -1370,14 +1403,14 @@ export default function ComparableSalesMap({
                 className="absolute right-3 z-[500] rounded-xl px-3 py-2.5 shadow-lg"
                 style={{
                   bottom: 36,
-                  background: 'var(--bg-widget)',
+                  background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)',
                   border: `1px solid ${border}`,
                   backdropFilter: 'blur(8px)',
                 }}
               >
                 <div
                   className="text-[9px] font-bold uppercase tracking-widest mb-1.5"
-                  style={{ color: textMuted }}
+                  style={{ color: darkMode ? '#A8B8CC' : textMuted }}
                 >
                   Sale Price
                 </div>
@@ -1391,10 +1424,10 @@ export default function ComparableSalesMap({
                   ))}
                 </div>
                 <div className="flex justify-between mt-1">
-                  <span className="text-[9px] tabular-nums" style={{ color: textMuted }}>
+                  <span className="text-[9px] tabular-nums" style={{ color: darkMode ? '#A8B8CC' : textMuted }}>
                     {fmtPrice(minPrice)}
                   </span>
-                  <span className="text-[9px] tabular-nums" style={{ color: textMuted }}>
+                  <span className="text-[9px] tabular-nums" style={{ color: darkMode ? '#A8B8CC' : textMuted }}>
                     {fmtPrice(maxPrice)}
                   </span>
                 </div>
@@ -1405,7 +1438,7 @@ export default function ComparableSalesMap({
             {(loading || compsLoading) && (
               <div
                 className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 shadow-lg flex items-center gap-1.5 z-[500]"
-                style={{ background: 'var(--bg-widget)', border: `1px solid ${border}` }}
+                style={{ background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}` }}
               >
                 <Loader2 className="w-3 h-3 animate-spin" style={{ color: accentColor }} />
                 <span className="text-[10px]" style={{ color: textMuted }}>Loading…</span>
@@ -1424,7 +1457,7 @@ export default function ComparableSalesMap({
                   <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accentColor }}>
                     Comparison
                   </span>
-                  <button onClick={clearSelection} className="text-[10px] ml-auto" style={{ color: textMuted }}>
+                  <button onClick={clearSelection} className="text-[10px] ml-auto" style={{ color: buttonMuted }}>
                     Clear
                   </button>
                 </div>
