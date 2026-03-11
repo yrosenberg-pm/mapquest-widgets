@@ -157,6 +157,18 @@ const DEFAULT_FILTERS: Filters = {
   minBaths: '',
 };
 
+/** Build filter values from subject property so comps match on beds, baths, and sqft. */
+function filtersFromSubject(subject: SubjectProperty): Partial<Filters> {
+  const partial: Partial<Filters> = {};
+  if (subject.beds != null) partial.minBeds = String(subject.beds);
+  if (subject.baths != null) partial.minBaths = String(subject.baths);
+  if (subject.sqft != null && subject.sqft > 0) {
+    partial.minSqft = String(Math.round(subject.sqft * 0.85));
+    partial.maxSqft = String(Math.round(subject.sqft * 1.15));
+  }
+  return partial;
+}
+
 function splitAddress(text: string): { address1: string; address2: string } {
   const parts = text.split(',').map((s) => s.trim());
   if (parts.length >= 3) {
@@ -168,6 +180,143 @@ function splitAddress(text: string): { address1: string; address2: string } {
     return { address1: text, address2: '' };
   }
   return { address1: text, address2: '' };
+}
+
+function geojsonToCoords(geometry: any): { lat: number; lng: number }[] | null {
+  if (!geometry) return null;
+  const { type, coordinates } = geometry;
+  if (type === 'Polygon' && coordinates?.[0]) {
+    return coordinates[0].map(([lng, lat]: [number, number]) => ({ lat, lng }));
+  }
+  if (type === 'MultiPolygon' && coordinates?.length) {
+    let best: [number, number][] = [];
+    let bestLen = 0;
+    for (const poly of coordinates) {
+      if (poly[0] && poly[0].length > bestLen) { best = poly[0]; bestLen = poly[0].length; }
+    }
+    return best.map(([lng, lat]: [number, number]) => ({ lat, lng }));
+  }
+  return null;
+}
+
+function pointInPolygon(lat: number, lng: number, polygon: { lat: number; lng: number }[]): boolean {
+  const n = polygon.length;
+  let inside = false;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i].lng, yi = polygon[i].lat;
+    const xj = polygon[j].lng, yj = polygon[j].lat;
+    if (yi > lat !== yj > lat && lng < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function boundingBoxFromPolygon(polygon: { lat: number; lng: number }[]): {
+  north: number; south: number; east: number; west: number;
+  centerLat: number; centerLng: number; radiusMiles: number; areaSqMiles: number;
+} {
+  let north = -90, south = 90, east = -180, west = 180;
+  for (const p of polygon) {
+    north = Math.max(north, p.lat);
+    south = Math.min(south, p.lat);
+    east = Math.max(east, p.lng);
+    west = Math.min(west, p.lng);
+  }
+  const centerLat = (north + south) / 2;
+  const centerLng = (east + west) / 2;
+  const latDist = (north - south) * 69;
+  const lngDist = (east - west) * 69 * Math.cos((centerLat * Math.PI) / 180);
+  const areaSqMiles = latDist * lngDist;
+  const radiusMiles = Math.min(Math.ceil(Math.sqrt(latDist * latDist + lngDist * lngDist) / 2) + 1, 10);
+  return { north, south, east, west, centerLat, centerLng, radiusMiles, areaSqMiles };
+}
+
+const MAX_BOUNDARY_AREA_SQ_MILES = 35;
+
+async function fetchBoundary(
+  lat: number,
+  lng: number,
+  address1?: string,
+  address2?: string,
+): Promise<{ lat: number; lng: number }[] | null> {
+  try {
+    const params = new URLSearchParams({
+      type: 'attom-neighborhood',
+      lat: String(lat),
+      lng: String(lng),
+    });
+    if (address1) params.set('address1', address1);
+    if (address2) params.set('address2', address2);
+    const res = await fetch(`/api/boundary?${params}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const coords = geojsonToCoords(data?.geometry);
+    return coords && coords.length >= 3 ? coords : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve boundary for an area search: zip, neighborhood, or city. */
+async function fetchAreaBoundary(
+  query: string,
+  lat?: number,
+  lng?: number,
+): Promise<{ polygon: { lat: number; lng: number }[]; label: string } | null> {
+  const trimmed = query.trim();
+  const isZip = /^\d{5}(-\d{4})?$/.test(trimmed) || /^\d{5}$/.test(trimmed);
+
+  if (isZip) {
+    try {
+      const res = await fetch(`/api/boundary?type=zip&q=${encodeURIComponent(trimmed)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const coords = geojsonToCoords(data.geometry);
+        if (coords && coords.length >= 3) return { polygon: coords, label: data.label || `ZIP ${trimmed}` };
+      }
+    } catch {}
+    return null;
+  }
+
+  if (lat != null && lng != null) {
+    try {
+      const params = new URLSearchParams({
+        type: 'attom-neighborhood',
+        q: trimmed,
+        lat: String(lat),
+        lng: String(lng),
+      });
+      const res = await fetch(`/api/boundary?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.approximate) {
+          const coords = geojsonToCoords(data.geometry);
+          if (coords && coords.length >= 3) return { polygon: coords, label: data.label || trimmed };
+        }
+      }
+    } catch {}
+  }
+
+  try {
+    const res = await fetch(`/api/boundary?type=neighborhood&q=${encodeURIComponent(trimmed)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (!data.approximate) {
+        const coords = geojsonToCoords(data.geometry);
+        if (coords && coords.length >= 3) return { polygon: coords, label: data.label || trimmed };
+      }
+    }
+  } catch {}
+
+  try {
+    const res = await fetch(`/api/boundary?type=city&q=${encodeURIComponent(trimmed)}`);
+    if (res.ok) {
+      const data = await res.json();
+      const coords = geojsonToCoords(data.geometry);
+      if (coords && coords.length >= 3) return { polygon: coords, label: data.label || trimmed };
+    }
+  } catch {}
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -284,6 +433,64 @@ async function fetchComps(
   }
 }
 
+/** Fetch sales in tiles over the bounding box of the polygon, then filter to only those inside the polygon. */
+async function fetchBoundarySales(
+  polygon: { lat: number; lng: number }[],
+  refLat: number,
+  refLng: number,
+  filters: Filters,
+): Promise<CompSale[]> {
+  const bb = boundingBoxFromPolygon(polygon);
+  if (bb.areaSqMiles > MAX_BOUNDARY_AREA_SQ_MILES) return [];
+
+  const TILE_MI = 1.2;
+  const latSpanMi = (bb.north - bb.south) * 69;
+  const lngSpanMi = (bb.east - bb.west) * 69 * Math.cos((bb.centerLat * Math.PI) / 180);
+  const cols = Math.max(1, Math.ceil(lngSpanMi / TILE_MI));
+  const rows = Math.max(1, Math.ceil(latSpanMi / TILE_MI));
+
+  if (rows * cols <= 1) {
+    const single = await fetchComps(bb.centerLat, bb.centerLng, Math.min(bb.radiusMiles, 5), filters);
+    return single.filter((c) => pointInPolygon(c.lat, c.lng, polygon));
+  }
+
+  const tileRadius = Math.ceil(TILE_MI * 0.75 * 10) / 10;
+  const latStep = (bb.north - bb.south) / rows;
+  const lngStep = (bb.east - bb.west) / cols;
+
+  const points: { lat: number; lng: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      points.push({
+        lat: bb.south + (r + 0.5) * latStep,
+        lng: bb.west + (c + 0.5) * lngStep,
+      });
+    }
+  }
+
+  const BATCH = 4;
+  const seen = new Set<string>();
+  const all: CompSale[] = [];
+
+  for (let i = 0; i < points.length; i += BATCH) {
+    const batch = points.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map((pt) => fetchComps(pt.lat, pt.lng, tileRadius, filters)),
+    );
+    for (const page of results) {
+      for (const c of page) {
+        const key = `${c.lat.toFixed(5)}:${c.lng.toFixed(5)}`;
+        if (seen.has(key)) continue;
+        if (!pointInPolygon(c.lat, c.lng, polygon)) continue;
+        seen.add(key);
+        all.push({ ...c, id: key, distanceMi: haversine(refLat, refLng, c.lat, c.lng) });
+      }
+    }
+  }
+
+  return all;
+}
+
 // ---------------------------------------------------------------------------
 // Main Widget
 // ---------------------------------------------------------------------------
@@ -312,6 +519,11 @@ export default function ComparableSalesMap({
   const [poiQuery, setPoiQuery] = useState('');
   const [poi, setPoi] = useState<{ name: string; lat: number; lng: number } | null>(null);
   const [poiLoading, setPoiLoading] = useState(false);
+  const [boundaryPolygon, setBoundaryPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
+  const [showBoundary, setShowBoundary] = useState(true);
+  const [isAreaSearch, setIsAreaSearch] = useState(false);
+  const [mapZoom, setMapZoom] = useState(14);
+  const handleMapBoundsChange = useCallback((b: { zoom: number }) => setMapZoom(b.zoom), []);
 
   const border = 'var(--border-subtle)';
   const textMain = 'var(--text-main)';
@@ -331,6 +543,16 @@ export default function ComparableSalesMap({
     [],
   );
 
+  const loadCompsInBoundary = useCallback(
+    async (polygon: { lat: number; lng: number }[], refLat: number, refLng: number, f: Filters) => {
+      setCompsLoading(true);
+      const results = await fetchBoundarySales(polygon, refLat, refLng, f);
+      setComps(results);
+      setCompsLoading(false);
+    },
+    [],
+  );
+
   const doSearch = useCallback(
     async (text: string, latHint?: number, lngHint?: number) => {
       setLoading(true);
@@ -338,32 +560,34 @@ export default function ComparableSalesMap({
       setSubject(null);
       setComps([]);
       setSelectedCompIds(new Set());
+      setBoundaryPolygon(null);
+      setIsAreaSearch(false);
 
       try {
-        const { address1, address2 } = splitAddress(text);
-
-        // Try ATTOM property lookup first
-        let subj = await fetchSubjectProperty(address1, address2);
-
-        if (!subj || !subj.lat || !subj.lng) {
-          // Fallback to geocode
-          let lat = latHint,
-            lng = lngHint;
-          if (!lat || !lng) {
-            const geo = await geocode(text);
-            if (!geo?.lat || !geo?.lng) {
-              setError(`Could not locate "${text}".`);
-              return;
-            }
-            lat = geo.lat;
-            lng = geo.lng;
+        const trimmed = text.trim();
+        let lat = latHint;
+        let lng = lngHint;
+        if (lat == null || lng == null) {
+          const geo = await geocode(trimmed);
+          if (!geo?.lat || !geo?.lng) {
+            setError(`Could not locate "${trimmed}".`);
+            return;
           }
-          // Build minimal subject from geocode
-          if (!subj) {
-            subj = {
-              address: text,
-              lat,
-              lng,
+          lat = geo.lat;
+          lng = geo.lng;
+        }
+
+        // Try area boundary first (zip, neighborhood, city) so we can show boundary and pull comps within it
+        const areaBoundary = await fetchAreaBoundary(trimmed, lat, lng);
+        if (areaBoundary) {
+          const bb = boundingBoxFromPolygon(areaBoundary.polygon);
+          if (bb.areaSqMiles <= MAX_BOUNDARY_AREA_SQ_MILES) {
+            setIsAreaSearch(true);
+            setBoundaryPolygon(areaBoundary.polygon);
+            const syntheticSubject: SubjectProperty = {
+              address: areaBoundary.label,
+              lat: bb.centerLat,
+              lng: bb.centerLng,
               beds: null,
               baths: null,
               sqft: null,
@@ -372,22 +596,53 @@ export default function ComparableSalesMap({
               lastSalePrice: null,
               lastSaleDate: null,
             };
-          } else {
-            subj.lat = lat;
-            subj.lng = lng;
+            setSubject(syntheticSubject);
+            subjectRef.current = syntheticSubject;
+            await loadCompsInBoundary(areaBoundary.polygon, bb.centerLat, bb.centerLng, filters);
+            return;
           }
+        }
+
+        // Address or no area boundary: resolve subject property and use radius comps
+        const { address1, address2 } = splitAddress(trimmed);
+        let subj = await fetchSubjectProperty(address1, address2);
+
+        if (!subj || !subj.lat || !subj.lng) {
+          subj = {
+            address: trimmed,
+            lat: lat!,
+            lng: lng!,
+            beds: null,
+            baths: null,
+            sqft: null,
+            yearBuilt: null,
+            propertyType: null,
+            lastSalePrice: null,
+            lastSaleDate: null,
+          };
+        } else {
+          subj.lat = lat!;
+          subj.lng = lng!;
         }
 
         setSubject(subj);
         subjectRef.current = subj;
-        await loadComps(subj.lat, subj.lng, filters);
+
+        // Auto-fill filters from subject so comps match on beds, baths, and sqft
+        const subjectFilters: Filters = { ...filters, ...filtersFromSubject(subj) };
+        setFilters(subjectFilters);
+
+        await loadComps(subj.lat, subj.lng, subjectFilters);
+        const { address1: a1, address2: a2 } = splitAddress(subj.address);
+        const boundary = await fetchBoundary(subj.lat, subj.lng, a1 || undefined, a2 || undefined);
+        setBoundaryPolygon(boundary);
       } catch (e: any) {
         setError(e.message || 'Search failed');
       } finally {
         setLoading(false);
       }
     },
-    [filters, loadComps],
+    [filters, loadComps, loadCompsInBoundary],
   );
 
   const handleSelect = useCallback(
@@ -411,26 +666,53 @@ export default function ComparableSalesMap({
   );
 
   const applyFilters = useCallback(() => {
-    if (subjectRef.current) {
-      loadComps(subjectRef.current.lat, subjectRef.current.lng, filters);
+    const subj = subjectRef.current;
+    if (!subj) return;
+    if (isAreaSearch && boundaryPolygon?.length) {
+      loadCompsInBoundary(boundaryPolygon, subj.lat, subj.lng, filters);
+    } else {
+      loadComps(subj.lat, subj.lng, filters);
     }
-  }, [filters, loadComps]);
+  }, [filters, loadComps, loadCompsInBoundary, isAreaSearch, boundaryPolygon]);
 
   const clearFilters = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
-    if (subjectRef.current) {
-      loadComps(
-        subjectRef.current.lat,
-        subjectRef.current.lng,
-        DEFAULT_FILTERS,
-      );
+    const subj = subjectRef.current;
+    if (!subj) return;
+    if (isAreaSearch && boundaryPolygon?.length) {
+      loadCompsInBoundary(boundaryPolygon, subj.lat, subj.lng, DEFAULT_FILTERS);
+    } else {
+      loadComps(subj.lat, subj.lng, DEFAULT_FILTERS);
     }
-  }, [loadComps]);
+  }, [loadComps, loadCompsInBoundary, isAreaSearch, boundaryPolygon]);
 
   const hasActiveFilters = useMemo(
     () => Object.values(filters).some((v) => v !== ''),
     [filters],
   );
+
+  // Only show comps that match subject's exact bed/bath when subject has them (trim results)
+  const compsFiltered = useMemo(() => {
+    if (!subject) return comps;
+    return comps.filter((c) => {
+      if (subject.beds != null && c.beds !== subject.beds) return false;
+      if (subject.baths != null && c.baths !== subject.baths) return false;
+      return true;
+    });
+  }, [comps, subject]);
+
+  const selectedComps = useMemo(
+    () => compsFiltered.filter((c) => selectedCompIds.has(c.id)),
+    [compsFiltered, selectedCompIds],
+  );
+
+  // ── Price range for color coding ─────────────────────────
+
+  const { minPrice, maxPrice } = useMemo(() => {
+    if (!compsFiltered.length) return { minPrice: 0, maxPrice: 0 };
+    const prices = compsFiltered.map((c) => c.salePrice);
+    return { minPrice: Math.min(...prices), maxPrice: Math.max(...prices) };
+  }, [compsFiltered]);
 
   // ── Sort ──────────────────────────────────────────────────
 
@@ -447,7 +729,7 @@ export default function ComparableSalesMap({
   );
 
   const sortedComps = useMemo(() => {
-    const sorted = [...comps];
+    const sorted = [...compsFiltered];
     sorted.sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'date') {
@@ -460,7 +742,7 @@ export default function ComparableSalesMap({
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return sorted;
-  }, [comps, sortKey, sortDir]);
+  }, [compsFiltered, sortKey, sortDir]);
 
   // ── Selection (compare up to 3) ─────────────────────────
 
@@ -498,20 +780,77 @@ export default function ComparableSalesMap({
 
   const clearPoi = useCallback(() => { setPoi(null); setPoiQuery(''); }, []);
 
-  const selectedComps = useMemo(
-    () => comps.filter((c) => selectedCompIds.has(c.id)),
-    [comps, selectedCompIds],
-  );
+  // ── Map polygons (boundary) ───────────────────────────────
 
-  // ── Price range for color coding ─────────────────────────
+  const mapPolygons = useMemo(() => {
+    if (!showBoundary || !boundaryPolygon?.length) return undefined;
+    return [{ coordinates: boundaryPolygon, color: accentColor, fillOpacity: 0.06, strokeWidth: 2 }];
+  }, [showBoundary, boundaryPolygon, accentColor]);
 
-  const { minPrice, maxPrice } = useMemo(() => {
-    if (!comps.length) return { minPrice: 0, maxPrice: 0 };
-    const prices = comps.map((c) => c.salePrice);
-    return { minPrice: Math.min(...prices), maxPrice: Math.max(...prices) };
-  }, [comps]);
+  // ── Heat grid (zoomed-out view): cell size by zoom ─────────
+  const COMP_HEAT_ZOOM_THRESHOLD = 15;
+  const showHeatView = mapZoom < COMP_HEAT_ZOOM_THRESHOLD && compsFiltered.length > 0;
 
-  // ── Map data ──────────────────────────────────────────────
+  function cellDegForCompZoom(zoom: number): number {
+    if (zoom <= 11) return 0.003;
+    if (zoom <= 12) return 0.002;
+    if (zoom <= 13) return 0.0012;
+    if (zoom <= 14) return 0.0008;
+    return 0.0005;
+  }
+
+  interface CompHeatCell {
+    rowLat: number;
+    colLng: number;
+    cellDeg: number;
+    count: number;
+    avgPrice: number;
+  }
+
+  const compHeatGrid = useMemo((): CompHeatCell[] => {
+    if (!compsFiltered.length) return [];
+    const cellDeg = cellDegForCompZoom(mapZoom);
+    const cells = new Map<string, { count: number; sumPrice: number; rowLat: number; colLng: number }>();
+    for (const c of compsFiltered) {
+      const row = Math.floor(c.lat / cellDeg);
+      const col = Math.floor(c.lng / cellDeg);
+      const key = `${row}:${col}`;
+      if (!cells.has(key)) cells.set(key, { count: 0, sumPrice: 0, rowLat: row * cellDeg, colLng: col * cellDeg });
+      const cell = cells.get(key)!;
+      cell.count++;
+      cell.sumPrice += c.salePrice;
+    }
+    return [...cells.values()].map((c) => ({
+      rowLat: c.rowLat,
+      colLng: c.colLng,
+      cellDeg,
+      count: c.count,
+      avgPrice: c.sumPrice / c.count,
+    }));
+  }, [compsFiltered, mapZoom]);
+
+  const heatPolygons = useMemo(() => {
+    if (!showHeatView || compHeatGrid.length === 0) return [];
+    return compHeatGrid.map((cell) => ({
+      coordinates: [
+        { lat: cell.rowLat, lng: cell.colLng },
+        { lat: cell.rowLat + cell.cellDeg, lng: cell.colLng },
+        { lat: cell.rowLat + cell.cellDeg, lng: cell.colLng + cell.cellDeg },
+        { lat: cell.rowLat, lng: cell.colLng + cell.cellDeg },
+      ],
+      color: priceToColor(cell.avgPrice, minPrice, maxPrice),
+      fillOpacity: Math.min(0.6, 0.25 + cell.count * 0.04),
+      strokeWidth: 0.5,
+    }));
+  }, [showHeatView, compHeatGrid, minPrice, maxPrice]);
+
+  const allPolygons = useMemo(() => {
+    const boundary = mapPolygons ?? [];
+    const heat = showHeatView ? heatPolygons : [];
+    return boundary.length + heat.length > 0 ? [...boundary, ...heat] : undefined;
+  }, [mapPolygons, showHeatView, heatPolygons]);
+
+  // ── Map markers: when zoomed out show only subject + POI; when zoomed in show all with clustering ──
 
   const markers = useMemo(() => {
     const m: Array<{
@@ -521,13 +860,14 @@ export default function ComparableSalesMap({
       color?: string;
       type?: 'home' | 'poi' | 'default';
       zIndexOffset?: number;
+      clusterable?: boolean;
     }> = [];
 
     if (subject) {
       m.push({
         lat: subject.lat,
         lng: subject.lng,
-        label: `<div style="min-width:160px">
+        label: `<div style="min-width:180px;min-height:52px;padding:6px 8px;box-sizing:border-box">
           <div style="font-weight:700;margin-bottom:2px">${subject.address.split(',')[0]}</div>
           <div style="font-size:11px;opacity:0.7">Subject Property</div>
           ${subject.lastSalePrice ? `<div style="font-size:12px;margin-top:2px">${fmtPriceFull(subject.lastSalePrice)}</div>` : ''}
@@ -535,52 +875,59 @@ export default function ComparableSalesMap({
         color: '#FFFFFF',
         type: 'home',
         zIndexOffset: 1000,
+        clusterable: false,
       });
     }
 
-    for (const comp of comps) {
-      const color = priceToColor(comp.salePrice, minPrice, maxPrice);
-      const bedbath = [
-        comp.beds != null ? `${comp.beds}bd` : null,
-        comp.baths != null ? `${comp.baths}ba` : null,
-      ]
-        .filter(Boolean)
-        .join(' / ');
-      m.push({
-        lat: comp.lat,
-        lng: comp.lng,
-        label: `<div style="min-width:180px">
+    if (!showHeatView) {
+      for (const comp of compsFiltered) {
+        const color = priceToColor(comp.salePrice, minPrice, maxPrice);
+        const bedbath = [
+          comp.beds != null ? `${comp.beds}bd` : null,
+          comp.baths != null ? `${comp.baths}ba` : null,
+        ]
+          .filter(Boolean)
+          .join(' / ');
+        m.push({
+          lat: comp.lat,
+          lng: comp.lng,
+          label: `<div style="min-width:200px;min-height:72px;padding:6px 8px;box-sizing:border-box">
           <div style="font-weight:700;margin-bottom:2px">${comp.address.split(',')[0]}</div>
           <div style="font-size:13px;font-weight:600;color:${color}">${fmtPriceFull(comp.salePrice)}</div>
           <div style="font-size:11px;opacity:0.7;margin-top:2px">${fmtDate(comp.saleDate)}</div>
           ${bedbath ? `<div style="font-size:11px;opacity:0.7">${bedbath}${comp.sqft ? ` · ${comp.sqft.toLocaleString()} sqft` : ''}</div>` : ''}
         </div>`,
-        color,
-        type: 'poi',
-      });
+          color,
+          type: 'poi',
+          clusterable: true,
+        });
+      }
     }
 
     if (poi) {
       m.push({
         lat: poi.lat,
         lng: poi.lng,
-        label: `<div style="min-width:120px">
+        label: `<div style="min-width:140px;min-height:44px;padding:6px 8px;box-sizing:border-box">
           <div style="font-weight:700;margin-bottom:2px">${poi.name}</div>
           <div style="font-size:11px;opacity:0.7">Point of Interest</div>
         </div>`,
         color: '#F59E0B',
         type: 'home',
         zIndexOffset: 900,
+        clusterable: false,
       });
     }
 
     return m;
-  }, [subject, comps, minPrice, maxPrice, poi]);
+  }, [subject, compsFiltered, minPrice, maxPrice, poi, showHeatView]);
+
+  const useClustering = compsFiltered.length > 0 && !showHeatView;
 
   // ── Legend steps ───────────────────────────────────────────
 
   const legendSteps = useMemo(() => {
-    if (!comps.length) return [];
+    if (!compsFiltered.length) return [];
     const steps = 5;
     const range = maxPrice - minPrice;
     if (range <= 0) return [{ color: PRICE_STOPS[3], label: fmtPrice(minPrice) }];
@@ -590,10 +937,10 @@ export default function ComparableSalesMap({
       const color = priceToColor(price, minPrice, maxPrice);
       return { color, label: fmtPrice(price) };
     });
-  }, [comps, minPrice, maxPrice]);
+  }, [compsFiltered, minPrice, maxPrice]);
 
   const subtitle = subject
-    ? `${comps.length} comparable sale${comps.length !== 1 ? 's' : ''} near ${subject.address.split(',')[0]}`
+    ? `${compsFiltered.length} comparable sale${compsFiltered.length !== 1 ? 's' : ''} near ${subject.address.split(',')[0]}`
     : 'Find recent sales near any property';
 
   // ── Render ────────────────────────────────────────────────
@@ -837,7 +1184,7 @@ export default function ComparableSalesMap({
           </div>
 
           {/* Comps list — sort bar + scrollable rows */}
-          {comps.length > 0 && (
+          {compsFiltered.length > 0 && (
             <div
               className="flex items-center gap-3 px-4 py-2 flex-shrink-0"
               style={{ borderBottom: `1px solid ${border}` }}
@@ -860,14 +1207,14 @@ export default function ComparableSalesMap({
                   </button>
                 )}
                 <span className="text-[10px] tabular-nums" style={{ color: textMuted }}>
-                  {comps.length} sale{comps.length !== 1 ? 's' : ''}
+                  {compsFiltered.length} sale{compsFiltered.length !== 1 ? 's' : ''}
                 </span>
               </span>
             </div>
           )}
 
           <div className="flex-1 min-h-0 overflow-y-auto prism-scrollbar">
-            {!loading && subject && comps.length === 0 && !compsLoading && (
+            {!loading && subject && compsFiltered.length === 0 && !compsLoading && (
               <div className="px-4 py-6 text-center">
                 <p className="text-sm" style={{ color: textMuted }}>
                   No comparable sales found. Try adjusting your filters.
@@ -953,7 +1300,7 @@ export default function ComparableSalesMap({
           </div>
 
           {/* Empty / loading state */}
-          {!subject && !loading && comps.length === 0 && (
+          {!subject && !loading && compsFiltered.length === 0 && (
             <div className="flex-1 flex items-center justify-center px-4 min-h-0">
               <div className="text-center" style={{ transform: 'translateY(-200px)' }}>
                 <MapPin className="w-8 h-8 mx-auto mb-3 opacity-30" style={{ color: textMuted }} />
@@ -990,9 +1337,32 @@ export default function ComparableSalesMap({
               }
               zoom={subject ? 14 : 10}
               markers={markers}
+              polygons={allPolygons}
+              skipPolygonFitBounds
+              clusterMarkers={useClustering}
+              clusterRadiusPx={56}
               darkMode={darkMode}
               height="100%"
+              mapType={mapZoom >= 18 ? 'hybrid' : undefined}
+              onBoundsChange={handleMapBoundsChange}
             />
+
+            {/* Boundary toggle */}
+            {boundaryPolygon && (
+              <button
+                type="button"
+                onClick={() => setShowBoundary((b) => !b)}
+                className="absolute top-3 left-3 z-[500] rounded-lg px-2.5 py-1.5 text-[10px] font-semibold shadow-lg transition-opacity"
+                style={{
+                  background: 'var(--bg-widget)',
+                  border: `1px solid ${border}`,
+                  color: showBoundary ? accentColor : textMuted,
+                  opacity: showBoundary ? 1 : 0.8,
+                }}
+              >
+                {showBoundary ? 'Hide' : 'Show'} boundary
+              </button>
+            )}
 
             {/* Price legend */}
             {legendSteps.length > 0 && (
