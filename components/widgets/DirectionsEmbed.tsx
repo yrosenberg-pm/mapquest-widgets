@@ -35,6 +35,8 @@ interface TransitStep {
   departureTime?: string;
   arrivalTime?: string;
   intermediateStops?: number;
+  /** Polyline for this leg (for map focus). Synced with snapped pedestrian geometry where applicable. */
+  pathCoords?: { lat: number; lng: number }[];
 }
 
 interface TransitSummary {
@@ -106,6 +108,49 @@ function transitStepIcon(type: string) {
   return Bus;
 }
 
+function boundsFromCoords(coords: { lat: number; lng: number }[]): { north: number; south: number; east: number; west: number } | null {
+  if (!coords.length) return null;
+  let north = coords[0].lat;
+  let south = coords[0].lat;
+  let east = coords[0].lng;
+  let west = coords[0].lng;
+  for (let i = 1; i < coords.length; i++) {
+    const c = coords[i];
+    if (c.lat > north) north = c.lat;
+    if (c.lat < south) south = c.lat;
+    if (c.lng > east) east = c.lng;
+    if (c.lng < west) west = c.lng;
+  }
+  return { north, south, east, west };
+}
+
+/** Pad and ensure a minimum span so fitBounds doesn’t over-zoom on tiny segments. */
+function expandBounds(
+  b: { north: number; south: number; east: number; west: number },
+  padLat = 0.00085,
+  padLng = 0.00085,
+  minSpanLat = 0.0022,
+  minSpanLng = 0.0022,
+) {
+  let north = b.north + padLat;
+  let south = b.south - padLat;
+  let east = b.east + padLng;
+  let west = b.west - padLng;
+  let latSpan = north - south;
+  let lngSpan = east - west;
+  if (latSpan < minSpanLat) {
+    const mid = (north + south) / 2;
+    north = mid + minSpanLat / 2;
+    south = mid - minSpanLat / 2;
+  }
+  if (lngSpan < minSpanLng) {
+    const mid = (east + west) / 2;
+    east = mid + minSpanLng / 2;
+    west = mid - minSpanLng / 2;
+  }
+  return { north, south, east, west };
+}
+
 export default function DirectionsEmbed({
   defaultFrom = '',
   defaultTo = '',
@@ -132,6 +177,8 @@ export default function DirectionsEmbed({
   const [transitSteps, setTransitSteps] = useState<TransitStep[]>([]);
   const [transitSummary, setTransitSummary] = useState<TransitSummary | null>(null);
   const [pedestrianShape, setPedestrianShape] = useState<{ lat: number; lng: number }[]>([]);
+  /** When set, map fits this step’s path; tap the same step again to show the full route. */
+  const [transitFocusedStepIndex, setTransitFocusedStepIndex] = useState<number | null>(null);
 
   const isTransit = routeType === 'transit';
   const isPedestrian = routeType === 'pedestrian';
@@ -165,6 +212,7 @@ export default function DirectionsEmbed({
     setTransitSteps([]);
     setTransitSummary(null);
     setPedestrianShape([]);
+    setTransitFocusedStepIndex(null);
   };
 
   const calculateTransitRoute = useCallback(async (origin: { lat: number; lng: number }, dest: { lat: number; lng: number }) => {
@@ -241,20 +289,6 @@ export default function DirectionsEmbed({
           catch { return undefined; }
         };
 
-        steps.push({
-          type: sType,
-          instruction,
-          durationMin: Math.ceil(dur / 60),
-          lengthM: len,
-          lineName: lineName || undefined,
-          color: segColor,
-          departureName: depPlace,
-          arrivalName: arrPlace,
-          departureTime: fmtT(section.departure?.time),
-          arrivalTime: fmtT(section.arrival?.time),
-          intermediateStops: section.intermediateStops?.length || 0,
-        });
-
         // Use server-decoded polyline coordinates for road/rail-snapped geometry.
         // Fall back to raw departure/arrival coordinates if unavailable.
         let segCoords: { lat: number; lng: number }[] = [];
@@ -300,6 +334,21 @@ export default function DirectionsEmbed({
         if (segCoords.length >= 2) {
           segs.push({ type: sType, coords: segCoords });
         }
+
+        steps.push({
+          type: sType,
+          instruction,
+          durationMin: Math.ceil(dur / 60),
+          lengthM: len,
+          lineName: lineName || undefined,
+          color: segColor,
+          departureName: depPlace,
+          arrivalName: arrPlace,
+          departureTime: fmtT(section.departure?.time),
+          arrivalTime: fmtT(section.arrival?.time),
+          intermediateStops: section.intermediateStops?.length || 0,
+          pathCoords: segCoords.length ? [...segCoords] : undefined,
+        });
       }
 
       // Snap pedestrian segments to roads via MapQuest Pedestrian Routing
@@ -322,8 +371,19 @@ export default function DirectionsEmbed({
         })
       );
 
+      let snapSegIdx = 0;
+      const mergedSteps: TransitStep[] = steps.map((st) => {
+        const pc = st.pathCoords;
+        let nextCoords = pc;
+        if (pc && pc.length >= 2 && snapSegIdx < snappedSegs.length) {
+          nextCoords = [...snappedSegs[snapSegIdx].coords];
+          snapSegIdx++;
+        }
+        return { ...st, pathCoords: nextCoords };
+      });
+
       setTransitSegs(snappedSegs);
-      setTransitSteps(steps);
+      setTransitSteps(mergedSteps);
 
       const distMi = totalLength / 1609.34;
       const uniqueModes = [...new Set(modes)].map(m => TRANSIT_MODE_LABELS[m] || m);
@@ -486,6 +546,18 @@ export default function DirectionsEmbed({
     }
     return { north, south, east, west };
   }, [fromCoords?.lat, fromCoords?.lng, toCoords?.lat, toCoords?.lng, isTransit, isPedestrian, transitSegs, pedestrianShape]);
+
+  /** Fit map to one transit leg when user selects a step; otherwise show full route. */
+  const directionsMapFitBounds = useMemo(() => {
+    if (isTransit && transitFocusedStepIndex !== null) {
+      const coords = transitSteps[transitFocusedStepIndex]?.pathCoords;
+      if (coords?.length) {
+        const b = boundsFromCoords(coords);
+        if (b) return expandBounds(b);
+      }
+    }
+    return mapFitBounds;
+  }, [isTransit, transitFocusedStepIndex, transitSteps, mapFitBounds]);
   
   const markers = useMemo(() => {
     const result: Array<{
@@ -556,7 +628,7 @@ export default function DirectionsEmbed({
             routeEnd={!isTransit && !isPedestrian ? (toCoords || undefined) : undefined}
             routeType={isTransit || isPedestrian ? undefined : (routeType === 'shortest' ? 'fastest' : routeType)}
             polylines={routePolylines}
-            fitBounds={mapFitBounds}
+            fitBounds={directionsMapFitBounds}
           />
         </div>
         {/* Sidebar */}
@@ -749,10 +821,20 @@ export default function DirectionsEmbed({
                         const pct = (Math.max(step.durationMin, 1) / totalDur) * 100;
                         const isPed = step.type === 'pedestrian';
                         const Icon = transitStepIcon(step.type);
+                        const isFocused = transitFocusedStepIndex === i;
                         return (
                           <div
                             key={i}
-                            className="relative h-full flex items-center justify-center"
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setTransitFocusedStepIndex((prev) => (prev === i ? null : i))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setTransitFocusedStepIndex((prev) => (prev === i ? null : i));
+                              }
+                            }}
+                            className="relative h-full flex items-center justify-center cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
                             style={{
                               width: `${pct}%`,
                               minWidth: 6,
@@ -760,8 +842,9 @@ export default function DirectionsEmbed({
                                 ? `repeating-linear-gradient(90deg, ${step.color}30 0 4px, transparent 4px 8px)`
                                 : step.color,
                               opacity: isPed ? 1 : 0.85,
+                              boxShadow: isFocused ? `inset 0 0 0 2px ${accentColor}, 0 0 0 1px rgba(255,255,255,0.35)` : undefined,
                             }}
-                            title={`${step.instruction} · ${step.durationMin} min`}
+                            title={`${step.instruction} · ${step.durationMin} min — click to zoom map`}
                           >
                             {pct > 12 && (
                               <Icon className="w-2.5 h-2.5" style={{ color: isPed ? step.color : '#fff' }} />
@@ -776,11 +859,27 @@ export default function DirectionsEmbed({
 
               {/* Transit step-by-step — always visible, scrollable */}
               <div className="flex-1 overflow-y-auto prism-scrollbar px-4 py-2">
+                <p className="text-[10px] mb-2" style={{ color: 'var(--text-muted)' }}>
+                  Tap a step to zoom the map to that leg. Tap again to show the full route.
+                </p>
                 {transitSteps.map((step, i) => {
                   const Icon = transitStepIcon(step.type);
                   const isLast = i === transitSteps.length - 1;
+                  const isFocused = transitFocusedStepIndex === i;
+                  const canFocus = !!(step.pathCoords && step.pathCoords.length > 0);
                   return (
-                    <div key={i} className="flex gap-2.5 relative">
+                    <button
+                      key={i}
+                      type="button"
+                      disabled={!canFocus}
+                      onClick={() => canFocus && setTransitFocusedStepIndex((prev) => (prev === i ? null : i))}
+                      className={`w-full text-left flex gap-2.5 relative rounded-xl px-1 -mx-1 transition-colors ${canFocus ? 'cursor-pointer hover:opacity-95' : 'cursor-default'}`}
+                      style={{
+                        background: isFocused ? `${accentColor}14` : 'transparent',
+                        border: isFocused ? `1px solid ${accentColor}55` : '1px solid transparent',
+                      }}
+                      title={canFocus ? 'Zoom map to this step' : undefined}
+                    >
                       <div className="flex flex-col items-center flex-shrink-0 pt-2.5">
                         <div
                           className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
@@ -804,7 +903,7 @@ export default function DirectionsEmbed({
                           )}
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

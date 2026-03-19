@@ -54,27 +54,33 @@ const DEFAULT_WIDTH = 400;
 const DEFAULT_HEIGHT = 500;
 const DEFAULT_REFRESH_S = 120;
 const DEFAULT_FILTERS: TrafficWidgetProps['incidentFilters'] = ['construction', 'incidents', 'event', 'congestion'];
+const MAX_NEARBY_REVERSE_GEO_ITEMS = 120;
+const NEARBY_REVERSE_BATCH = 5;
+
 const ZOOM_CROSSOVER = 12;
+/** Skip HERE flow below this zoom — huge bboxes are slow and overload the map. */
+const HERE_FLOW_MIN_ZOOM = 10;
+/** Zoom threshold: include functional class 3 (major roads beyond motorway/trunk). */
+const HERE_FLOW_FULL_CLASSES_ZOOM = 12;
 
 const severityMeta: Record<Severity, { label: string; dot: string }> = {
-  4: { label: 'Critical', dot: 'bg-red-500' },
-  3: { label: 'Major', dot: 'bg-orange-500' },
-  2: { label: 'Minor', dot: 'bg-yellow-400' },
-  1: { label: 'Low', dot: 'bg-emerald-500' },
+  4: { label: 'Critical', dot: 'bg-rose-400/80' },
+  3: { label: 'Major', dot: 'bg-amber-500/80' },
+  2: { label: 'Minor', dot: 'bg-stone-400/90' },
+  1: { label: 'Low', dot: 'bg-slate-400/90' },
 };
 
 function severityChipClass(sev: Severity, isDark: boolean) {
   if (isDark) {
-    if (sev === 4) return 'bg-red-500/15 text-red-300';
-    if (sev === 3) return 'bg-orange-500/15 text-orange-300';
-    if (sev === 2) return 'bg-yellow-400/15 text-yellow-200';
-    return 'bg-emerald-500/15 text-emerald-300';
+    if (sev === 4) return 'bg-rose-950/40 text-rose-100/95';
+    if (sev === 3) return 'bg-amber-950/35 text-amber-100/90';
+    if (sev === 2) return 'bg-stone-800/40 text-stone-200/95';
+    return 'bg-slate-800/40 text-slate-200/95';
   }
-  // Light mode: stronger fills + darker text for contrast.
-  if (sev === 4) return 'bg-red-100 text-red-900';
-  if (sev === 3) return 'bg-orange-100 text-orange-900';
-  if (sev === 2) return 'bg-yellow-100 text-yellow-900';
-  return 'bg-emerald-100 text-emerald-900';
+  if (sev === 4) return 'bg-rose-50 text-rose-950 border border-rose-200/70';
+  if (sev === 3) return 'bg-amber-50 text-amber-950 border border-amber-200/70';
+  if (sev === 2) return 'bg-stone-100 text-stone-800 border border-stone-200/80';
+  return 'bg-slate-100 text-slate-800 border border-slate-200/80';
 }
 
 const responseCache = new Map<
@@ -303,13 +309,6 @@ async function fetchIncidentsByBbox(opts: {
   return { incidents, ts };
 }
 
-function severityToMarkerColor(sev: Severity) {
-  if (sev === 4) return '#ef4444';
-  if (sev === 3) return '#f97316';
-  if (sev === 2) return '#facc15';
-  return '#22c55e';
-}
-
 function isLikelyRoadClosure(desc?: string) {
   const s = (desc || '').toLowerCase();
   return s.includes('road closed') || s.includes('closure') || s.includes('lanes closed') || s.includes('closed');
@@ -333,7 +332,7 @@ function incidentIconDataUri(kind: IncidentKind, color: string) {
             <path d="M 32.535 30.843 h -8.88 c -0.512 0 -0.928 -0.416 -0.928 -0.928 s 0.415 -0.928 0.928 -0.928 h 9.643 l 2.875 -7.182 c 1.22 -3.047 3.987 -5.178 7.222 -5.56 c 0.673 -0.08 1.349 -0.14 2.023 -0.209 c -11.012 -0.401 -22.024 -0.315 -33.035 0.269 l 3.423 -8.551 c 0.5 -1.248 1.635 -2.14 2.97 -2.298 c 8.8 -1.041 17.601 -1.041 26.401 0 c 1.335 0.158 2.47 1.05 2.97 2.298 l 3.12 7.796 c 0.471 -0.028 0.942 -0.04 1.413 -0.062 l -3.321 -8.3 c -0.609 -1.521 -1.984 -2.583 -3.589 -2.773 c -9.152 -1.082 -18.433 -1.082 -27.586 0 c -1.605 0.19 -2.98 1.252 -3.588 2.773 l -3.513 8.776 l -2.928 3.04 c -2.752 2.858 -4.205 6.77 -3.986 10.732 l 0.326 5.887 c 0.03 0.544 0.135 1.067 0.294 1.564 v 7.891 c 0 0.573 0.21 1.092 0.545 1.505 l 2.536 -6.335 c 1.22 -3.047 3.987 -5.178 7.222 -5.56 c 1.208 -0.143 2.419 -0.265 3.631 -0.375 c -0.002 -0.024 -0.014 -0.044 -0.014 -0.069 c 0 -0.512 0.415 -0.928 0.928 -0.928 h 10.518 L 32.535 30.843 z M 16.52 30.026 c -1.241 2.422 -3.823 3.578 -5.768 2.581 c -1.945 -0.996 -2.516 -3.767 -1.276 -6.189 c 1.241 -2.422 3.823 -3.578 5.768 -2.581 C 17.19 24.833 17.761 27.604 16.52 30.026 z" fill="white" opacity="0.96"/>
           </g>`;
 
-  // Background is the severity color; glyph is white for maximum contrast.
+  // Background uses bright category color; glyph is white for contrast.
   const bg = `<circle cx="128" cy="128" r="124" fill="${color}" stroke="white" stroke-width="10" />`;
   // Scale glyph down so it fits comfortably inside the circle (some paths reach the viewBox edges).
   const glyph = `
@@ -351,19 +350,73 @@ function incidentIconDataUri(kind: IncidentKind, color: string) {
   return svgDataUri(svg);
 }
 
+/**
+ * Traffic ramp — punchy but not neon; reads well on dark basemaps.
+ */
+const TRAFFIC_FLOW = {
+  unknown: '#a8c8e8',
+  smooth: '#34d399',
+  light: '#f0d030',
+  moderate: '#f59e0b',
+  heavy: '#f87171',
+  severe: '#ef4444',
+} as const;
+
+function parseHexRgb(hex: string): [number, number, number] | null {
+  const h = hex.replace('#', '').trim();
+  if (h.length !== 6) return null;
+  const n = parseInt(h, 16);
+  if (!Number.isFinite(n)) return null;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function mixHex(a: string, b: string, t: number): string {
+  const pa = parseHexRgb(a);
+  const pb = parseHexRgb(b);
+  if (!pa || !pb) return a;
+  const u = clamp(t, 0, 1);
+  const out = pa.map((v, i) => Math.round(v + (pb[i]! - v) * u)) as [number, number, number];
+  return `#${out.map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Continuous blend along speed/freeflow — avoids harsh “bands” between congestion levels. */
+function trafficColorFromFlowRatio(ratio: number): string {
+  const r = clamp(ratio, 0, 1);
+  const stops: { t: number; c: string }[] = [
+    { t: 0, c: TRAFFIC_FLOW.severe },
+    { t: 0.22, c: TRAFFIC_FLOW.heavy },
+    { t: 0.42, c: TRAFFIC_FLOW.moderate },
+    { t: 0.62, c: TRAFFIC_FLOW.light },
+    { t: 0.82, c: TRAFFIC_FLOW.smooth },
+    { t: 1, c: TRAFFIC_FLOW.smooth },
+  ];
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i]!;
+    const b = stops[i + 1]!;
+    if (r <= b.t) {
+      const span = b.t - a.t;
+      const u = span < 1e-6 ? 0 : clamp((r - a.t) / span, 0, 1);
+      return mixHex(a.c, b.c, u);
+    }
+  }
+  return TRAFFIC_FLOW.smooth;
+}
+
 function kindToMarkerColor(kind: IncidentKind) {
-  if (kind === 'closure') return '#7C3AED'; // purple
-  if (kind === 'construction') return '#D97706'; // darker amber
-  return '#0EA5E9'; // sky blue
+  // Bright, distinct palette — intentionally not the old purple / amber / sky-cyan trio.
+  if (kind === 'closure') return '#F43F5E'; // rose
+  if (kind === 'construction') return '#10B981'; // emerald
+  return '#6366F1'; // indigo (general traffic / incidents)
 }
 
 function congestionColorFromSpeedMph(mph: number) {
-  if (!Number.isFinite(mph)) return '#9CA3AF';
-  if (mph >= 45) return '#3b82f6';
-  if (mph >= 30) return '#facc15';
-  if (mph >= 18) return '#f97316';
-  if (mph >= 10) return '#ef4444';
-  return '#b91c1c';
+  if (!Number.isFinite(mph)) return TRAFFIC_FLOW.unknown;
+  // Rough tiers from typical road speeds (not ratio-based); keeps the same palette as flow lines.
+  if (mph >= 45) return TRAFFIC_FLOW.smooth;
+  if (mph >= 30) return TRAFFIC_FLOW.light;
+  if (mph >= 18) return TRAFFIC_FLOW.moderate;
+  if (mph >= 10) return TRAFFIC_FLOW.heavy;
+  return TRAFFIC_FLOW.severe;
 }
 
 // --------------- Incident density heatmap grid (zoomed-out view) ---------------
@@ -371,11 +424,11 @@ function congestionColorFromSpeedMph(mph: number) {
 const TRAFFIC_GRID_CELL_DEG = 0.008; // ~0.55 mi per cell
 
 const TRAFFIC_GRID_COLORS = [
-  { min: 1, max: 2, fill: '#3B82F6', opacity: 0.20 },
-  { min: 3, max: 5, fill: '#06B6D4', opacity: 0.28 },
-  { min: 6, max: 10, fill: '#F59E0B', opacity: 0.35 },
-  { min: 11, max: 20, fill: '#F97316', opacity: 0.45 },
-  { min: 21, max: Infinity, fill: '#EF4444', opacity: 0.55 },
+  { min: 1, max: 2, fill: TRAFFIC_FLOW.smooth, opacity: 0.18 },
+  { min: 3, max: 5, fill: TRAFFIC_FLOW.light, opacity: 0.21 },
+  { min: 6, max: 10, fill: TRAFFIC_FLOW.moderate, opacity: 0.24 },
+  { min: 11, max: 20, fill: TRAFFIC_FLOW.heavy, opacity: 0.27 },
+  { min: 21, max: Infinity, fill: TRAFFIC_FLOW.severe, opacity: 0.30 },
 ];
 
 function gridColorForCount(count: number) {
@@ -402,13 +455,60 @@ function buildIncidentGrid(incidents: NormalizedIncident[]) {
 // --------------- HERE Traffic Flow color from km/h ---------------
 
 function flowColorFromKmh(currentSpeed: number, freeFlowSpeed: number) {
-  if (!Number.isFinite(currentSpeed) || !Number.isFinite(freeFlowSpeed) || freeFlowSpeed <= 0) return '#9CA3AF';
-  const ratio = currentSpeed / freeFlowSpeed;
-  if (ratio >= 0.85) return '#22c55e'; // green — free flow
-  if (ratio >= 0.65) return '#facc15'; // yellow — light congestion
-  if (ratio >= 0.45) return '#f97316'; // orange — moderate
-  if (ratio >= 0.25) return '#ef4444'; // red — heavy
-  return '#b91c1c'; // deep red — severe / near standstill
+  if (!Number.isFinite(currentSpeed) || !Number.isFinite(freeFlowSpeed) || freeFlowSpeed <= 0) return TRAFFIC_FLOW.unknown;
+  return trafficColorFromFlowRatio(currentSpeed / freeFlowSpeed);
+}
+
+const HERE_LINK_MERGE_EPS = 1e-5;
+
+function approxSameLinkPoint(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): boolean {
+  return Math.abs(a.lat - b.lat) < HERE_LINK_MERGE_EPS && Math.abs(a.lng - b.lng) < HERE_LINK_MERGE_EPS;
+}
+
+/**
+ * HERE traffic flow returns many short `links` per road feature. Join them into longer chains
+ * so the map shows whole-road polylines (with one outline per chain) instead of tiny segment strokes.
+ */
+function mergeHereShapeLinksToChains(links: any[]): { lat: number; lng: number }[][] {
+  const chains: { lat: number; lng: number }[][] = [];
+  let current: { lat: number; lng: number }[] = [];
+
+  const flush = () => {
+    if (current.length >= 2) chains.push(current);
+    current = [];
+  };
+
+  for (const link of links) {
+    const pts: any[] = link?.points || [];
+    if (pts.length < 2) continue;
+    const coords = pts
+      .filter((p: any) => typeof p.lat === 'number' && typeof p.lng === 'number')
+      .map((p: any) => ({ lat: p.lat, lng: p.lng }));
+    if (coords.length < 2) continue;
+
+    if (current.length === 0) {
+      current = [...coords];
+      continue;
+    }
+
+    const joint = current[current.length - 1];
+    const linkStart = coords[0];
+    const linkEnd = coords[coords.length - 1];
+
+    if (approxSameLinkPoint(joint, linkStart)) {
+      current.push(...coords.slice(1));
+    } else if (approxSameLinkPoint(joint, linkEnd)) {
+      for (let i = coords.length - 2; i >= 0; i--) current.push(coords[i]);
+    } else {
+      flush();
+      current = [...coords];
+    }
+  }
+  flush();
+  return chains;
 }
 
 async function fetchTrafficSegments(opts: {
@@ -468,7 +568,7 @@ async function fetchTrafficSegments(opts: {
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
       coords.push({ lat, lng });
     }
-    if (coords.length >= 2) segments.push({ coords, speedMph: NaN, color: '#9CA3AF' });
+    if (coords.length >= 2) segments.push({ coords, speedMph: NaN, color: TRAFFIC_FLOW.unknown });
   }
 
   return segments;
@@ -619,7 +719,11 @@ export default function LiveTrafficWidget({
   const [currentZoom, setCurrentZoom] = useState(z);
 
   // HERE Traffic Flow polylines for major roads (fetched when zoomed in)
-  const [flowPolylines, setFlowPolylines] = useState<{ coords: { lat: number; lng: number }[]; color: string; weight: number }[]>([]);
+  const [flowPolylines, setFlowPolylines] = useState<
+    { coords: { lat: number; lng: number }[]; color: string; weight: number }[]
+  >([]);
+  /** True while a HERE flow request is in flight — polylines stay cleared until it completes. */
+  const [flowLoading, setFlowLoading] = useState(false);
 
   // Area mode center can be changed by the user (starting location).
   const [areaCenter, setAreaCenter] = useState<{ lat: number; lng: number }>(center);
@@ -709,7 +813,7 @@ export default function LiveTrafficWidget({
       parts.push(`\nINCIDENTS (up to 15):`);
       for (const inc of incidents.slice(0, 15)) {
         const delay = inc.delayMinutes ? `, ~${Math.round(inc.delayMinutes)} min delay` : '';
-        parts.push(`  - [${severityMeta[inc.severity].label}] ${inc.shortDesc}${inc.road ? ` on ${inc.road}` : ''}${delay} (${inc.distanceMiles.toFixed(1)} mi away)`);
+        parts.push(`  - [${severityMeta[inc.severity].label}] ${inc.shortDesc}${inc.road ? ` on ${inc.road}` : ''}${delay}`);
       }
     }
 
@@ -797,37 +901,6 @@ export default function LiveTrafficWidget({
     return scored.map((s) => s.i);
   }, [mode, routeState, incidents, corridorMiles]);
 
-  const reverseCacheRef = useRef<Map<string, string>>(new Map());
-  const [selectedNearbyLabel, setSelectedNearbyLabel] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!selectedIncident) {
-      setSelectedNearbyLabel(null);
-      return;
-    }
-    const cached = reverseCacheRef.current.get(selectedIncident.id);
-    if (cached) {
-      setSelectedNearbyLabel(cached);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await reverseGeocode(selectedIncident.lat, selectedIncident.lng);
-        if (cancelled) return;
-        const parts = [r?.street, r?.adminArea5, r?.adminArea3].filter(Boolean);
-        const label = parts.length ? parts.join(', ') : null;
-        if (label) reverseCacheRef.current.set(selectedIncident.id, label);
-        setSelectedNearbyLabel(label);
-      } catch (_) {
-        if (!cancelled) setSelectedNearbyLabel(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedIncident?.id]);
-
   const selectedMapMarker = useMemo(() => {
     if (!selectedIncident) return [];
     const markerColor = kindToMarkerColor(selectedIncident.kind);
@@ -883,8 +956,25 @@ export default function LiveTrafficWidget({
 
   // Fetch HERE Traffic Flow for major roads in the current viewport
   const flowAbortRef = useRef<AbortController | null>(null);
-  const fetchHereFlow = useCallback(async (bounds: { north: number; south: number; east: number; west: number }) => {
+  const flowRequestIdRef = useRef(0);
+  const lastMapBoundsRef = useRef<{
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+    zoom: number;
+  } | null>(null);
+
+  const fetchHereFlow = useCallback(async (bounds: { north: number; south: number; east: number; west: number; zoom: number }) => {
+    const reqId = ++flowRequestIdRef.current;
     try {
+      const z = bounds.zoom;
+      if (!Number.isFinite(z) || z < HERE_FLOW_MIN_ZOOM) {
+        flowAbortRef.current?.abort();
+        setFlowPolylines([]);
+        return;
+      }
+
       flowAbortRef.current?.abort();
       const ac = new AbortController();
       flowAbortRef.current = ac;
@@ -894,15 +984,24 @@ export default function LiveTrafficWidget({
       url.searchParams.set('endpoint', 'trafficflow');
       url.searchParams.set('in', bbox);
       url.searchParams.set('locationReferencing', 'shape');
-      url.searchParams.set('functionalClasses', '1,2,3');
+      // Zoomed out: only motorways/trunk (1,2) — far fewer features, much faster.
+      const functionalClasses = z >= HERE_FLOW_FULL_CLASSES_ZOOM ? '1,2,3' : '1,2';
+      url.searchParams.set('functionalClasses', functionalClasses);
 
       const res = await fetch(url.toString(), { signal: ac.signal });
-      if (!res.ok) { setFlowPolylines([]); return; }
+      if (!res.ok) {
+        setFlowPolylines([]);
+        return;
+      }
       const data = await res.json();
       const results: any[] = data?.results || [];
 
       const lines: { coords: { lat: number; lng: number }[]; color: string; weight: number }[] = [];
+      const maxFeatures = z >= HERE_FLOW_FULL_CLASSES_ZOOM ? 2000 : 900;
+      let featureCount = 0;
       for (const r of results) {
+        if (featureCount >= maxFeatures) break;
+        featureCount += 1;
         const flow = r?.currentFlow;
         if (!flow) continue;
         const speed = flow.speed ?? 0;
@@ -910,20 +1009,26 @@ export default function LiveTrafficWidget({
         const color = flowColorFromKmh(speed * 3.6, freeFlow * 3.6); // API returns m/s
 
         const links: any[] = r?.location?.shape?.links || [];
-        for (const link of links) {
-          const pts: any[] = link?.points || [];
-          if (pts.length < 2) continue;
-          const coords = pts
-            .filter((p: any) => typeof p.lat === 'number' && typeof p.lng === 'number')
-            .map((p: any) => ({ lat: p.lat, lng: p.lng }));
-          if (coords.length >= 2) {
-            lines.push({ coords, color, weight: 4 });
-          }
+        let chains = mergeHereShapeLinksToChains(links);
+        if (chains.length === 0 && links.length > 0) {
+          chains = links
+            .map((link: any) => {
+              const pts: any[] = link?.points || [];
+              return pts
+                .filter((p: any) => typeof p.lat === 'number' && typeof p.lng === 'number')
+                .map((p: any) => ({ lat: p.lat, lng: p.lng }));
+            })
+            .filter((c: { lat: number; lng: number }[]) => c.length >= 2);
+        }
+        for (const coords of chains) {
+          lines.push({ coords, color, weight: 5 });
         }
       }
       setFlowPolylines(lines);
     } catch (e: any) {
       if (e?.name !== 'AbortError') setFlowPolylines([]);
+    } finally {
+      if (flowRequestIdRef.current === reqId) setFlowLoading(false);
     }
   }, []);
 
@@ -934,6 +1039,7 @@ export default function LiveTrafficWidget({
   const flowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const boundsHandlerRef = useRef<(bounds: { north: number; south: number; east: number; west: number; zoom: number }) => void>(undefined);
   boundsHandlerRef.current = (bounds) => {
+    lastMapBoundsRef.current = bounds;
     const bbox = { lat1: bounds.south, lng1: bounds.west, lat2: bounds.north, lng2: bounds.east };
     setViewportBbox(bbox);
     setCurrentZoom(bounds.zoom);
@@ -944,16 +1050,39 @@ export default function LiveTrafficWidget({
     }, 600);
     if (showFlow) {
       if (flowTimerRef.current) clearTimeout(flowTimerRef.current);
-      flowTimerRef.current = setTimeout(() => {
-        void fetchHereFlow(bounds);
-      }, 800);
+      if (bounds.zoom < HERE_FLOW_MIN_ZOOM) {
+        setFlowPolylines([]);
+        setFlowLoading(false);
+      } else {
+        setFlowPolylines([]);
+        setFlowLoading(true);
+        const flowDelay = bounds.zoom < HERE_FLOW_FULL_CLASSES_ZOOM ? 1100 : 650;
+        flowTimerRef.current = setTimeout(() => {
+          void fetchHereFlow(bounds);
+        }, flowDelay);
+      }
     } else {
       setFlowPolylines([]);
+      setFlowLoading(false);
     }
   };
   const handleBoundsChange = useCallback((bounds: { north: number; south: number; east: number; west: number; zoom: number }) => {
     boundsHandlerRef.current?.(bounds);
   }, []);
+
+  /** Flow lines: zoom-scaled width + smoother geometry; solid colors (no alpha fade). */
+  const trafficFlowMapLines = useMemo(() => {
+    if (!showFlow || mode !== 'area' || flowLoading || flowPolylines.length === 0) return [];
+    const z = currentZoom;
+    const weight = z >= 15 ? 3 : z >= 13 ? 3.5 : z >= 11 ? 4.5 : 5.5;
+    const smoothFactor = 1.35;
+    return flowPolylines.map((pl) => ({
+      ...pl,
+      weight,
+      smoothFactor,
+      opacity: 1,
+    }));
+  }, [flowPolylines, currentZoom, showFlow, mode, flowLoading]);
 
   const searchExitOrMileMarker = useCallback(async (query: string) => {
     const q = query.trim();
@@ -1098,6 +1227,57 @@ export default function LiveTrafficWidget({
 
   const list = useMemo(() => listBase.filter((i) => severityFilter.has(i.severity)), [listBase, severityFilter]);
 
+  const reverseCacheRef = useRef<Map<string, string>>(new Map());
+  /** Reverse-geocoded "nearby" line per incident id for visible list rows. */
+  const [nearbyById, setNearbyById] = useState<Record<string, string>>({});
+
+  const nearbyListIdsKey = useMemo(
+    () => list.slice(0, MAX_NEARBY_REVERSE_GEO_ITEMS).map((i: NormalizedIncident) => i.id).join('\0'),
+    [list],
+  );
+
+  useEffect(() => {
+    const incidents = list.slice(0, MAX_NEARBY_REVERSE_GEO_ITEMS) as NormalizedIncident[];
+    const allowed = new Set(incidents.map((i) => i.id));
+    setNearbyById(() => {
+      const next: Record<string, string> = {};
+      for (const inc of incidents) {
+        const hit = reverseCacheRef.current.get(inc.id);
+        if (hit) next[inc.id] = hit;
+      }
+      return next;
+    });
+
+    let cancelled = false;
+    (async () => {
+      const pending = incidents.filter((inc) => !reverseCacheRef.current.has(inc.id));
+      for (let i = 0; i < pending.length && !cancelled; i += NEARBY_REVERSE_BATCH) {
+        const batch = pending.slice(i, i + NEARBY_REVERSE_BATCH);
+        await Promise.all(
+          batch.map(async (inc) => {
+            if (cancelled || !allowed.has(inc.id)) return;
+            try {
+              const r = await reverseGeocode(inc.lat, inc.lng);
+              if (cancelled || !allowed.has(inc.id)) return;
+              const parts = [r?.street, r?.adminArea5, r?.adminArea3].filter(Boolean);
+              const label = parts.length ? parts.join(', ') : null;
+              if (label) {
+                reverseCacheRef.current.set(inc.id, label);
+                setNearbyById((p) => (p[inc.id] === label ? p : { ...p, [inc.id]: label }));
+              }
+            } catch {
+              /* ignore */
+            }
+          }),
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [nearbyListIdsKey]);
+
   const countsForListBase = useMemo(() => {
     const counts: Record<Severity, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
     for (const i of listBase as any[]) counts[i.severity] += 1;
@@ -1191,7 +1371,20 @@ export default function LiveTrafficWidget({
           <div className="absolute top-3 right-3 z-[500] flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowFlow((v) => !v)}
+              onClick={() => {
+                setShowFlow((v) => {
+                  const next = !v;
+                  if (!next) {
+                    setFlowPolylines([]);
+                    setFlowLoading(false);
+                  } else if (hasSearched && lastMapBoundsRef.current) {
+                    setFlowPolylines([]);
+                    setFlowLoading(true);
+                    void fetchHereFlow(lastMapBoundsRef.current);
+                  }
+                  return next;
+                });
+              }}
               className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm hover:opacity-80"
               style={{
                 borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
@@ -1224,6 +1417,24 @@ export default function LiveTrafficWidget({
               Refresh
             </button>
           </div>
+
+          {showFlow && mode === 'area' && hasSearched && flowLoading && currentZoom >= HERE_FLOW_MIN_ZOOM && (
+            <div
+              className="absolute top-14 right-3 z-[500] inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium shadow-md"
+              style={{
+                borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)',
+                background: isDark ? 'rgba(26,35,50,0.94)' : 'rgba(255,255,255,0.96)',
+                color: 'var(--text-main)',
+                backdropFilter: 'blur(10px)',
+              }}
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" aria-hidden="true" />
+              Loading traffic…
+            </div>
+          )}
+
           <div className="w-full h-full">
             {/** Show all route corridor events on the map once a route is ready. */}
             {/** Otherwise (route not built yet), keep the map focused on the selected incident. */}
@@ -1239,7 +1450,7 @@ export default function LiveTrafficWidget({
                   lat: exitPin.lat,
                   lng: exitPin.lng,
                   label: exitPin.label,
-                  color: '#8B5CF6',
+                  color: '#9333EA',
                   clusterable: false,
                   zIndexOffset: 3000,
                 }] : []),
@@ -1270,7 +1481,7 @@ export default function LiveTrafficWidget({
               clusterRadiusPx={56}
               circles={[]}
               polygons={[]}
-              polylines={showFlow && mode === 'area' ? flowPolylines : []}
+              polylines={trafficFlowMapLines}
               interactive={true}
               zoomToLocation={zoomToLocation}
               onBoundsChange={handleBoundsChange}
@@ -1848,12 +2059,26 @@ export default function LiveTrafficWidget({
                               ? i.crossStreet
                               : null;
 
-                    const titleLine = locLine || i.shortDesc;
+                    const primaryLine = locLine || i.shortDesc;
 
-                    const secondaryLine =
-                      (locLine && i.shortDesc && i.shortDesc !== locLine
-                        ? i.shortDesc
-                        : (isSelected && i.fullDesc && i.fullDesc !== i.shortDesc ? i.fullDesc : null));
+                    // Event copy on every row: location as headline when known, then short + full details.
+                    const descriptionLines: string[] = [];
+                    if (locLine && i.shortDesc && i.shortDesc !== locLine) {
+                      descriptionLines.push(i.shortDesc);
+                    }
+                    if (i.fullDesc?.trim()) {
+                      const fd = i.fullDesc.trim();
+                      if (fd !== primaryLine && !descriptionLines.includes(fd)) {
+                        descriptionLines.push(fd);
+                      }
+                    }
+
+                    const metaLineParts: string[] = [];
+                    if (descriptionLines.length === 0 && i.direction) metaLineParts.push(i.direction);
+                    if (mode === 'route' && typeof i.delayMinutes === 'number' && i.delayMinutes > 0) {
+                      metaLineParts.push(`+${i.delayMinutes} min delay`);
+                    }
+                    const metaLine = metaLineParts.length > 0 ? metaLineParts.join(' · ') : null;
 
                     return (
                       <li
@@ -1882,23 +2107,26 @@ export default function LiveTrafficWidget({
                           />
                           <div className="min-w-0">
                             <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                              {titleLine}
+                              {primaryLine}
                             </div>
-                            {secondaryLine && (
-                              <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                                {secondaryLine}
-                                {i.direction ? ` · ${i.direction}` : ''}
+                            {descriptionLines.map((line, idx) => (
+                              <div
+                                key={`${i.id}-desc-${idx}`}
+                                className="mt-1 text-xs leading-snug break-words"
+                                style={{ color: 'var(--text-muted)' }}
+                              >
+                                {line}
+                                {idx === 0 && i.direction ? ` · ${i.direction}` : ''}
+                              </div>
+                            ))}
+                            {metaLine && (
+                              <div className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
+                                {metaLine}
                               </div>
                             )}
-                            <div className="mt-1 text-xs leading-5" style={{ color: 'var(--text-muted)' }}>
-                              <span>{i.distanceMiles.toFixed(1)} mi from center</span>
-                              {mode === 'route' && typeof i.delayMinutes === 'number' && i.delayMinutes > 0 && (
-                                <span className="ml-2">· +{i.delayMinutes} min delay</span>
-                              )}
-                            </div>
-                            {isSelected && selectedNearbyLabel && (
-                              <div className="mt-2 text-xs" style={{ color: 'var(--text-muted)' }}>
-                                Nearby: {selectedNearbyLabel}
+                            {nearbyById[i.id] && (
+                              <div className="mt-2 text-xs leading-snug break-words" style={{ color: 'var(--text-muted)' }}>
+                                Nearby: {nearbyById[i.id]}
                               </div>
                             )}
                           </div>

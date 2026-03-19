@@ -1,7 +1,7 @@
 // components/widgets/RouteWeatherAlerts.tsx
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Cloud,
   CloudDrizzle,
@@ -13,7 +13,6 @@ import {
   Eye,
   Loader2,
   MapPin,
-  Navigation,
   Sun,
   Thermometer,
   Wind,
@@ -25,11 +24,15 @@ import {
   X,
   Sparkles,
   CornerDownLeft,
+  Star,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
-import { geocode as mqGeocode, searchAhead, getDirections } from '@/lib/mapquest';
+import { geocode as mqGeocode, searchAhead } from '@/lib/mapquest';
 
 type Severity = 'warning' | 'watch' | 'advisory';
 
@@ -48,14 +51,42 @@ type PlaceSelection = {
   lng: number;
 };
 
-type HereRouteResponse = {
-  routes?: Array<{
-    sections?: Array<{
-      polyline?: string;
-      summary?: { length?: number; duration?: number };
-    }>;
-  }>;
+const ROUTE_WEATHER_FAVORITES_KEY = 'mq-route-weather-favorite-places';
+const MAX_FAVORITE_PLACES = 25;
+
+type FavoritePlace = {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  addedAt: number;
 };
+
+function loadFavoritePlaces(): FavoritePlace[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(ROUTE_WEATHER_FAVORITES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (x): x is FavoritePlace =>
+          !!x &&
+          typeof (x as FavoritePlace).id === 'string' &&
+          typeof (x as FavoritePlace).label === 'string' &&
+          typeof (x as FavoritePlace).lat === 'number' &&
+          typeof (x as FavoritePlace).lng === 'number',
+      )
+      .slice(0, MAX_FAVORITE_PLACES);
+  } catch {
+    return [];
+  }
+}
+
+function sameFavoriteCoords(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  return Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lng - b.lng) < 1e-4;
+}
 
 type WeatherObservation = {
   temperature?: string | number;
@@ -84,19 +115,6 @@ type ForecastHour = {
   description?: string;
   iconName?: string;
   precipitationProbability?: string | number;
-};
-
-type RouteConditionKind = 'clear' | 'rain' | 'snow' | 'ice' | 'fog' | 'wind' | 'unknown';
-
-type RouteConditionPoint = {
-  lat: number;
-  lng: number;
-  milesAt: number; // miles from start
-  desc: string;
-  tempF: number | null;
-  precipProb: number | null; // 0..100 (if available)
-  windMph: number | null;
-  kind: RouteConditionKind;
 };
 
 type AlertItem = {
@@ -158,10 +176,6 @@ function alertMarkerIconUri(sev: Severity) {
     </svg>
   `.trim();
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-}
-
-function formatMiles(n: number) {
-  return new Intl.NumberFormat('en-US').format(Math.round(n));
 }
 
 function formatAlertTimeWindow(startTime?: string, endTime?: string) {
@@ -500,248 +514,6 @@ function extractDateKey(x: any): string | undefined {
   return undefined;
 }
 
-function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
-  const R = 3958.7613; // miles
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const lat1 = (a.lat * Math.PI) / 180;
-  const lat2 = (b.lat * Math.PI) / 180;
-  const s =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-  const c = 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
-  return R * c;
-}
-
-function pointToSegmentDistanceMiles(
-  p: { lat: number; lng: number },
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number }
-): number {
-  // Equirectangular approximation for short distances: project to meters around p.lat
-  const latRad = (p.lat * Math.PI) / 180;
-  const mx = (lng: number) => lng * 111_320 * Math.cos(latRad);
-  const my = (lat: number) => lat * 110_574;
-
-  const px = mx(p.lng);
-  const py = my(p.lat);
-  const ax = mx(a.lng);
-  const ay = my(a.lat);
-  const bx = mx(b.lng);
-  const by = my(b.lat);
-
-  const abx = bx - ax;
-  const aby = by - ay;
-  const apx = px - ax;
-  const apy = py - ay;
-  const abLen2 = abx * abx + aby * aby;
-  let t = abLen2 === 0 ? 0 : (apx * abx + apy * aby) / abLen2;
-  t = Math.max(0, Math.min(1, t));
-  const cx = ax + t * abx;
-  const cy = ay + t * aby;
-  const dx = px - cx;
-  const dy = py - cy;
-  const meters = Math.sqrt(dx * dx + dy * dy);
-  return meters / 1609.34;
-}
-
-function pointToPolylineDistanceMiles(
-  p: { lat: number; lng: number },
-  poly: Array<{ lat: number; lng: number }>
-): number | null {
-  if (!poly || poly.length < 2) return null;
-  let best = Infinity;
-  for (let i = 1; i < poly.length; i++) {
-    const d = pointToSegmentDistanceMiles(p, poly[i - 1], poly[i]);
-    if (d < best) best = d;
-  }
-  return Number.isFinite(best) ? best : null;
-}
-
-function classifyRouteCondition(opts: {
-  desc: string;
-  tempF: number | null;
-  precipProb: number | null;
-  windMph: number | null;
-}): RouteConditionKind {
-  const d = (opts.desc || '').toLowerCase();
-  const temp = typeof opts.tempF === 'number' ? opts.tempF : null;
-  const p = typeof opts.precipProb === 'number' ? opts.precipProb : null;
-  const wind = typeof opts.windMph === 'number' ? opts.windMph : null;
-
-  const precipLikely = p != null ? p >= 35 : d.includes('rain') || d.includes('snow') || d.includes('sleet');
-  const isFreezing = temp != null ? temp <= 32 : false;
-
-  if (d.includes('blizzard') || d.includes('snow') || d.includes('flurr') || d.includes('sleet') || d.includes('hail')) {
-    return 'snow';
-  }
-  if ((d.includes('freez') || d.includes('ice')) || (precipLikely && isFreezing)) {
-    return 'ice';
-  }
-  if (d.includes('fog') || d.includes('mist') || d.includes('smoke') || d.includes('haze')) {
-    return 'fog';
-  }
-  if (d.includes('rain') || d.includes('shower') || d.includes('drizzle') || (precipLikely && !isFreezing)) {
-    return 'rain';
-  }
-  if (wind != null && wind >= 25) return 'wind';
-  if (d.includes('clear') || d.includes('sun') || d.includes('cloud')) return 'clear';
-  return 'unknown';
-}
-
-function conditionStyles(kind: RouteConditionKind) {
-  switch (kind) {
-    case 'snow':
-      return { bg: '#8B5CF615', border: '#8B5CF640', text: '#8B5CF6', fill: '#8B5CF6' };
-    case 'ice':
-      return { bg: '#06B6D415', border: '#06B6D440', text: '#06B6D4', fill: '#06B6D4' };
-    case 'rain':
-      return { bg: '#3B82F615', border: '#3B82F640', text: '#3B82F6', fill: '#3B82F6' };
-    case 'fog':
-      return { bg: '#64748B15', border: '#64748B40', text: '#64748B', fill: '#64748B' };
-    case 'wind':
-      return { bg: '#F59E0B15', border: '#F59E0B40', text: '#F59E0B', fill: '#F59E0B' };
-    case 'clear':
-      return { bg: '#EAB30815', border: '#EAB30840', text: '#EAB308', fill: '#EAB308' };
-    case 'unknown':
-    default:
-      return { bg: '#94A3B815', border: '#94A3B840', text: '#94A3B8', fill: '#94A3B8' };
-  }
-}
-
-function conditionGlyph(kind: RouteConditionKind) {
-  switch (kind) {
-    case 'snow':
-      return '❄';
-    case 'ice':
-      return '🧊';
-    case 'rain':
-      return '💧';
-    case 'fog':
-      return '≋';
-    case 'wind':
-      return '〰';
-    case 'clear':
-      return '☀';
-    case 'unknown':
-    default:
-      return '•';
-  }
-}
-
-function conditionInnerIconSvg(kind: RouteConditionKind) {
-  // Simple Lucide-style icons (stroke-only) to match the left panel visual language.
-  // ViewBox: 0 0 24 24
-  switch (kind) {
-    case 'rain':
-      return `
-        <path d="M17.5 19H7a4 4 0 1 1 0-8 5 5 0 0 1 9.7-1.6A4.5 4.5 0 0 1 17.5 19z"/>
-        <line x1="9" y1="21" x2="9" y2="23"/>
-        <line x1="13" y1="21" x2="13" y2="23"/>
-        <line x1="17" y1="21" x2="17" y2="23"/>
-      `;
-    case 'snow':
-    case 'ice':
-      return `
-        <path d="M17.5 19H7a4 4 0 1 1 0-8 5 5 0 0 1 9.7-1.6A4.5 4.5 0 0 1 17.5 19z"/>
-        <circle cx="9" cy="22" r="0.9"/>
-        <circle cx="13" cy="22" r="0.9"/>
-        <circle cx="17" cy="22" r="0.9"/>
-      `;
-    case 'fog':
-      return `
-        <path d="M17.5 19H7a4 4 0 1 1 0-8 5 5 0 0 1 9.7-1.6A4.5 4.5 0 0 1 17.5 19z"/>
-        <line x1="6.5" y1="21" x2="18.5" y2="21"/>
-        <line x1="8" y1="23" x2="17" y2="23"/>
-      `;
-    case 'wind':
-      return `
-        <path d="M3 12h10a3 3 0 1 0-3-3"/>
-        <path d="M3 18h14a3 3 0 1 1-3 3"/>
-      `;
-    case 'clear':
-      return `
-        <circle cx="12" cy="12" r="4"/>
-        <line x1="12" y1="2" x2="12" y2="5"/>
-        <line x1="12" y1="19" x2="12" y2="22"/>
-        <line x1="2" y1="12" x2="5" y2="12"/>
-        <line x1="19" y1="12" x2="22" y2="12"/>
-        <line x1="4.2" y1="4.2" x2="6.4" y2="6.4"/>
-        <line x1="17.6" y1="17.6" x2="19.8" y2="19.8"/>
-        <line x1="17.6" y1="6.4" x2="19.8" y2="4.2"/>
-        <line x1="4.2" y1="19.8" x2="6.4" y2="17.6"/>
-      `;
-    case 'unknown':
-    default:
-      // Cloud
-      return `
-        <path d="M17.5 19H7a4 4 0 1 1 0-8 5 5 0 0 1 9.7-1.6A4.5 4.5 0 0 1 17.5 19z"/>
-      `;
-  }
-}
-
-function conditionMarkerIconUri(kind: RouteConditionKind) {
-  const s = conditionStyles(kind);
-  const inner = conditionInnerIconSvg(kind);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
-      <circle cx="24" cy="24" r="21" fill="${s.fill}" stroke="white" stroke-width="3.5"/>
-      <g transform="translate(12 12)">
-        <g fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          ${inner}
-        </g>
-      </g>
-    </svg>
-  `.trim();
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-}
-
-// HERE Flexible Polyline decoder (2D only)
-function decodeHerePolyline(encoded: string): { lat: number; lng: number }[] {
-  const DECODING_TABLE = [
-    62, -1, -1, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, -1,
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-    22, 23, 24, 25, -1, -1, -1, -1, 63, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
-    36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-  ];
-
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
-
-  const readVarInt = () => {
-    let shift = 0;
-    let value = 0;
-    while (index < encoded.length) {
-      const char = encoded.charCodeAt(index++) - 45;
-      const v = DECODING_TABLE[char];
-      value |= (v & 31) << shift;
-      if ((v & 32) === 0) return value;
-      shift += 5;
-    }
-    return value;
-  };
-
-  // header
-  readVarInt(); // version
-  const header = readVarInt();
-  const precision = Math.pow(10, -(header & 15));
-  const hasZ = ((header >> 8) & 1) === 1;
-
-  const coords: { lat: number; lng: number }[] = [];
-  while (index < encoded.length) {
-    const latDelta = readVarInt();
-    const lngDelta = readVarInt();
-    const dLat = latDelta & 1 ? ~(latDelta >> 1) : latDelta >> 1;
-    const dLng = lngDelta & 1 ? ~(lngDelta >> 1) : lngDelta >> 1;
-    lat += dLat;
-    lng += dLng;
-    if (hasZ) readVarInt(); // skip z
-    coords.push({ lat: lat * precision, lng: lng * precision });
-  }
-  return coords;
-}
-
 function WeatherIcon({ desc }: { desc: string }) {
   const d = desc.toLowerCase();
   if (d.includes('thunder') || d.includes('storm')) return <CloudLightning className="w-5 h-5" />;
@@ -755,6 +527,7 @@ function WeatherIcon({ desc }: { desc: string }) {
 
 function AutosuggestInput({
   label,
+  labelRight,
   placeholder,
   value,
   onChange,
@@ -765,6 +538,8 @@ function AutosuggestInput({
   closeToken,
 }: {
   label: string;
+  /** e.g. favorite star aligned with the field label */
+  labelRight?: ReactNode;
   placeholder: string;
   value: string;
   onChange: (val: string) => void;
@@ -879,9 +654,12 @@ function AutosuggestInput({
 
   return (
     <div ref={wrapRef} className="relative w-full">
-      <label className="block text-[11px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--text-muted)' }}>
-        {label}
-      </label>
+      <div className={`flex items-center gap-2 mb-1.5 ${labelRight ? 'justify-between' : ''}`}>
+        <label className="block text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          {label}
+        </label>
+        {labelRight}
+      </div>
       <div
         className="rounded-xl flex items-center gap-2.5"
         style={{
@@ -992,14 +770,10 @@ export default function RouteWeatherAlerts({
   companyLogo?: string;
   fontFamily?: string;
 }) {
-  const [startText, setStartText] = useState('');
+  const [placeText, setPlaceText] = useState('');
+  const [place, setPlace] = useState<PlaceSelection | null>(null);
   const [destText, setDestText] = useState('');
-  const [start, setStart] = useState<PlaceSelection | null>(null);
   const [dest, setDest] = useState<PlaceSelection | null>(null);
-
-  const [loadingRoute, setLoadingRoute] = useState(false);
-  const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | null>(null);
-  const [routeMiles, setRouteMiles] = useState<number | null>(null);
 
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [obs, setObs] = useState<WeatherObservation | null>(null);
@@ -1009,10 +783,72 @@ export default function RouteWeatherAlerts({
 
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alerts, setAlerts] = useState<RouteAlert[]>([]);
-  const [loadingConditions, setLoadingConditions] = useState(false);
-  const [routeConditions, setRouteConditions] = useState<RouteConditionPoint[]>([]);
   const [runError, setRunError] = useState<string | null>(null);
   const [closeToken, setCloseToken] = useState(0);
+  const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
+  const [currentWeatherOpen, setCurrentWeatherOpen] = useState(false);
+  const [forecastOpen, setForecastOpen] = useState(true);
+
+  const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>(() => loadFavoritePlaces());
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ROUTE_WEATHER_FAVORITES_KEY, JSON.stringify(favoritePlaces));
+    } catch {
+      /* quota / private mode */
+    }
+  }, [favoritePlaces]);
+
+  const addFavoritePlace = useCallback((p: PlaceSelection) => {
+    setFavoritePlaces((prev) => {
+      if (prev.some((f) => sameFavoriteCoords(f, p))) return prev;
+      const next: FavoritePlace = {
+        id: `fav-${p.lat.toFixed(5)}-${p.lng.toFixed(5)}-${Date.now()}`,
+        label: p.label,
+        lat: p.lat,
+        lng: p.lng,
+        addedAt: Date.now(),
+      };
+      return [next, ...prev].slice(0, MAX_FAVORITE_PLACES);
+    });
+  }, []);
+
+  const removeFavoritePlace = useCallback((id: string) => {
+    setFavoritePlaces((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
+  const toggleFavoriteSelection = useCallback(
+    (sel: PlaceSelection) => {
+      const existing = favoritePlaces.find((f) => sameFavoriteCoords(f, sel));
+      if (existing) removeFavoritePlace(existing.id);
+      else addFavoritePlace(sel);
+    },
+    [favoritePlaces, addFavoritePlace, removeFavoritePlace],
+  );
+
+  const placeIsFavorite = useMemo(
+    () => !!(place && favoritePlaces.some((f) => sameFavoriteCoords(f, place))),
+    [place, favoritePlaces],
+  );
+  const destIsFavorite = useMemo(
+    () => !!(dest && favoritePlaces.some((f) => sameFavoriteCoords(f, dest))),
+    [dest, favoritePlaces],
+  );
+
+  const applyFavoritePlace = useCallback((f: FavoritePlace) => {
+    const sel: PlaceSelection = { label: f.label, lat: f.lat, lng: f.lng };
+    setPlace(sel);
+    setPlaceText(f.label);
+    // Same as after Get forecast: mark value as “selected” so autosuggest doesn’t reopen.
+    setCloseToken((t) => t + 1);
+  }, []);
+
+  const applyFavoriteDestination = useCallback((f: FavoritePlace) => {
+    const sel: PlaceSelection = { label: f.label, lat: f.lat, lng: f.lng };
+    setDest(sel);
+    setDestText(f.label);
+    setCloseToken((t) => t + 1);
+  }, []);
 
   // Chat state
   interface ChatMsg { role: 'user' | 'assistant'; content: string }
@@ -1031,15 +867,25 @@ export default function RouteWeatherAlerts({
     if (chatOpen) setTimeout(() => chatInputRef.current?.focus(), 150);
   }, [chatOpen]);
 
-  const buildWeatherContext = useCallback(() => {
-    const parts: string[] = ['WIDGET: Route Weather Alerts'];
+  const weatherAt = useMemo(() => dest ?? place, [dest, place]);
 
-    if (start) parts.push(`START: ${start.label} (${start.lat.toFixed(5)}, ${start.lng.toFixed(5)})`);
-    if (dest) parts.push(`DESTINATION: ${dest.label} (${dest.lat.toFixed(5)}, ${dest.lng.toFixed(5)})`);
-    if (routeMiles != null) parts.push(`ROUTE DISTANCE: ~${Math.round(routeMiles)} miles`);
+  const buildWeatherContext = useCallback(() => {
+    const parts: string[] = ['WIDGET: Area Weather & Forecast'];
+
+    if (place) {
+      parts.push(`ORIGIN / LOCATION: ${place.label} (${place.lat.toFixed(5)}, ${place.lng.toFixed(5)})`);
+    }
+    if (dest) {
+      parts.push(`DESTINATION: ${dest.label} (${dest.lat.toFixed(5)}, ${dest.lng.toFixed(5)})`);
+    }
+    if (weatherAt) {
+      parts.push(
+        `\nWeather, forecast, and alerts below are for: ${weatherAt.label}${dest ? ' (destination)' : ''}.`,
+      );
+    }
 
     if (obs) {
-      parts.push(`\nDESTINATION CURRENT WEATHER:`);
+      parts.push(`\nCURRENT WEATHER:`);
       parts.push(`  Temperature: ${toNumber(obs.temperature) ?? '--'}°F (feels like ${toNumber(obs.comfort) ?? '--'}°F)`);
       parts.push(`  Sky: ${obs.skyDescription || '—'}`);
       parts.push(`  Humidity: ${toNumber(obs.humidity) ?? '--'}%`);
@@ -1048,35 +894,28 @@ export default function RouteWeatherAlerts({
     }
 
     if (forecastDays.length > 0) {
-      parts.push(`\nDAILY FORECAST (destination):`);
+      parts.push(`\nDAILY FORECAST:`);
       for (const d of forecastDays.slice(0, 7)) {
         const day = d.dayOfWeek || d.dayOfMonth || '—';
         parts.push(`  ${day}: High ${formatTempNoDecimals(d.highTemperature)}°F / Low ${formatTempNoDecimals(d.lowTemperature)}°F — ${d.description || '—'}`);
       }
     }
 
-    if (routeConditions.length > 0) {
-      parts.push(`\nCONDITIONS ALONG ROUTE:`);
-      for (const c of routeConditions) {
-        parts.push(`  ${c.milesAt} mi: ${c.desc}${c.tempF != null ? `, ${Math.round(c.tempF)}°F` : ''}${c.windMph != null ? `, ${Math.round(c.windMph)} mph wind` : ''}${c.precipProb != null ? `, ${Math.round(c.precipProb)}% precip` : ''} [${c.kind}]`);
-      }
-    }
-
     if (alerts.length > 0) {
       parts.push(`\nACTIVE WEATHER ALERTS:`);
       for (const a of alerts) {
-        parts.push(`  - ${a.title} (${a.severity}${a.timeWindow ? `, ${a.timeWindow}` : ''}${a.milesAt != null ? `, at mile ${a.milesAt}` : ''})`);
+        parts.push(`  - ${a.title} (${a.severity}${a.timeWindow ? `, ${a.timeWindow}` : ''})`);
       }
-    } else if (start && dest) {
-      parts.push(`\nACTIVE WEATHER ALERTS: None found along route.`);
+    } else if (weatherAt) {
+      parts.push(`\nACTIVE WEATHER ALERTS: None found for this area.`);
     }
 
-    if (!start && !dest) {
-      parts.push(`\nNo route has been entered yet. The user needs to enter start/destination and click "Get Weather & Alerts" first.`);
+    if (!place) {
+      parts.push(`\nNo location selected yet. The user should search a city or address and click "Get forecast".`);
     }
 
     return parts.join('\n');
-  }, [start, dest, routeMiles, obs, forecastDays, routeConditions, alerts]);
+  }, [place, dest, weatherAt, obs, forecastDays, alerts]);
 
   const sendChatMessage = useCallback(async (text?: string) => {
     const msg = text ?? chatInput.trim();
@@ -1094,8 +933,8 @@ export default function RouteWeatherAlerts({
           message: msg,
           history: chatMessages.slice(-10),
           context: buildWeatherContext(),
-          lat: dest?.lat || start?.lat,
-          lng: dest?.lng || start?.lng,
+          lat: weatherAt?.lat ?? place?.lat,
+          lng: weatherAt?.lng ?? place?.lng,
         }),
       });
 
@@ -1110,43 +949,52 @@ export default function RouteWeatherAlerts({
     } finally {
       setChatLoading(false);
     }
-  }, [chatInput, chatLoading, chatMessages, buildWeatherContext, start, dest]);
+  }, [chatInput, chatLoading, chatMessages, buildWeatherContext, place, weatherAt]);
+
+  const mapFitBounds = useMemo(() => {
+    if (!place || !dest) return undefined;
+    return {
+      north: Math.max(place.lat, dest.lat),
+      south: Math.min(place.lat, dest.lat),
+      east: Math.max(place.lng, dest.lng),
+      west: Math.min(place.lng, dest.lng),
+    };
+  }, [place, dest]);
 
   const mapCenter = useMemo(() => {
-    const pt = dest || start;
+    if (place && dest) {
+      return { lat: (place.lat + dest.lat) / 2, lng: (place.lng + dest.lng) / 2 };
+    }
+    const pt = place || dest;
     if (pt) return { lat: pt.lat, lng: pt.lng };
     return { lat: 39.8283, lng: -98.5795 };
-  }, [start, dest]);
+  }, [place, dest]);
 
   const markers = useMemo(() => {
     const m: any[] = [];
-    if (start) m.push({ lat: start.lat, lng: start.lng, label: `Start: ${start.label}`, color: '#16A34A', type: 'default', clusterable: false });
-    if (dest) m.push({ lat: dest.lat, lng: dest.lng, label: `Destination: ${dest.label}`, color: '#DC2626', type: 'default', clusterable: false });
-    if (routeConditions.length > 0) {
-      for (const p of routeConditions) {
-        const s = conditionStyles(p.kind);
-        m.push({
-          lat: p.lat,
-          lng: p.lng,
-          label: `${p.milesAt} mi · ${p.desc}${p.tempF != null ? ` · ${Math.round(p.tempF)}°F` : ''}${
-            p.windMph != null ? ` · ${Math.round(p.windMph)} mph wind` : ''
-          }${p.precipProb != null ? ` · ${Math.round(p.precipProb)}% precip` : ''}`,
-          iconUrl: conditionMarkerIconUri(p.kind),
-          iconCircular: false,
-          iconSize: [38, 38],
-          zIndexOffset: 450,
-          color: s.fill,
-          type: 'default',
-          clusterable: false,
-        });
-      }
+    if (place) {
+      m.push({
+        lat: place.lat,
+        lng: place.lng,
+        label: dest ? `From: ${place.label}` : place.label,
+        color: dest ? '#16A34A' : accentColor,
+        type: 'default',
+        clusterable: false,
+      });
+    }
+    if (dest) {
+      m.push({
+        lat: dest.lat,
+        lng: dest.lng,
+        label: `To: ${dest.label}`,
+        color: '#DC2626',
+        type: 'default',
+        clusterable: false,
+      });
     }
     if (alerts.length > 0) {
       for (const a of alerts) {
-        const milesFromDest =
-          routeMiles != null && a.milesAt != null ? Math.max(0, routeMiles - a.milesAt) : null;
         const detailParts: string[] = [];
-        if (milesFromDest != null) detailParts.push(`${formatMiles(milesFromDest)} mi from destination`);
         if (a.timeWindow) detailParts.push(a.timeWindow);
         const detail = detailParts.length ? ` · ${detailParts.join(' · ')}` : '';
 
@@ -1164,14 +1012,7 @@ export default function RouteWeatherAlerts({
       }
     }
     return m;
-  }, [
-    start,
-    dest,
-    accentColor,
-    routeConditions,
-    alerts,
-    routeMiles,
-  ]);
+  }, [place, dest, accentColor, alerts]);
 
   const geocodeOne = async (q: string): Promise<PlaceSelection | null> => {
     const query = q.trim();
@@ -1182,41 +1023,49 @@ export default function RouteWeatherAlerts({
     return { label, lat: result.lat, lng: result.lng };
   };
 
-  const runAll = async () => {
-    setCloseToken(t => t + 1);
+  const loadForecast = async () => {
+    setCloseToken((t) => t + 1);
+    setCurrentWeatherOpen(true);
+    setForecastOpen(true);
     setRunError(null);
     setObs(null);
     setForecastDays([]);
     setForecastHours([]);
     setAlerts([]);
-    setRouteConditions([]);
-    setRoutePolyline(null);
-    setRouteMiles(null);
 
     setLoadingWeather(true);
-    setLoadingRoute(true);
     setLoadingAlerts(true);
-    setLoadingConditions(true);
 
     try {
-      // Ensure we have coordinates (either selected from autosuggest, or geocoded from text)
-      let s = start;
-      let d = dest;
-      if (!s) s = await geocodeOne(startText);
-      if (!d) d = await geocodeOne(destText);
-      if (!s || !d) {
-        throw new Error('Please select a starting point and destination from the suggestions (or type a full address).');
+      let p = place;
+      if (!p) p = await geocodeOne(placeText);
+      if (!p) {
+        throw new Error('Please pick a place from the suggestions or enter a full city or address.');
       }
-      setStart(s);
-      setDest(d);
-      setStartText(s.label);
-      setDestText(d.label);
+      setPlace(p);
+      setPlaceText(p.label);
 
-      // Destination weather
+      if (!destText.trim()) {
+        setDest(null);
+      }
+      let d: PlaceSelection | null = dest;
+      if (destText.trim()) {
+        if (!d) d = await geocodeOne(destText);
+        if (!d) {
+          throw new Error('Could not find the destination. Choose a suggestion or type a full address.');
+        }
+        setDest(d);
+        setDestText(d.label);
+      } else {
+        d = null;
+      }
+
+      const wx = d ?? p;
+
       const [oRes, dRes, hRes] = await Promise.all([
-        fetch(`/api/here?endpoint=weather&product=observation&latitude=${d.lat}&longitude=${d.lng}`),
-        fetch(`/api/here?endpoint=weather&product=forecast_7days&latitude=${d.lat}&longitude=${d.lng}`),
-        fetch(`/api/here?endpoint=weather&product=forecast_hourly&latitude=${d.lat}&longitude=${d.lng}`),
+        fetch(`/api/here?endpoint=weather&product=observation&latitude=${wx.lat}&longitude=${wx.lng}`),
+        fetch(`/api/here?endpoint=weather&product=forecast_7days&latitude=${wx.lat}&longitude=${wx.lng}`),
+        fetch(`/api/here?endpoint=weather&product=forecast_hourly&latitude=${wx.lat}&longitude=${wx.lng}`),
       ]);
       const o = await oRes.json();
       const dd = await dRes.json();
@@ -1352,110 +1201,35 @@ export default function RouteWeatherAlerts({
       setForecastHours(uniqueHours);
       setLoadingWeather(false);
 
-      // Route polyline
-      const routeResult = await getDirections(`${s.lat},${s.lng}`, `${d.lat},${d.lng}`, 'fastest');
-      if (!routeResult?.shapePoints || routeResult.shapePoints.length < 2) {
-        throw new Error('Could not calculate a route for those locations.');
-      }
-      setRoutePolyline(routeResult.shapePoints);
-      setRouteMiles(routeResult.distance ?? null);
-      setLoadingRoute(false);
-
-      // Sample points & fetch conditions/alerts.
-      // Tahoe → Reno is ~60mi; sample more densely for shorter routes.
-      const estMiles = routeResult.distance ?? undefined;
-      const sampleEveryMiles =
-        typeof estMiles === 'number'
-          ? estMiles <= 80
-            ? 10
-            : estMiles <= 250
-              ? 25
-              : 50
-          : 25;
-
-      const samples: Array<{ lat: number; lng: number; milesAt: number }> = [{ lat: s.lat, lng: s.lng, milesAt: 0 }];
-      let acc = 0;
-      let nextTarget = sampleEveryMiles;
-      const routeShape = routeResult.shapePoints!;
-      for (let i = 1; i < routeShape.length; i++) {
-        const seg = milesBetween(routeShape[i - 1], routeShape[i]);
-        acc += seg;
-        if (acc >= nextTarget) {
-          samples.push({ lat: routeShape[i].lat, lng: routeShape[i].lng, milesAt: Math.round(acc) });
-          nextTarget += sampleEveryMiles;
-          if (samples.length >= 10) break;
-        }
-      }
-      samples.push({ lat: d.lat, lng: d.lng, milesAt: routeResult.distance ? Math.round(routeResult.distance) : Math.round(acc) });
-
-      // Along-route "road condition" proxy from weather observations at varying distances.
-      try {
-        const obsResults = await Promise.all(
-          samples.map(async (sp) => {
-            const oRes = await fetch(`/api/here?endpoint=weather&product=observation&latitude=${sp.lat}&longitude=${sp.lng}`);
-            const o = await oRes.json();
-            const obsItem =
-              o?.observations?.location?.[0]?.observation?.[0] || o?.observations?.location?.observation?.[0] || null;
-            const desc = String(obsItem?.skyDescription || obsItem?.description || '').trim() || '—';
-            const tempF = toNumber(obsItem?.temperature);
-            const windMph = toNumber(obsItem?.windSpeed);
-            const precipProb = toNumber(obsItem?.precipitationProbability);
-            const kind = classifyRouteCondition({ desc, tempF, precipProb, windMph });
-            const pt: RouteConditionPoint = {
-              lat: sp.lat,
-              lng: sp.lng,
-              milesAt: sp.milesAt,
-              desc,
-              tempF,
-              precipProb,
-              windMph,
-              kind,
-            };
-            return pt;
-          })
-        );
-        setRouteConditions(obsResults);
-      } catch {
-        setRouteConditions([]);
-      } finally {
-        setLoadingConditions(false);
-      }
-
       const found: RouteAlert[] = [];
       const seen = new Set<string>();
-      for (const sp of samples) {
-        const aRes = await fetch(`/api/here?endpoint=weather&product=alerts&latitude=${sp.lat}&longitude=${sp.lng}`);
-        const aJson = await aRes.json();
-        const list: AlertItem[] = aJson?.alerts?.alerts || aJson?.alerts || aJson?.warning || aJson?.warnings || [];
-        const arr = Array.isArray(list) ? list : [];
-        for (const a of arr) {
-          // Prefer the descriptive event text as the title (often the most human-friendly)
-          const title = a.description || a.headline || a.type || 'Weather Alert';
-          const key = `${title}`.toLowerCase();
-          if (seen.has(key)) continue;
-          seen.add(key);
-          const sev = severityFromTitle(title);
-          const timeWindow = formatAlertTimeWindow(a.startTime, a.endTime);
-          found.push({
-            key,
-            title,
-            severity: sev,
-            timeWindow,
-            milesAt: sp.milesAt,
-            url: a.url,
-            lat: sp.lat,
-            lng: sp.lng,
-          });
-        }
+      const aRes = await fetch(`/api/here?endpoint=weather&product=alerts&latitude=${wx.lat}&longitude=${wx.lng}`);
+      const aJson = await aRes.json();
+      const list: AlertItem[] = aJson?.alerts?.alerts || aJson?.alerts || aJson?.warning || aJson?.warnings || [];
+      const arr = Array.isArray(list) ? list : [];
+      for (const a of arr) {
+        const title = a.description || a.headline || a.type || 'Weather Alert';
+        const key = `${title}`.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const sev = severityFromTitle(title);
+        const timeWindow = formatAlertTimeWindow(a.startTime, a.endTime);
+        found.push({
+          key,
+          title,
+          severity: sev,
+          timeWindow,
+          url: a.url,
+          lat: wx.lat,
+          lng: wx.lng,
+        });
       }
       setAlerts(found);
     } catch (e: any) {
-      setRunError(e?.message || 'Failed to load weather/alerts.');
+      setRunError(e?.message || 'Failed to load weather.');
     } finally {
       setLoadingWeather(false);
-      setLoadingRoute(false);
       setLoadingAlerts(false);
-      setLoadingConditions(false);
     }
   };
 
@@ -1469,8 +1243,8 @@ export default function RouteWeatherAlerts({
       } as React.CSSProperties}
     >
       <WidgetHeader
-        title="Route Weather Alerts"
-        subtitle="See forecast and active alerts along a route."
+        title="Area Weather"
+        subtitle="Weather & forecast for a place; add an optional destination to see conditions where you’re heading."
         variant="impressive"
         layout="inline"
         icon={<CloudSun className="w-4 h-4" />}
@@ -1479,23 +1253,55 @@ export default function RouteWeatherAlerts({
         {/* Left panel */}
         <div className="w-full md:w-[40%] flex flex-col border-t md:border-t-0 md:border-r md:order-1" style={{ borderColor: 'var(--border-subtle)' }}>
           <div className="p-4 grid grid-cols-1 gap-3 relative" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-            {(loadingWeather || loadingRoute || loadingAlerts) && (
+            {(loadingWeather || loadingAlerts) && (
               <div className="absolute right-4 top-4 pointer-events-none">
                 <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />
               </div>
             )}
             <AutosuggestInput
-              label="Starting point"
-              placeholder="Enter a starting address"
-              value={startText}
+              label="Starting location"
+              labelRight={
+                <button
+                  type="button"
+                  disabled={!place}
+                  onClick={() => place && toggleFavoriteSelection(place)}
+                  className="p-1 rounded-lg shrink-0 transition-opacity disabled:opacity-35 hover:opacity-90 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg-widget)]"
+                  title={
+                    !place
+                      ? 'Choose a place from suggestions to favorite it'
+                      : placeIsFavorite
+                        ? 'Remove from favorites'
+                        : 'Add to favorites'
+                  }
+                  aria-pressed={placeIsFavorite}
+                  aria-label={
+                    !place
+                      ? 'Favorite starting location (choose a place first)'
+                      : placeIsFavorite
+                        ? 'Remove starting location from favorites'
+                        : 'Add starting location to favorites'
+                  }
+                >
+                  <Star
+                    className="w-4 h-4"
+                    aria-hidden
+                    style={{
+                      color: placeIsFavorite ? accentColor : 'var(--text-muted)',
+                      fill: placeIsFavorite ? accentColor : 'transparent',
+                    }}
+                    strokeWidth={placeIsFavorite ? 0 : 2}
+                  />
+                </button>
+              }
+              placeholder="City, neighborhood, or address"
+              value={placeText}
               onChange={(v) => {
-                setStartText(v);
-                // If user edits text after selecting, discard previous coordinates so runAll re-geocodes.
-                if (start) setStart(null);
+                setPlaceText(v);
+                if (place) setPlace(null);
               }}
               onSelect={(sel) => {
-                setStart(sel);
-                setStartText(sel.label);
+                setPlace(sel);
+                setPlaceText(sel.label);
               }}
               accentColor={accentColor}
               darkMode={darkMode}
@@ -1503,12 +1309,44 @@ export default function RouteWeatherAlerts({
               closeToken={closeToken}
             />
             <AutosuggestInput
-              label="Destination"
-              placeholder="Enter a destination"
+              label="Destination (optional)"
+              labelRight={
+                <button
+                  type="button"
+                  disabled={!dest}
+                  onClick={() => dest && toggleFavoriteSelection(dest)}
+                  className="p-1 rounded-lg shrink-0 transition-opacity disabled:opacity-35 hover:opacity-90 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg-widget)]"
+                  title={
+                    !dest
+                      ? 'Choose a destination from suggestions to favorite it'
+                      : destIsFavorite
+                        ? 'Remove from favorites'
+                        : 'Add to favorites'
+                  }
+                  aria-pressed={destIsFavorite}
+                  aria-label={
+                    !dest
+                      ? 'Favorite destination (choose a place first)'
+                      : destIsFavorite
+                        ? 'Remove destination from favorites'
+                        : 'Add destination to favorites'
+                  }
+                >
+                  <Star
+                    className="w-4 h-4"
+                    aria-hidden
+                    style={{
+                      color: destIsFavorite ? accentColor : 'var(--text-muted)',
+                      fill: destIsFavorite ? accentColor : 'transparent',
+                    }}
+                    strokeWidth={destIsFavorite ? 0 : 2}
+                  />
+                </button>
+              }
+              placeholder="Where you’re headed — uses this spot for weather & forecast"
               value={destText}
               onChange={(v) => {
                 setDestText(v);
-                // If user edits text after selecting, discard previous coordinates so runAll re-geocodes.
                 if (dest) setDest(null);
               }}
               onSelect={(sel) => {
@@ -1517,7 +1355,7 @@ export default function RouteWeatherAlerts({
               }}
               accentColor={accentColor}
               darkMode={darkMode}
-              at={start || undefined}
+              at={place || undefined}
               closeToken={closeToken}
             />
           </div>
@@ -1525,18 +1363,18 @@ export default function RouteWeatherAlerts({
           <div className="px-4 py-3 flex items-center gap-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
             <button
               type="button"
-              onClick={runAll}
-              disabled={loadingWeather || loadingRoute || loadingAlerts || (!startText.trim() || !destText.trim())}
+              onClick={loadForecast}
+              disabled={loadingWeather || loadingAlerts || !placeText.trim()}
               className="prism-btn prism-btn-primary flex-1 py-3 text-sm hover:brightness-110 transition-all"
               style={{
                 background: accentColor,
-                opacity: loadingWeather || loadingRoute || loadingAlerts || (!startText.trim() || !destText.trim()) ? 0.6 : 1,
+                opacity: loadingWeather || loadingAlerts || !placeText.trim() ? 0.6 : 1,
               }}
             >
-              {(loadingWeather || loadingRoute || loadingAlerts) ? (
+              {(loadingWeather || loadingAlerts) ? (
                 <><Loader2 className="w-4 h-4 animate-spin" /> <span className="ml-2">Loading…</span></>
               ) : (
-                <><Navigation className="w-4 h-4" /> <span className="ml-2">Get Weather & Alerts</span></>
+                <><CloudSun className="w-4 h-4" /> <span className="ml-2">Get forecast</span></>
               )}
             </button>
           </div>
@@ -1551,14 +1389,21 @@ export default function RouteWeatherAlerts({
             {/* Destination Weather */}
             <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
               <CollapsibleSection
-                title="Destination Weather"
-                summary={dest ? dest.label : 'Enter a destination to see weather.'}
-                defaultOpen={false}
+                title="Current weather"
+                summary={
+                  place
+                    ? dest
+                      ? `${dest.label} · at destination`
+                      : `${place.label}`
+                    : 'Search a location and get forecast.'
+                }
+                open={currentWeatherOpen}
+                onOpenChange={setCurrentWeatherOpen}
               >
                 <div className="mt-3">
-                  {!dest ? (
+                  {!place ? (
                     <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                      Enter a destination to see weather.
+                      Search for a place, then tap Get forecast.
                     </div>
                   ) : loadingWeather ? (
                     <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -1630,8 +1475,13 @@ export default function RouteWeatherAlerts({
             <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
               <CollapsibleSection
                 title="Forecast"
-                summary={dest ? `Destination forecast · ${forecastMode === 'daily' ? 'Daily' : 'Hourly'}` : 'Enter a destination to see forecast.'}
-                defaultOpen={false}
+                summary={
+                  place
+                    ? `${dest ? `${dest.label} · ` : ''}${forecastMode === 'daily' ? 'Daily' : 'Hourly'}`
+                    : 'Get forecast for a location first.'
+                }
+                open={forecastOpen}
+                onOpenChange={setForecastOpen}
                 rightHint={
                   <div className="flex items-center gap-2 cursor-pointer hover:opacity-80" onClick={(e) => e.stopPropagation()}>
                     <button
@@ -1724,123 +1574,17 @@ export default function RouteWeatherAlerts({
               </CollapsibleSection>
             </div>
 
-            {/* Conditions Along Route */}
+            {/* Weather alerts */}
             <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
               <CollapsibleSection
-                title="Conditions along route"
+                title="Weather alerts"
                 summary={
-                  routeMiles != null
-                    ? `~${formatMiles(routeMiles)} mi · ${routeConditions.length || 0} points`
-                    : `${routeConditions.length || 0} points`
-                }
-                defaultOpen={true}
-                rightHint={
-                  <span
-                    className="text-xs font-medium px-2 py-0.5 rounded-full"
-                    style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
-                  >
-                    {routeConditions.length || 0}
-                  </span>
-                }
-              >
-                <div className="mt-3">
-                  {!start || !dest ? (
-                    <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                      Enter both addresses to sample conditions along the route.
-                    </div>
-                  ) : loadingRoute || loadingConditions ? (
-                    <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Sampling conditions…
-                    </div>
-                  ) : routeConditions.length === 0 ? (
-                    <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                      No along-route condition samples available.
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {/* Segmented bar */}
-                      <div className="flex items-center gap-1">
-                        {routeConditions.map((p, idx) => {
-                          const s = conditionStyles(p.kind);
-                          return (
-                            <div
-                              key={`${p.milesAt}-${idx}`}
-                              title={`${p.milesAt} mi · ${p.desc}${p.tempF != null ? ` · ${Math.round(p.tempF)}°F` : ''}${
-                                p.windMph != null ? ` · ${Math.round(p.windMph)} mph wind` : ''
-                              }`}
-                              className="h-3 rounded-full flex-1"
-                              style={{
-                                background: s.fill,
-                                opacity: idx === 0 || idx === routeConditions.length - 1 ? 0.95 : 0.85,
-                              }}
-                            />
-                          );
-                        })}
-                      </div>
-                      {/* Labels */}
-                      <div className="flex items-center justify-between text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                        <span>0 mi</span>
-                        <span>
-                          {routeConditions.length > 2 ? `${routeConditions[Math.floor(routeConditions.length / 2)].milesAt} mi` : ''}
-                        </span>
-                        <span>{routeConditions[routeConditions.length - 1].milesAt} mi</span>
-                      </div>
-
-                      {/* Compact list */}
-                      <div className="max-h-[220px] overflow-y-auto prism-scrollbar pr-1">
-                        <div className="space-y-1.5">
-                          {routeConditions.map((p, idx) => {
-                            const s = conditionStyles(p.kind);
-                            return (
-                              <div
-                                key={`${p.milesAt}-${idx}-row`}
-                                className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl"
-                                style={{ background: s.bg, border: `1px solid ${s.border}` }}
-                              >
-                                <div className="min-w-0">
-                                  <div className="text-[11px] font-semibold truncate" style={{ color: s.text }}>
-                                    {p.milesAt} mi · {p.desc}
-                                  </div>
-                                  <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-secondary)' }}>
-                                    {p.tempF != null ? `${Math.round(p.tempF)}°F` : '--'}
-                                    {p.windMph != null ? ` · ${Math.round(p.windMph)} mph wind` : ''}
-                                    {p.precipProb != null ? ` · ${Math.round(p.precipProb)}% precip` : ''}
-                                  </div>
-                                </div>
-                                <div
-                                  className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center"
-                                  style={{ background: `${s.fill}18`, color: s.fill }}
-                                >
-                                  <WeatherIcon desc={p.desc} />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      {routeConditions.length > 4 && (
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          Scroll to view all conditions
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </CollapsibleSection>
-            </div>
-
-            {/* Route Alerts */}
-            <div className="rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: '1px solid var(--border-subtle)' }}>
-              <CollapsibleSection
-                title="Route Weather Alerts"
-                summary={
-                  !start || !dest
-                    ? 'Enter both addresses to scan alerts along the route.'
-                    : loadingRoute || loadingAlerts
-                      ? 'Checking alerts along route…'
+                  !weatherAt
+                    ? 'Load forecast for a location to check alerts.'
+                    : loadingAlerts
+                      ? 'Checking alerts…'
                       : alerts.length === 0
-                        ? 'No severe alerts found along route.'
+                        ? 'No alerts for this area.'
                         : `${alerts.length} alert${alerts.length === 1 ? '' : 's'}`
                 }
                 defaultOpen={false}
@@ -1856,19 +1600,19 @@ export default function RouteWeatherAlerts({
                 }
               >
                 <div className="mt-3">
-                  {!start || !dest ? (
+                  {!weatherAt ? (
                     <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                      Enter both addresses to scan alerts along the route.
+                      Search a location and run Get forecast.
                     </div>
-                  ) : loadingRoute || loadingAlerts ? (
+                  ) : loadingAlerts ? (
                     <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Checking alerts along route…
+                      Checking alerts…
                     </div>
                   ) : alerts.length === 0 ? (
                     <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                       <AlertTriangle className="w-4 h-4" />
-                      No severe alerts found along route.
+                      No alerts for this area.
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -1901,16 +1645,9 @@ export default function RouteWeatherAlerts({
                                         textOverflow: 'ellipsis',
                                         maxWidth: 320,
                                       }}
-                                      title={`${
-                                        routeMiles != null && a.milesAt != null
-                                          ? `${formatMiles(Math.max(0, routeMiles - a.milesAt))} miles from destination`
-                                          : 'Along your route'
-                                      }${a.timeWindow ? ` · ${a.timeWindow}` : ''}`}
+                                      title={a.timeWindow || ''}
                                     >
-                                      {routeMiles != null && a.milesAt != null
-                                        ? `${formatMiles(Math.max(0, routeMiles - a.milesAt))} miles from destination`
-                                        : 'Along your route'}
-                                      {a.timeWindow ? ` · ${a.timeWindow}` : ''}
+                                      {a.timeWindow || 'Active alert'}
                                     </div>
                                   </div>
                                   <span
@@ -1956,16 +1693,124 @@ export default function RouteWeatherAlerts({
           <MapQuestMap
             apiKey={process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || ''}
             center={mapCenter}
-            zoom={start && dest ? 8 : 4}
+            zoom={place && !dest ? 9 : 4}
+            // Let the directions polyline drive fitBounds when both ends exist (avoids fighting the route line).
+            fitBounds={place && dest ? undefined : mapFitBounds}
             darkMode={darkMode}
             accentColor={accentColor}
             height="100%"
             markers={markers}
             clusterMarkers={false}
             clusterRadiusPx={56}
-            showRoute={!!routePolyline}
-            routePolyline={routePolyline || undefined}
+            showRoute={Boolean(place && dest)}
+            routeStart={place && dest ? { lat: place.lat, lng: place.lng } : undefined}
+            routeEnd={place && dest ? { lat: dest.lat, lng: dest.lng } : undefined}
+            routeType="fastest"
           />
+
+          {/* Favorites — floating collapsible, top-right of map */}
+          <div
+            className="absolute top-3 right-3 z-[1001] w-[min(calc(100%-24px),288px)]"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <div
+              className="rounded-2xl shadow-xl overflow-hidden"
+              style={{
+                background: 'var(--bg-widget)',
+                border: '1px solid var(--border-subtle)',
+                backdropFilter: 'blur(12px)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setFavoritesPanelOpen((o) => !o)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors hover:brightness-[1.02]"
+                style={{
+                  background: 'var(--bg-panel)',
+                  borderBottom: favoritesPanelOpen ? '1px solid var(--border-subtle)' : 'none',
+                }}
+                aria-expanded={favoritesPanelOpen}
+                aria-controls="route-weather-favorites-panel"
+                id="route-weather-favorites-trigger"
+              >
+                <Star className="w-4 h-4 shrink-0" style={{ color: accentColor }} aria-hidden />
+                <span className="text-xs font-semibold flex-1 min-w-0 truncate" style={{ color: 'var(--text-main)' }}>
+                  Favorites
+                </span>
+                {favoritePlaces.length > 0 ? (
+                  <span
+                    className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md shrink-0"
+                    style={{ background: `${accentColor}22`, color: accentColor }}
+                  >
+                    {favoritePlaces.length}
+                  </span>
+                ) : null}
+                {favoritesPanelOpen ? (
+                  <ChevronUp className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden />
+                ) : (
+                  <ChevronDown className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden />
+                )}
+              </button>
+              {favoritesPanelOpen ? (
+                <div id="route-weather-favorites-panel" className="p-3" role="region" aria-labelledby="route-weather-favorites-trigger">
+                  <p className="text-[10px] mb-2 leading-snug" style={{ color: 'var(--text-muted)' }}>
+                    Saved on this device. Tap the <strong className="font-semibold">star</strong> next to a field to save; click again to remove.
+                  </p>
+                  {favoritePlaces.length === 0 ? (
+                    <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+                      No favorites yet — pick a place from suggestions, then fill the star.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5 max-h-[220px] overflow-y-auto prism-scrollbar pr-0.5" aria-label="Favorite places">
+                      {favoritePlaces.map((f) => (
+                        <li
+                          key={f.id}
+                          className="flex items-center gap-1 rounded-lg px-1.5 py-1"
+                          style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
+                        >
+                          <span
+                            className="flex-1 min-w-0 text-[11px] leading-snug truncate"
+                            title={f.label}
+                            style={{ color: 'var(--text-main)' }}
+                          >
+                            {f.label}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => applyFavoritePlace(f)}
+                            className="px-1.5 py-0.5 rounded-md text-[10px] font-bold shrink-0 hover:brightness-110"
+                            style={{ background: '#16A34A22', color: '#16A34A' }}
+                            title="Use as starting location"
+                          >
+                            From
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyFavoriteDestination(f)}
+                            className="px-1.5 py-0.5 rounded-md text-[10px] font-bold shrink-0 hover:brightness-110"
+                            style={{ background: '#DC262622', color: '#DC2626' }}
+                            title="Use as destination"
+                          >
+                            To
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFavoritePlace(f.id)}
+                            className="p-1 rounded-md shrink-0 hover:opacity-80"
+                            style={{ color: 'var(--text-muted)' }}
+                            title="Remove favorite"
+                            aria-label={`Remove ${f.label}`}
+                          >
+                            <Trash2 className="w-3 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
 
           {/* Chat overlay — bottom-right of map */}
           <div className="absolute bottom-3 right-3 z-[1000]" style={{ pointerEvents: 'auto' }}>
@@ -2004,7 +1849,7 @@ export default function RouteWeatherAlerts({
                     <div className="text-center py-6">
                       <Sparkles className="w-6 h-6 mx-auto mb-2" style={{ color: accentColor, opacity: 0.5 }} />
                       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                        Ask me about weather along your route
+                        Ask about this location&apos;s weather
                       </p>
                       <div className="mt-3 flex flex-wrap gap-1.5 justify-center">
                         {[

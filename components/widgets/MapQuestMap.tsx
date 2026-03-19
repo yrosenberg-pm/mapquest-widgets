@@ -45,6 +45,8 @@ interface MapPolyline {
   color?: string;
   weight?: number;
   opacity?: number;
+  /** Leaflet simplification (default 1). Slightly higher values look smoother on road geometry. */
+  smoothFactor?: number;
   dashed?: boolean;
   onClick?: (lat: number, lng: number) => void;
 }
@@ -96,7 +98,8 @@ interface MapQuestMapProps {
   interactive?: boolean;
   className?: string;
   fitBounds?: { north: number; south: number; east: number; west: number };
-  zoomToLocation?: { lat: number; lng: number; zoom?: number };
+  /** Optional `key` forces the zoom effect to run again when lat/lng are unchanged (e.g. re-selecting the same step). */
+  zoomToLocation?: { lat: number; lng: number; zoom?: number; key?: number | string };
   showTraffic?: boolean;
   highlightedSegment?: number | null; // Index of segment to highlight
   stops?: { lat: number; lng: number }[]; // All stops for segment-by-segment routing
@@ -644,7 +647,7 @@ export default function MapQuestMap({
     if (!mapRef.current || !mapReady || !zoomToLocation) return;
     const targetZoom = zoomToLocation.zoom || 16;
     mapRef.current.setView([zoomToLocation.lat, zoomToLocation.lng], targetZoom);
-  }, [zoomToLocation, mapReady]);
+  }, [zoomToLocation?.lat, zoomToLocation?.lng, zoomToLocation?.zoom, zoomToLocation?.key, mapReady]);
 
   // Update markers - different icons for home vs POI
   useEffect(() => {
@@ -1011,13 +1014,17 @@ export default function MapQuestMap({
     for (const pl of polylines) {
       if (!pl?.coords || pl.coords.length < 2) continue;
       const latLngs = pl.coords.map((c) => [c.lat, c.lng] as [number, number]);
+      const w = pl.weight ?? 6;
+      const dashArray = pl.dashed ? '10, 10' : undefined;
+
       const line = L.polyline(latLngs, {
         color: pl.color || '#F97316',
-        weight: pl.weight ?? 6,
+        weight: w,
         opacity: pl.opacity ?? 0.9,
         lineCap: 'round',
         lineJoin: 'round',
-        dashArray: pl.dashed ? '10, 10' : undefined,
+        smoothFactor: pl.smoothFactor ?? 1,
+        dashArray,
       }).addTo(polylinesLayerRef.current);
 
       if (pl.onClick) {
@@ -1321,16 +1328,6 @@ export default function MapQuestMap({
             coords.push([points[i], points[i + 1]]);
           }
 
-          // White outer glow for contrast
-          const outerGlow = L.polyline(coords, {
-            color: '#ffffff',
-            weight: 14,
-            opacity: 0.9,
-            lineCap: 'round',
-            lineJoin: 'round',
-          });
-          highlightLayerRef.current.addLayer(outerGlow);
-
           // Blue shadow for depth
           const shadowLine = L.polyline(coords, {
             color: '#1e40af',
@@ -1531,51 +1528,17 @@ export default function MapQuestMap({
     if (showRoute && routeSegments && routeSegments.length > 0) {
       const allLatLngs: [number, number][] = [];
 
-      // Continuous underlay to make the route feel like one connected line (helps blend segments).
-      const stitched: [number, number][] = [];
       routeSegments.forEach((seg) => {
         if (!seg.coords || seg.coords.length < 2) return;
-        seg.coords.forEach((p) => stitched.push([p.lat, p.lng]));
+        seg.coords.forEach((p) => {
+          allLatLngs.push([p.lat, p.lng]);
+        });
       });
-      if (stitched.length > 1) {
-        // White glow
-        L.polyline(stitched, {
-          color: '#ffffff',
-          weight: 12,
-          opacity: 0.75,
-          lineCap: 'round',
-          lineJoin: 'round',
-          smoothFactor: 1.2,
-        }).addTo(routeLayerRef.current);
-        // Soft blue base
-        L.polyline(stitched, {
-          color: accentColor,
-          weight: 9,
-          opacity: 0.25,
-          lineCap: 'round',
-          lineJoin: 'round',
-          smoothFactor: 1.2,
-        }).addTo(routeLayerRef.current);
-      }
 
       routeSegments.forEach((seg) => {
         if (!seg.coords || seg.coords.length < 2) return;
         const latLngs = seg.coords.map((p) => [p.lat, p.lng] as [number, number]);
-        allLatLngs.push(...latLngs);
-
         const w = seg.weight ?? 6;
-
-        // Feather stroke to soften hard boundaries between segment colors.
-        L.polyline(latLngs, {
-          color: seg.color,
-          weight: w + 6,
-          opacity: 0.18,
-          lineCap: 'round',
-          lineJoin: 'round',
-          smoothFactor: 1.2,
-        }).addTo(routeLayerRef.current);
-
-        // Main colored segment
         L.polyline(latLngs, {
           color: seg.color,
           weight: w,
@@ -1601,18 +1564,7 @@ export default function MapQuestMap({
 
     if (showTraffic) {
       // The native MapQuest traffic layer (overlayPane, z=400) sits ABOVE our
-      // routeCasingPane (z=380).  We draw a wide white-border + blue casing in
-      // the lower pane; the traffic flow colours render smoothly on top.
-      // White outer glow — makes the route path stand out from surrounding roads
-      L.polyline(latLngs, {
-        color: '#ffffff',
-        weight: 14,
-        opacity: 0.9,
-        lineCap: 'round',
-        lineJoin: 'round',
-        smoothFactor: 1,
-        pane: 'routeCasingPane',
-      }).addTo(routeLayerRef.current);
+      // routeCasingPane (z=380).  Light blue casing below so the path is faintly visible under traffic.
       // Core route tint — light blue so the route is identifiable under traffic
       L.polyline(latLngs, {
         color: routeColor || DEFAULT_ROUTE_BLUE,
@@ -1635,8 +1587,8 @@ export default function MapQuestMap({
     }
 
     // Main route line (when traffic overlay is off, this is the primary visual;
-    // when it's on, the traffic layer covers it so we just need the casing above
-    // plus an invisible hit-detection line).
+    // when it's on, the traffic layer covers it so we use a faint blue casing plus
+    // an invisible hit-detection line).
     const routeLine = showTraffic
       ? L.polyline(latLngs, {
           color: routeColor || DEFAULT_ROUTE_BLUE,

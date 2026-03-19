@@ -289,6 +289,40 @@ async function fetchNeighborhoodBoundary(
     } catch {}
   }
 
+  // Prefer Slipstream neighborhood geometry (point-in-polygon search by coords)
+  // This is scoped to this widget only (proxy at /api/slipstream).
+  try {
+    const coordsParam = `${lat},${lng}`;
+    const searchParams = new URLSearchParams({
+      endpoint: 'neighborhoods-search',
+      coords: coordsParam,
+      geometry: 'true',
+      limit: '1',
+    });
+    const res = await fetch(`/api/slipstream?${searchParams}`);
+    if (res.ok) {
+      const data = await res.json();
+      const n = data?.result?.neighborhoods?.[0];
+      const coords = geojsonToCoords(n?.geometry);
+      if (coords && coords.length >= 3) return coords;
+      const id = n?.id;
+      if (id) {
+        const getParams = new URLSearchParams({
+          endpoint: 'neighborhoods-get',
+          id,
+          geometry: 'true',
+        });
+        const res2 = await fetch(`/api/slipstream?${getParams}`);
+        if (res2.ok) {
+          const data2 = await res2.json();
+          const n2 = data2?.result?.neighborhoods?.[0];
+          const coords2 = geojsonToCoords(n2?.geometry);
+          if (coords2 && coords2.length >= 3) return coords2;
+        }
+      }
+    }
+  } catch {}
+
   // Try ATTOM-enhanced boundary (uses geoIdV4 for authoritative name -> Zillow/Overpass/TIGER)
   try {
     const params = new URLSearchParams({
