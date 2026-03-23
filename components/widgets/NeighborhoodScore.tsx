@@ -11,6 +11,7 @@ import {
 import { geocode, searchPlaces, getDirections } from '@/lib/mapquest';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 
@@ -1736,8 +1737,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
             Powered by
           </span>
-          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
-          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+          <MapQuestPoweredLogo darkMode={darkMode} />
         </div>
       )}
     </div>

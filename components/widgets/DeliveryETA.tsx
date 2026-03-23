@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Package, Truck, MapPin, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 
 type DeliveryStatus = 'preparing' | 'in_transit' | 'nearby' | 'delivered';
@@ -314,8 +315,7 @@ export default function DeliveryETA({
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
             Powered by
           </span>
-          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
-          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+          <MapQuestPoweredLogo darkMode={darkMode} />
         </div>
       )}
     </div>

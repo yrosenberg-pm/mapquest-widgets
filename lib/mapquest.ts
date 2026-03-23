@@ -394,6 +394,8 @@ interface DirectionsResult {
   legs?: any[];
   steps?: any[];
   shapePoints?: { lat: number; lng: number }[];
+  /** Indices into the route shape (one per maneuver); used to split the polyline by turn. */
+  maneuverIndexes?: number[];
 }
 
 export async function getDirections(
@@ -444,6 +446,11 @@ export async function getDirections(
       }
     }
 
+    const maneuverIndexesRaw = route.shape?.maneuverIndexes;
+    const maneuverIndexes = Array.isArray(maneuverIndexesRaw)
+      ? maneuverIndexesRaw.map((n: unknown) => Number(n)).filter((n) => Number.isFinite(n))
+      : undefined;
+
     return {
       distance: route.distance,
       time: route.time / 60, // Convert seconds to minutes
@@ -453,6 +460,8 @@ export async function getDirections(
       legs: route.legs || [],
       steps: route.legs?.[0]?.maneuvers || [],
       shapePoints,
+      maneuverIndexes:
+        maneuverIndexes && maneuverIndexes.length > 0 ? maneuverIndexes : undefined,
     };
   } catch (err) {
     console.error('getDirections failed:', err);

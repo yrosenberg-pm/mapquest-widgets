@@ -23,6 +23,8 @@ interface UseAddressAutocompleteOptions {
   maxSuggestions?: number;
   debounceMs?: number;
   disabled?: boolean;
+  /** When incremented (e.g. after applying a saved favorite), force-close the dropdown. */
+  closeToken?: number;
 }
 
 export function useAddressAutocomplete(
@@ -32,6 +34,7 @@ export function useAddressAutocomplete(
 ) {
   const {
     onSelect,
+    closeToken,
     // UX: only start searching once we have enough signal (reduces jumpiness)
     minChars = 4,
     // "letters or numbers" threshold (ignores spaces/punctuation)
@@ -49,6 +52,12 @@ export function useAddressAutocomplete(
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const justSelectedRef = useRef(false);
   const requestSeqRef = useRef(0);
+
+  useEffect(() => {
+    setIsOpen(false);
+    setSuggestions([]);
+    setHighlightedIndex(-1);
+  }, [closeToken]);
 
   const buildFullAddressString = (suggestion: any) => {
     const base = String(suggestion?.displayString || suggestion?.name || '').trim();

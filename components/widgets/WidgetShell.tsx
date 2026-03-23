@@ -3,6 +3,7 @@
 
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import ThemeToggle from './ThemeToggle';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 
 // ========================================
 // Branding Props Interface
@@ -156,16 +157,7 @@ export default function WidgetShell({
               {companyName && <span style={{ fontWeight: 500 }}>{companyName} · </span>}
               {footerText || 'Powered by'}
             </span>
-            <img
-              src="/brand/mapquest-footer-light.svg"
-              alt="MapQuest"
-              className="prism-footer-logo prism-footer-logo--light"
-            />
-            <img
-              src="/brand/mapquest-footer-dark.svg"
-              alt="MapQuest"
-              className="prism-footer-logo prism-footer-logo--dark"
-            />
+            <MapQuestPoweredLogo darkMode={theme === 'dark'} />
           </div>
         )}
       </div>

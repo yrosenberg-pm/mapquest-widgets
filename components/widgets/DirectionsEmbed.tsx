@@ -1,10 +1,11 @@
 // components/widgets/DirectionsEmbed.tsx
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp, Clock, Train, Bus, Footprints, Ship, TramFront } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react';
+import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp, Clock, Train, Bus, Footprints, Ship, TramFront, Star, Trash2 } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 
@@ -62,6 +63,46 @@ interface DirectionsEmbedProps {
 }
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
+
+/** Same key as Route Weather so favorites sync between widgets. */
+const DIRECTIONS_FAVORITES_KEY = 'mq-route-weather-favorite-places';
+const MAX_FAVORITE_PLACES = 25;
+
+type FavoritePlace = {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  addedAt: number;
+};
+
+type PlaceSelection = { label: string; lat: number; lng: number };
+
+function loadFavoritePlaces(): FavoritePlace[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(DIRECTIONS_FAVORITES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (x): x is FavoritePlace =>
+          !!x &&
+          typeof (x as FavoritePlace).id === 'string' &&
+          typeof (x as FavoritePlace).label === 'string' &&
+          typeof (x as FavoritePlace).lat === 'number' &&
+          typeof (x as FavoritePlace).lng === 'number',
+      )
+      .slice(0, MAX_FAVORITE_PLACES);
+  } catch {
+    return [];
+  }
+}
+
+function sameFavoriteCoords(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  return Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lng - b.lng) < 1e-4;
+}
 
 const TRANSIT_MODE_LABELS: Record<string, string> = {
   pedestrian: 'Walk', subway: 'Subway', metro: 'Metro', bus: 'Bus',
@@ -151,6 +192,68 @@ function expandBounds(
   return { north, south, east, west };
 }
 
+/** Slice full route shape into one maneuver using MapQuest `maneuverIndexes` (point indices along the shape). */
+function sliceShapeForManeuver(
+  shapePoints: { lat: number; lng: number }[],
+  maneuverIndexes: number[],
+  i: number,
+  maneuverCount: number,
+): { lat: number; lng: number }[] {
+  const pointPairs = shapePoints.length;
+  const startPt = Math.max(0, Math.min(pointPairs - 1, Number(maneuverIndexes[i]) || 0));
+  const endPt =
+    i === maneuverCount - 1
+      ? pointPairs - 1
+      : Math.max(startPt + 1, Math.min(pointPairs - 1, Number(maneuverIndexes[i + 1]) || startPt + 1));
+  const coords: { lat: number; lng: number }[] = [];
+  for (let p = startPt; p <= endPt; p++) {
+    coords.push(shapePoints[p]);
+  }
+  return coords;
+}
+
+/** Per-step path for map zoom / highlight; falls back to maneuver start/end points when indexes are missing. */
+function buildDriveStepPaths(
+  shapePoints: { lat: number; lng: number }[] | undefined,
+  maneuverIndexes: number[] | undefined,
+  rawManeuvers: unknown[],
+): ({ lat: number; lng: number }[] | undefined)[] {
+  const n = rawManeuvers.length;
+  const out: ({ lat: number; lng: number }[] | undefined)[] = Array.from({ length: n }, () => undefined);
+  if (shapePoints && shapePoints.length >= 2 && maneuverIndexes && maneuverIndexes.length === n && n > 0) {
+    for (let i = 0; i < n; i++) {
+      const seg = sliceShapeForManeuver(shapePoints, maneuverIndexes, i, n);
+      if (seg.length >= 2) out[i] = seg;
+    }
+    return out;
+  }
+  for (let i = 0; i < n; i++) {
+    const m = rawManeuvers[i] as {
+      startPoint?: { lat?: number; lng?: number };
+      endPoint?: { lat?: number; lng?: number };
+    };
+    const sp =
+      m?.startPoint?.lat != null && m?.startPoint?.lng != null
+        ? { lat: Number(m.startPoint.lat), lng: Number(m.startPoint.lng) }
+        : null;
+    const ep =
+      m?.endPoint?.lat != null && m?.endPoint?.lng != null
+        ? { lat: Number(m.endPoint.lat), lng: Number(m.endPoint.lng) }
+        : null;
+    if (sp && ep && (Math.abs(sp.lat - ep.lat) + Math.abs(sp.lng - ep.lng) > 1e-8)) {
+      out[i] = [sp, ep];
+    } else if (sp && i < n - 1) {
+      const next = (rawManeuvers[i + 1] as typeof m)?.startPoint;
+      if (next?.lat != null && next?.lng != null) {
+        out[i] = [sp, { lat: Number(next.lat), lng: Number(next.lng) }];
+      }
+    } else if (sp && ep) {
+      out[i] = [sp, ep];
+    }
+  }
+  return out;
+}
+
 export default function DirectionsEmbed({
   defaultFrom = '',
   defaultTo = '',
@@ -180,6 +283,95 @@ export default function DirectionsEmbed({
   /** When set, map fits this step’s path; tap the same step again to show the full route. */
   const [transitFocusedStepIndex, setTransitFocusedStepIndex] = useState<number | null>(null);
 
+  /** Drive / bike / walk: path coords per turn-by-turn step (from route shape + maneuver indexes). */
+  const [routeStepPathCoords, setRouteStepPathCoords] = useState<({ lat: number; lng: number }[] | undefined)[]>([]);
+  /** Non-transit: zoom map to this step’s segment; tap again to show full route. */
+  const [focusedRouteStepIndex, setFocusedRouteStepIndex] = useState<number | null>(null);
+
+  const [favoritesPanelOpen, setFavoritesPanelOpen] = useState(false);
+  const [favoritePlaces, setFavoritePlaces] = useState<FavoritePlace[]>(() => loadFavoritePlaces());
+  const [closeToken, setCloseToken] = useState(0);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DIRECTIONS_FAVORITES_KEY, JSON.stringify(favoritePlaces));
+    } catch {
+      /* quota / private mode */
+    }
+  }, [favoritePlaces]);
+
+  const addFavoritePlace = useCallback((p: PlaceSelection) => {
+    setFavoritePlaces((prev) => {
+      if (prev.some((f) => sameFavoriteCoords(f, p))) return prev;
+      const next: FavoritePlace = {
+        id: `fav-${p.lat.toFixed(5)}-${p.lng.toFixed(5)}-${Date.now()}`,
+        label: p.label,
+        lat: p.lat,
+        lng: p.lng,
+        addedAt: Date.now(),
+      };
+      return [next, ...prev].slice(0, MAX_FAVORITE_PLACES);
+    });
+  }, []);
+
+  const removeFavoritePlace = useCallback((id: string) => {
+    setFavoritePlaces((prev) => prev.filter((f) => f.id !== id));
+  }, []);
+
+  const toggleFavoriteSelection = useCallback(
+    (sel: PlaceSelection) => {
+      const existing = favoritePlaces.find((f) => sameFavoriteCoords(f, sel));
+      if (existing) removeFavoritePlace(existing.id);
+      else addFavoritePlace(sel);
+    },
+    [favoritePlaces, addFavoritePlace, removeFavoritePlace],
+  );
+
+  const fromSelection = useMemo((): PlaceSelection | null => {
+    if (!fromCoords || !from.trim()) return null;
+    return { label: from.trim(), lat: fromCoords.lat, lng: fromCoords.lng };
+  }, [from, fromCoords]);
+
+  const toSelection = useMemo((): PlaceSelection | null => {
+    if (!toCoords || !to.trim()) return null;
+    return { label: to.trim(), lat: toCoords.lat, lng: toCoords.lng };
+  }, [to, toCoords]);
+
+  const fromIsFavorite = useMemo(
+    () => !!(fromSelection && favoritePlaces.some((f) => sameFavoriteCoords(f, fromSelection))),
+    [fromSelection, favoritePlaces],
+  );
+  const toIsFavorite = useMemo(
+    () => !!(toSelection && favoritePlaces.some((f) => sameFavoriteCoords(f, toSelection))),
+    [toSelection, favoritePlaces],
+  );
+
+  const clearTransitData = useCallback(() => {
+    setTransitSegs([]);
+    setTransitSteps([]);
+    setTransitSummary(null);
+    setPedestrianShape([]);
+    setTransitFocusedStepIndex(null);
+  }, []);
+
+  const applyFavoriteFrom = useCallback((f: FavoritePlace) => {
+    setFrom(f.label);
+    setFromCoords({ lat: f.lat, lng: f.lng });
+    setRoute(null);
+    clearTransitData();
+    setError(null);
+    setCloseToken((t) => t + 1);
+  }, [clearTransitData]);
+
+  const applyFavoriteTo = useCallback((f: FavoritePlace) => {
+    setTo(f.label);
+    setToCoords({ lat: f.lat, lng: f.lng });
+    setRoute(null);
+    clearTransitData();
+    setError(null);
+    setCloseToken((t) => t + 1);
+  }, [clearTransitData]);
+
   const isTransit = routeType === 'transit';
   const isPedestrian = routeType === 'pedestrian';
   const hasResults = !!(route || transitSummary);
@@ -206,14 +398,6 @@ export default function DirectionsEmbed({
     { id: 'pedestrian' as RouteType, label: 'Walk', icon: PersonStanding },
     { id: 'bicycle' as RouteType, label: 'Bike', icon: Bike },
   ];
-
-  const clearTransitData = () => {
-    setTransitSegs([]);
-    setTransitSteps([]);
-    setTransitSummary(null);
-    setPedestrianShape([]);
-    setTransitFocusedStepIndex(null);
-  };
 
   const calculateTransitRoute = useCallback(async (origin: { lat: number; lng: number }, dest: { lat: number; lng: number }) => {
     setLoading(true);
@@ -400,7 +584,7 @@ export default function DirectionsEmbed({
     } finally {
       setLoading(false);
     }
-  }, [departureTime, accentColor]);
+  }, [departureTime, accentColor, clearTransitData]);
   
   const calculateRoute = async () => {
     if (!from.trim() || !to.trim()) {
@@ -410,6 +594,8 @@ export default function DirectionsEmbed({
 
     setLoading(true);
     setError(null);
+    setFocusedRouteStepIndex(null);
+    setRouteStepPathCoords([]);
 
     try {
       const [fromResult, toResult] = await Promise.all([
@@ -450,14 +636,19 @@ export default function DirectionsEmbed({
 
       if (!directions) throw new Error('Could not calculate route');
 
+      const rawSteps = directions.steps || [];
       const routeInfo: RouteInfo = {
         distance: directions.distance,
         time: directions.time,
         fuelUsed: directions.fuelUsed,
         hasTolls: directions.hasTolls,
         hasHighway: directions.hasHighway,
-        steps: directions.steps || [],
+        steps: rawSteps,
       };
+
+      setRouteStepPathCoords(
+        buildDriveStepPaths(directions.shapePoints, directions.maneuverIndexes, rawSteps),
+      );
 
       setRoute(routeInfo);
       onRouteCalculated?.(routeInfo);
@@ -482,6 +673,8 @@ export default function DirectionsEmbed({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to calculate route');
       setRoute(null);
+      setRouteStepPathCoords([]);
+      setFocusedRouteStepIndex(null);
       clearTransitData();
     } finally {
       setLoading(false);
@@ -502,7 +695,14 @@ export default function DirectionsEmbed({
   // and road-snapped shape for pedestrian mode
   const routePolylines = useMemo(() => {
     if (isTransit && transitSegs.length > 0) {
-      return transitSegs.map((seg) => {
+      const lines: Array<{
+        coords: { lat: number; lng: number }[];
+        color: string;
+        weight: number;
+        opacity: number;
+        dashed: boolean;
+        className?: string;
+      }> = transitSegs.map((seg) => {
         const segType = seg.type;
         const color = TRANSIT_SEG_COLORS[segType] || accentColor;
         const isPed = segType === 'pedestrian';
@@ -516,18 +716,70 @@ export default function DirectionsEmbed({
           dashed: isPed || isFerry,
         };
       });
+      if (transitFocusedStepIndex !== null) {
+        const seg = transitSegs[transitFocusedStepIndex];
+        if (seg?.coords?.length >= 2) {
+          const segType = seg.type;
+          const base = TRANSIT_SEG_COLORS[segType] || accentColor;
+          const isPed = segType === 'pedestrian';
+          const isBus = BUS_TYPES.has(segType);
+          const isFerry = segType === 'ferry';
+          lines.push({
+            coords: seg.coords,
+            color: base,
+            weight: isPed ? 7 : isBus ? 9 : 10,
+            opacity: 1,
+            dashed: isPed || isFerry,
+            className: 'highlighted-segment-glow',
+          });
+        }
+      }
+      return lines;
     }
+    const stepOverlay =
+      focusedRouteStepIndex !== null ? routeStepPathCoords[focusedRouteStepIndex] : undefined;
+    const hasStepFocus = !!(stepOverlay && stepOverlay.length >= 2);
+
     if (isPedestrian && pedestrianShape.length >= 2) {
-      return [{
+      const base: Array<{
+        coords: { lat: number; lng: number }[];
+        color: string;
+        weight: number;
+        opacity: number;
+        dashed: boolean;
+        className?: string;
+      }> = [{
         coords: pedestrianShape,
         color: accentColor,
         weight: 5,
         opacity: 0.9,
         dashed: false,
       }];
+      if (hasStepFocus) {
+        base.push({
+          coords: stepOverlay,
+          color: accentColor,
+          weight: 9,
+          opacity: 1,
+          dashed: false,
+          className: 'highlighted-segment-glow',
+        });
+      }
+      return base;
+    }
+    // Drive / bike: base route from MapQuest showRoute; overlay highlighted step only when selected
+    if (!isTransit && hasStepFocus) {
+      return [{
+        coords: stepOverlay!,
+        color: accentColor,
+        weight: 8,
+        opacity: 0.95,
+        dashed: false,
+        className: 'highlighted-segment-glow',
+      }];
     }
     return undefined;
-  }, [isTransit, isPedestrian, transitSegs, pedestrianShape, accentColor]);
+  }, [isTransit, isPedestrian, transitSegs, pedestrianShape, accentColor, focusedRouteStepIndex, routeStepPathCoords, transitFocusedStepIndex]);
 
   const mapFitBounds = useMemo(() => {
     if (!fromCoords || !toCoords) return undefined;
@@ -547,7 +799,7 @@ export default function DirectionsEmbed({
     return { north, south, east, west };
   }, [fromCoords?.lat, fromCoords?.lng, toCoords?.lat, toCoords?.lng, isTransit, isPedestrian, transitSegs, pedestrianShape]);
 
-  /** Fit map to one transit leg when user selects a step; otherwise show full route. */
+  /** Fit map to one step segment (transit leg or turn-by-turn); tap again for full route. */
   const directionsMapFitBounds = useMemo(() => {
     if (isTransit && transitFocusedStepIndex !== null) {
       const coords = transitSteps[transitFocusedStepIndex]?.pathCoords;
@@ -556,8 +808,15 @@ export default function DirectionsEmbed({
         if (b) return expandBounds(b);
       }
     }
+    if (!isTransit && focusedRouteStepIndex !== null) {
+      const coords = routeStepPathCoords[focusedRouteStepIndex];
+      if (coords && coords.length >= 2) {
+        const b = boundsFromCoords(coords);
+        if (b) return expandBounds(b);
+      }
+    }
     return mapFitBounds;
-  }, [isTransit, transitFocusedStepIndex, transitSteps, mapFitBounds]);
+  }, [isTransit, transitFocusedStepIndex, transitSteps, mapFitBounds, focusedRouteStepIndex, routeStepPathCoords]);
   
   const markers = useMemo(() => {
     const result: Array<{
@@ -614,7 +873,7 @@ export default function DirectionsEmbed({
       />
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map */}
-        <div className="h-[300px] md:h-auto md:flex-1 md:order-2">
+        <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
@@ -630,6 +889,110 @@ export default function DirectionsEmbed({
             polylines={routePolylines}
             fitBounds={directionsMapFitBounds}
           />
+
+          {/* Favorites — floating collapsible, top-right of map (same storage as Route Weather) */}
+          <div
+            className="absolute top-3 right-3 z-[1001] w-[min(calc(100%-24px),288px)]"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <div
+              className="rounded-2xl shadow-xl overflow-hidden"
+              style={{
+                background: 'var(--bg-widget)',
+                border: '1px solid var(--border-subtle)',
+                backdropFilter: 'blur(12px)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setFavoritesPanelOpen((o) => !o)}
+                className="w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors hover:brightness-[1.02]"
+                style={{
+                  background: 'var(--bg-panel)',
+                  borderBottom: favoritesPanelOpen ? '1px solid var(--border-subtle)' : 'none',
+                }}
+                aria-expanded={favoritesPanelOpen}
+                aria-controls="directions-favorites-panel"
+                id="directions-favorites-trigger"
+              >
+                <Star className="w-4 h-4 shrink-0" style={{ color: accentColor }} aria-hidden />
+                <span className="text-xs font-semibold flex-1 min-w-0 truncate" style={{ color: 'var(--text-main)' }}>
+                  Favorites
+                </span>
+                {favoritePlaces.length > 0 ? (
+                  <span
+                    className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-md shrink-0"
+                    style={{ background: `${accentColor}22`, color: accentColor }}
+                  >
+                    {favoritePlaces.length}
+                  </span>
+                ) : null}
+                {favoritesPanelOpen ? (
+                  <ChevronUp className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden />
+                ) : (
+                  <ChevronDown className="w-4 h-4 shrink-0" style={{ color: 'var(--text-muted)' }} aria-hidden />
+                )}
+              </button>
+              {favoritesPanelOpen ? (
+                <div id="directions-favorites-panel" className="p-3" role="region" aria-labelledby="directions-favorites-trigger">
+                  <p className="text-[10px] mb-2 leading-snug" style={{ color: 'var(--text-muted)' }}>
+                    Saved on this device. Tap the <strong className="font-semibold">star</strong> next to a field to save; click again to remove.
+                  </p>
+                  {favoritePlaces.length === 0 ? (
+                    <p className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>
+                      No favorites yet — pick a place from suggestions, then fill the star.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5 max-h-[220px] overflow-y-auto prism-scrollbar pr-0.5" aria-label="Favorite places">
+                      {favoritePlaces.map((f) => (
+                        <li
+                          key={f.id}
+                          className="flex items-center gap-1 rounded-lg px-1.5 py-1"
+                          style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)' }}
+                        >
+                          <span
+                            className="flex-1 min-w-0 text-[11px] leading-snug truncate"
+                            title={f.label}
+                            style={{ color: 'var(--text-main)' }}
+                          >
+                            {f.label}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => applyFavoriteFrom(f)}
+                            className="px-1.5 py-0.5 rounded-md text-[10px] font-bold shrink-0 hover:brightness-110"
+                            style={{ background: '#16A34A22', color: '#16A34A' }}
+                            title="Use as start (A)"
+                          >
+                            From
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyFavoriteTo(f)}
+                            className="px-1.5 py-0.5 rounded-md text-[10px] font-bold shrink-0 hover:brightness-110"
+                            style={{ background: '#DC262622', color: '#DC2626' }}
+                            title="Use as destination (B)"
+                          >
+                            To
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFavoritePlace(f.id)}
+                            className="p-1 rounded-md shrink-0 hover:opacity-80"
+                            style={{ color: 'var(--text-muted)' }}
+                            title="Remove favorite"
+                            aria-label={`Remove ${f.label}`}
+                          >
+                            <Trash2 className="w-3 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
         {/* Sidebar */}
         <div 
@@ -658,6 +1021,8 @@ export default function DirectionsEmbed({
                     setFrom(v);
                     setFromCoords(null);
                     setRoute(null);
+                    setRouteStepPathCoords([]);
+                    setFocusedRouteStepIndex(null);
                     clearTransitData();
                     setError(null);
                   }}
@@ -672,7 +1037,39 @@ export default function DirectionsEmbed({
                   borderColor={borderColor}
                   className="flex-1"
                   hideIcon
+                  closeToken={closeToken}
                 />
+                <button
+                  type="button"
+                  disabled={!fromSelection}
+                  onClick={() => fromSelection && toggleFavoriteSelection(fromSelection)}
+                  className="p-1 rounded-lg shrink-0 transition-opacity disabled:opacity-35 hover:opacity-90 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg-widget)]"
+                  title={
+                    !fromSelection
+                      ? 'Choose a place from suggestions or run Go to set a start point'
+                      : fromIsFavorite
+                        ? 'Remove from favorites'
+                        : 'Add to favorites'
+                  }
+                  aria-pressed={fromIsFavorite}
+                  aria-label={
+                    !fromSelection
+                      ? 'Favorite start (choose a place first)'
+                      : fromIsFavorite
+                        ? 'Remove start from favorites'
+                        : 'Add start to favorites'
+                  }
+                >
+                  <Star
+                    className="w-4 h-4"
+                    aria-hidden
+                    style={{
+                      color: fromIsFavorite ? accentColor : 'var(--text-muted)',
+                      fill: fromIsFavorite ? accentColor : 'transparent',
+                    }}
+                    strokeWidth={fromIsFavorite ? 0 : 2}
+                  />
+                </button>
               </div>
 
               <div
@@ -691,6 +1088,8 @@ export default function DirectionsEmbed({
                     setTo(v);
                     setToCoords(null);
                     setRoute(null);
+                    setRouteStepPathCoords([]);
+                    setFocusedRouteStepIndex(null);
                     clearTransitData();
                     setError(null);
                   }}
@@ -705,7 +1104,39 @@ export default function DirectionsEmbed({
                   borderColor={borderColor}
                   className="flex-1"
                   hideIcon
+                  closeToken={closeToken}
                 />
+                <button
+                  type="button"
+                  disabled={!toSelection}
+                  onClick={() => toSelection && toggleFavoriteSelection(toSelection)}
+                  className="p-1 rounded-lg shrink-0 transition-opacity disabled:opacity-35 hover:opacity-90 outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--bg-widget)]"
+                  title={
+                    !toSelection
+                      ? 'Choose a place from suggestions or run Go to set a destination'
+                      : toIsFavorite
+                        ? 'Remove from favorites'
+                        : 'Add to favorites'
+                  }
+                  aria-pressed={toIsFavorite}
+                  aria-label={
+                    !toSelection
+                      ? 'Favorite destination (choose a place first)'
+                      : toIsFavorite
+                        ? 'Remove destination from favorites'
+                        : 'Add destination to favorites'
+                  }
+                >
+                  <Star
+                    className="w-4 h-4"
+                    aria-hidden
+                    style={{
+                      color: toIsFavorite ? accentColor : 'var(--text-muted)',
+                      fill: toIsFavorite ? accentColor : 'transparent',
+                    }}
+                    strokeWidth={toIsFavorite ? 0 : 2}
+                  />
+                </button>
               </div>
             </div>
 
@@ -834,7 +1265,7 @@ export default function DirectionsEmbed({
                                 setTransitFocusedStepIndex((prev) => (prev === i ? null : i));
                               }
                             }}
-                            className="relative h-full flex items-center justify-center cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                            className={`relative h-full flex items-center justify-center cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${isFocused ? 'directions-transit-bar-segment--breathing' : ''}`}
                             style={{
                               width: `${pct}%`,
                               minWidth: 6,
@@ -842,8 +1273,8 @@ export default function DirectionsEmbed({
                                 ? `repeating-linear-gradient(90deg, ${step.color}30 0 4px, transparent 4px 8px)`
                                 : step.color,
                               opacity: isPed ? 1 : 0.85,
-                              boxShadow: isFocused ? `inset 0 0 0 2px ${accentColor}, 0 0 0 1px rgba(255,255,255,0.35)` : undefined,
-                            }}
+                              ...(isFocused ? { ['--directions-ring' as string]: accentColor } : {}),
+                            } as CSSProperties}
                             title={`${step.instruction} · ${step.durationMin} min — click to zoom map`}
                           >
                             {pct > 12 && (
@@ -873,11 +1304,12 @@ export default function DirectionsEmbed({
                       type="button"
                       disabled={!canFocus}
                       onClick={() => canFocus && setTransitFocusedStepIndex((prev) => (prev === i ? null : i))}
-                      className={`w-full text-left flex gap-2.5 relative rounded-xl px-1 -mx-1 transition-colors ${canFocus ? 'cursor-pointer hover:opacity-95' : 'cursor-default'}`}
-                      style={{
-                        background: isFocused ? `${accentColor}14` : 'transparent',
-                        border: isFocused ? `1px solid ${accentColor}55` : '1px solid transparent',
-                      }}
+                      className={`w-full text-left flex gap-2.5 relative rounded-xl px-1 -mx-1 transition-colors ${canFocus ? 'cursor-pointer hover:opacity-95' : 'cursor-default'} ${isFocused ? 'directions-selected-step-breathe' : ''}`}
+                      style={
+                        isFocused
+                          ? ({ ['--directions-accent' as string]: step.color } as CSSProperties)
+                          : undefined
+                      }
                       title={canFocus ? 'Zoom map to this step' : undefined}
                     >
                       <div className="flex flex-col items-center flex-shrink-0 pt-2.5">
@@ -888,7 +1320,10 @@ export default function DirectionsEmbed({
                           <Icon className="w-3 h-3" style={{ color: step.color }} />
                         </div>
                         {!isLast && (
-                          <div className="w-0.5 flex-1 min-h-[12px] my-0.5 rounded-full" style={{ background: step.color, opacity: 0.5 }} />
+                          <div
+                            className="w-0.5 flex-1 min-h-[12px] my-0.5 rounded-full"
+                            style={{ background: step.color, opacity: 0.5 }}
+                          />
                         )}
                       </div>
                       <div className="flex-1 min-w-0 py-2" style={{ borderBottom: isLast ? 'none' : '1px solid var(--border-subtle)' }}>
@@ -933,31 +1368,57 @@ export default function DirectionsEmbed({
                 </div>
               </div>
 
-              {/* Turn-by-turn — always visible, scrollable */}
+              {/* Turn-by-turn — always visible, scrollable; tap a step to zoom the map to that segment */}
               {route.steps.length > 0 && (
-                <div className="flex-1 overflow-y-auto prism-scrollbar">
-                  {route.steps.map((step, index) => (
-                    <div 
-                      key={index} 
-                      className="flex items-start gap-2.5 px-4 py-3"
-                      style={{ borderBottom: '1px solid var(--border-subtle)' }}
-                    >
-                      <div
-                        className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 mt-0.5"
-                        style={{ background: index === 0 ? accentColor : 'var(--text-muted)', color: 'white' }}
+                <div className="flex-1 overflow-y-auto prism-scrollbar flex flex-col min-h-0">
+                  <p className="text-[10px] px-4 pt-2 pb-1 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                    Tap a step to zoom the map to that turn. Tap again to show the full route.
+                  </p>
+                  {route.steps.map((step, index) => {
+                    const narrative = (step as { narrative?: string }).narrative ?? '';
+                    const canFocus = (routeStepPathCoords[index]?.length ?? 0) >= 2;
+                    const isFocused = focusedRouteStepIndex === index;
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        disabled={!canFocus}
+                        onClick={() =>
+                          canFocus &&
+                          setFocusedRouteStepIndex((prev) => (prev === index ? null : index))
+                        }
+                        className={`flex items-start gap-2.5 px-4 py-3 text-left w-full transition-colors ${
+                          canFocus ? 'cursor-pointer hover:opacity-95' : 'cursor-default opacity-90'
+                        } ${isFocused && canFocus ? 'directions-selected-step-breathe-drive' : ''}`}
+                        style={{
+                          borderBottom: '1px solid var(--border-subtle)',
+                          ...(isFocused && canFocus
+                            ? ({ ['--directions-accent' as string]: accentColor } as CSSProperties)
+                            : {}),
+                        }}
+                        title={canFocus ? 'Zoom map to this turn' : undefined}
                       >
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm leading-snug" style={{ color: 'var(--text-main)' }}>{step.narrative}</div>
-                        <div className="text-[11px] mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-                          <span>{formatDistance(step.distance)}</span>
-                          <span>·</span>
-                          <span>{formatTime(step.time)}</span>
+                        <div
+                          className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 mt-0.5"
+                          style={{
+                            background:
+                              isFocused || index === 0 ? accentColor : 'var(--text-muted)',
+                            color: 'white',
+                          }}
+                        >
+                          {index + 1}
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm leading-snug" style={{ color: 'var(--text-main)' }}>{narrative}</div>
+                          <div className="text-[11px] mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
+                            <span>{formatDistance(step.distance)}</span>
+                            <span>·</span>
+                            <span>{formatTime(step.time)}</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -991,8 +1452,7 @@ export default function DirectionsEmbed({
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
             Powered by
           </span>
-          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
-          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+          <MapQuestPoweredLogo darkMode={darkMode} />
         </div>
       )}
     </div>

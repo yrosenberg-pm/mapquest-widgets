@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 
@@ -1807,8 +1808,7 @@ export default function MultiStopPlanner({
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
             Powered by
           </span>
-          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
-          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+          <MapQuestPoweredLogo darkMode={darkMode} />
         </div>
       )}
     </div>

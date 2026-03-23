@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, Bike, Navigation, Loader2, ChevronRight, X, RefreshCw, CreditCard, Zap, MapPin } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 
@@ -714,16 +715,7 @@ export default function CitiBikeFinder({
               powered by <span style={{ color: LYFT_PINK, fontWeight: 600, fontStyle: 'italic' }}>lyft</span>
             </span>
             <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}> · Powered by </span>
-            <img
-              src="/brand/mapquest-footer-light.svg"
-              alt="MapQuest"
-              className="prism-footer-logo prism-footer-logo--light"
-            />
-            <img
-              src="/brand/mapquest-footer-dark.svg"
-              alt="MapQuest"
-              className="prism-footer-logo prism-footer-logo--dark"
-            />
+            <MapQuestPoweredLogo darkMode={darkMode} />
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { ShoppingBag, Car, MapPin, CheckCircle2, Loader2, RefreshCw, Clock, User } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 
 type DeliveryStatus = 'shopping' | 'checkout' | 'on_the_way' | 'arriving' | 'delivered';
 
@@ -466,8 +467,7 @@ export default function InstacartDeliveryETA({
               instacart
             </span>
             <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
-            <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
-            <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+            <MapQuestPoweredLogo darkMode={darkMode} />
           </div>
         </div>
       )}

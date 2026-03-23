@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, Phone, Clock, Navigation, Loader2, ChevronRight, X, Coffee } from 'lucide-react';
 import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 
 interface StarbucksLocation {
@@ -630,8 +631,7 @@ export default function StarbucksFinder({
               <span style={{ fontWeight: 600, color: STARBUCKS_GREEN }}>Starbucks Finder</span>
               <span style={{ color: 'var(--text-muted)' }}> · Powered by </span>
             </span>
-            <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
-            <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+            <MapQuestPoweredLogo darkMode={darkMode} />
           </div>
         </div>
       )}

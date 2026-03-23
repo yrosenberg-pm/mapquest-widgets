@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import { Utensils, ParkingCircle, Cloud, Sun, CloudRain, Snowflake, Navigation, Search, Droplets, Wind, Star, ExternalLink, Hotel, Car, Bike, PersonStanding, Train } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 
 const NHL_STADIUMS = [
@@ -1167,8 +1168,7 @@ export default function NHLArenaExplorer({
       {showBranding && (
         <div className="prism-footer">
           <span aria-label="Powered by MapQuest">Powered by</span>
-          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
-          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+          <MapQuestPoweredLogo darkMode={darkMode} />
         </div>
       )}
     </div>

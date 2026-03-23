@@ -24,6 +24,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { geocode } from '@/lib/mapquest';
@@ -830,7 +831,7 @@ export default function PropertyIntelligence({
           className="w-full flex flex-col border-t md:border-t-0 md:border-r md:order-1 overflow-hidden"
           style={{ borderColor: border, flex: '0 0 40%', maxWidth: '40%' }}
         >
-          {/* Address search */}
+          {/* Area search (neighborhood / ZIP / city — not street addresses) */}
           <div className="px-5 py-4" style={{ borderBottom: `1px solid ${border}` }}>
             <div
               className="rounded-xl flex items-center gap-2.5"
@@ -845,7 +846,7 @@ export default function PropertyIntelligence({
                 onChange={setQuery}
                 onSelect={handleAddressSelect}
                 onEnter={handleManualSearch}
-                placeholder="Search by property address…"
+                placeholder="Search by neighborhood, ZIP code, or city…"
                 darkMode={darkMode}
                 className="flex-1"
                 hideIcon
@@ -876,8 +877,8 @@ export default function PropertyIntelligence({
               <div className="text-center py-20 px-6">
                 <Home className="w-12 h-12 mx-auto mb-4" style={{ color: textMuted, opacity: 0.25 }} />
                 <p className="text-base font-semibold mb-1.5" style={{ color: textMain }}>Explore property data</p>
-                <p className="text-xs leading-relaxed max-w-[260px] mx-auto" style={{ color: textMuted }}>
-                  Search a street address for property details, or enter a neighborhood name or zip code to see an AVM heat map.
+                <p className="text-xs leading-relaxed max-w-[280px] mx-auto" style={{ color: textMuted }}>
+                  Search by neighborhood, ZIP code, or city to load the AVM heat map. Select a property from the map or list to open details.
                 </p>
               </div>
             )}
@@ -1246,8 +1247,7 @@ export default function PropertyIntelligence({
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
             Powered by
           </span>
-          <img src="/brand/mapquest-footer-light.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--light" />
-          <img src="/brand/mapquest-footer-dark.svg" alt="MapQuest" className="prism-footer-logo prism-footer-logo--dark" />
+          <MapQuestPoweredLogo darkMode={darkMode} />
           <span style={{ fontSize: '10px', opacity: 0.5 }}>+ ATTOM</span>
         </div>
       )}

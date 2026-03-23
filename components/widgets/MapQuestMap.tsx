@@ -48,6 +48,8 @@ interface MapPolyline {
   /** Leaflet simplification (default 1). Slightly higher values look smoother on road geometry. */
   smoothFactor?: number;
   dashed?: boolean;
+  /** Passed to Leaflet polyline `className` (e.g. breathing highlight on a segment). */
+  className?: string;
   onClick?: (lat: number, lng: number) => void;
 }
 
@@ -115,8 +117,87 @@ declare global {
   }
 }
 
-// Route lines should always be the MapQuest "sharp blue" regardless of widget accent color.
+// Fallback when neither routeColor nor accentColor is set
 const DEFAULT_ROUTE_BLUE = '#3B82F6';
+
+/** Remove OSM copyright from attribution (preferred over moving it). Runs on each layout pass. */
+function stripOsmAttribution(container: HTMLElement) {
+  const attr = container.querySelector('.leaflet-control-attribution');
+  if (!attr) return;
+
+  attr.querySelectorAll('a[href]').forEach((a) => {
+    const href = (a.getAttribute('href') || '').toLowerCase();
+    if (href.includes('openstreetmap') || href.includes('osm.org') || href.includes('osmfoundation')) {
+      a.remove();
+    }
+  });
+
+  let html = attr.innerHTML;
+  const before = html;
+  html = html.replace(/&copy;\s*OpenStreetMap[^|<]*/gi, '');
+  html = html.replace(/©\s*OpenStreetMap[^|<]*/gi, '');
+  html = html.replace(/OpenStreetMap\s+contributors/gi, '');
+  html = html.replace(/\|\s*\|\s*/g, '|');
+  html = html.replace(/^\s*\|\s*|\s*\|\s*$/g, '').trim();
+  if (html !== before) {
+    attr.innerHTML = html;
+  }
+}
+
+/**
+ * MapQuest.js: attribution + logo bottom-left. Terms → bottom-right.
+ * OSM copyright is stripped from the left attribution bar (hidden); CSS also hides any stray OSM links.
+ */
+function layoutMapAttributionAndLogo(map: any) {
+  if (!map?.getContainer) return;
+  const container = map.getContainer() as HTMLElement;
+
+  try {
+    if (map.attributionControl && typeof map.attributionControl.setPosition === 'function') {
+      map.attributionControl.setPosition('bottomleft');
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const logoCtl = map._mapQuestLogoControl;
+    if (logoCtl && typeof logoCtl.setPosition === 'function') {
+      logoCtl.setPosition('bottomleft');
+    }
+    if (logoCtl && typeof logoCtl.showLogo === 'function') {
+      logoCtl.showLogo();
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    stripOsmAttribution(container);
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const attr = container.querySelector('.leaflet-control-attribution');
+    const terms =
+      (attr?.querySelector('a#terms') as HTMLElement | null) ||
+      (attr?.querySelector('a.termsLink') as HTMLElement | null) ||
+      (container.querySelector(':scope > a#terms.mapquest-terms-docked') as HTMLElement | null) ||
+      (container.querySelector(':scope > a.mapquest-terms-docked') as HTMLElement | null);
+    if (terms) {
+      container.querySelectorAll(':scope > a.mapquest-terms-docked').forEach((el) => {
+        if (el !== terms) el.remove();
+      });
+      terms.classList.add('mapquest-terms-docked');
+      if (terms.parentElement !== container) {
+        container.appendChild(terms);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 export default function MapQuestMap({
   apiKey,
@@ -324,9 +405,68 @@ export default function MapQuestMap({
         background: #1f2937 !important;
       }
 
-      /* Hide MapQuest logo */
-      .mqlogo, .mq-attribution-logo {
+      /* Bottom-left: everything above, MapQuest logo last (touching map edge).
+         Logo is div.leaflet-control.mapquest-logo — it does NOT contain .mapquest-logo, so :has(.mapquest-logo) never matched. */
+      .leaflet-bottom.leaflet-left {
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-end !important;
+        align-items: flex-start !important;
+        gap: 4px !important;
+      }
+      .leaflet-bottom.leaflet-left > .leaflet-control:not(.mapquest-logo) {
+        order: 1 !important;
+      }
+      .leaflet-bottom.leaflet-left > .leaflet-control.mapquest-logo,
+      .leaflet-bottom.leaflet-left > .mapquest-logo {
+        order: 10 !important;
+      }
+      .leaflet-bottom.leaflet-left .leaflet-control-attribution {
+        margin-left: 6px !important;
+        margin-bottom: 0 !important;
+        max-width: min(70vw, 380px) !important;
+        text-align: left !important;
+      }
+      /* Hide OSM attribution links if SDK re-injects them before the next stripOsmAttribution pass */
+      .leaflet-control-attribution a[href*="openstreetmap.org"],
+      .leaflet-control-attribution a[href*="openstreetmap"],
+      .leaflet-control-attribution a[href*="osm.org"] {
         display: none !important;
+        visibility: hidden !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        position: absolute !important;
+        pointer-events: none !important;
+      }
+      .leaflet-bottom.leaflet-left .mapquest-logo {
+        margin-left: 6px !important;
+        margin-bottom: 4px !important;
+      }
+
+      /* Terms link moved to map container (see layoutMapAttributionAndLogo) — bottom-right, off the left attribution strip */
+      .leaflet-container a.mapquest-terms-docked,
+      .leaflet-container a#terms.mapquest-terms-docked {
+        position: absolute !important;
+        right: 8px !important;
+        bottom: 8px !important;
+        left: auto !important;
+        top: auto !important;
+        z-index: 1001 !important;
+        margin: 0 !important;
+        display: inline-block !important;
+        font-size: 9px !important;
+        line-height: 1.2 !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+        background: rgba(255, 255, 255, 0.9) !important;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+      }
+      .dark-map .leaflet-container a.mapquest-terms-docked,
+      .dark-map .leaflet-container a#terms.mapquest-terms-docked {
+        background: rgba(17, 24, 39, 0.92) !important;
+        color: #9ca3af !important;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
       }
       
       /* Marker styling */
@@ -621,6 +761,20 @@ export default function MapQuestMap({
       }
     }, 100);
   }, [darkMode, mapReady, mapType]);
+
+  // Bottom-left: attribution (OSM stripped) + logo; Terms docked bottom-right on map container
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    const run = () => layoutMapAttributionAndLogo(map);
+    run();
+    const t1 = window.setTimeout(run, 200);
+    const t2 = window.setTimeout(run, 700);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [mapReady, darkMode, mapType]);
 
   // Update center and zoom
   useEffect(() => {
@@ -1025,6 +1179,7 @@ export default function MapQuestMap({
         lineJoin: 'round',
         smoothFactor: pl.smoothFactor ?? 1,
         dashArray,
+        ...(pl.className ? { className: pl.className } : {}),
       }).addTo(polylinesLayerRef.current);
 
       if (pl.onClick) {
@@ -1328,20 +1483,24 @@ export default function MapQuestMap({
             coords.push([points[i], points[i + 1]]);
           }
 
-          // Blue shadow for depth
-          const shadowLine = L.polyline(coords, {
-            color: '#1e40af',
-            weight: 11,
-            opacity: 0.4,
+          // Same white ribbon + accent as full route (replaces flat blue “shadow” only)
+          L.polyline(coords, {
+            color: '#000000',
+            weight: 13,
+            opacity: 0.1,
             lineCap: 'round',
             lineJoin: 'round',
-          });
-          highlightLayerRef.current.addLayer(shadowLine);
-
-          // Main highlighted segment - thick blue line
+          }).addTo(highlightLayerRef.current);
+          L.polyline(coords, {
+            color: '#ffffff',
+            weight: 11,
+            opacity: 0.98,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(highlightLayerRef.current);
           const highlightLine = L.polyline(coords, {
             color: accentColor,
-            weight: 8,
+            weight: 6,
             opacity: 1,
             lineCap: 'round',
             lineJoin: 'round',
@@ -1409,14 +1568,24 @@ export default function MapQuestMap({
           }
 
           const isSegmentHighlighted = highlightedSegment !== null;
-          const mainRouteColor = isSegmentHighlighted ? '#9CA3AF' : (routeColor || DEFAULT_ROUTE_BLUE);
+          const mainRouteColor = isSegmentHighlighted
+            ? '#9CA3AF'
+            : (routeColor || accentColor || DEFAULT_ROUTE_BLUE);
           const mainRouteOpacity = isSegmentHighlighted ? 0.5 : 0.9;
 
-          // Shadow
+          // Layer order (bottom → top): faint outer stroke, white ribbon, main route.
+          // Ribbon stays full strength when a segment is selected — only the center line dims.
           L.polyline(latLngs, {
             color: '#000000',
-            weight: 8,
-            opacity: isSegmentHighlighted ? 0.05 : 0.1,
+            weight: 13,
+            opacity: 0.1,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(routeLayerRef.current);
+          L.polyline(latLngs, {
+            color: '#ffffff',
+            weight: 11,
+            opacity: 0.98,
             lineCap: 'round',
             lineJoin: 'round',
           }).addTo(routeLayerRef.current);
@@ -1567,7 +1736,7 @@ export default function MapQuestMap({
       // routeCasingPane (z=380).  Light blue casing below so the path is faintly visible under traffic.
       // Core route tint — light blue so the route is identifiable under traffic
       L.polyline(latLngs, {
-        color: routeColor || DEFAULT_ROUTE_BLUE,
+        color: routeColor || accentColor || DEFAULT_ROUTE_BLUE,
         weight: 8,
         opacity: 0.3,
         lineCap: 'round',
@@ -1576,11 +1745,18 @@ export default function MapQuestMap({
         pane: 'routeCasingPane',
       }).addTo(routeLayerRef.current);
     } else {
-      // Shadow
+      // Bottom → top: outer stroke, white ribbon, then main line below
       L.polyline(latLngs, {
         color: '#000000',
-        weight: 8,
+        weight: 13,
         opacity: 0.1,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(routeLayerRef.current);
+      L.polyline(latLngs, {
+        color: '#ffffff',
+        weight: 11,
+        opacity: 0.98,
         lineCap: 'round',
         lineJoin: 'round',
       }).addTo(routeLayerRef.current);
@@ -1589,16 +1765,17 @@ export default function MapQuestMap({
     // Main route line (when traffic overlay is off, this is the primary visual;
     // when it's on, the traffic layer covers it so we use a faint blue casing plus
     // an invisible hit-detection line).
+    const lineBlue = routeColor || accentColor || DEFAULT_ROUTE_BLUE;
     const routeLine = showTraffic
       ? L.polyline(latLngs, {
-          color: routeColor || DEFAULT_ROUTE_BLUE,
+          color: lineBlue,
           weight: 18,
           opacity: 0,     // invisible – needed only for click/drag hit detection
           lineCap: 'round',
           lineJoin: 'round',
         }).addTo(routeLayerRef.current)
       : L.polyline(latLngs, {
-          color: routeColor || DEFAULT_ROUTE_BLUE,
+          color: lineBlue,
           weight: 5,
           opacity: 0.9,
           lineCap: 'round',

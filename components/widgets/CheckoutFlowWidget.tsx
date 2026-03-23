@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, Loader2, ShoppingBag, Lock, MapPin } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import { geocode } from '@/lib/mapquest';
 import { useAddressAutocomplete } from '@/hooks/useAddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
@@ -744,16 +745,7 @@ export default function CheckoutFlowWidget({
             {companyName && <span style={{ fontWeight: 600 }}>{companyName} · </span>}
             Powered by
           </span>
-          <img
-            src="/brand/mapquest-footer-light.svg"
-            alt="MapQuest"
-            className="prism-footer-logo prism-footer-logo--light"
-          />
-          <img
-            src="/brand/mapquest-footer-dark.svg"
-            alt="MapQuest"
-            className="prism-footer-logo prism-footer-logo--dark"
-          />
+          <MapQuestPoweredLogo darkMode={darkMode} />
         </div>
       )}
     </div>

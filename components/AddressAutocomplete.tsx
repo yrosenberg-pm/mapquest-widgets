@@ -21,6 +21,8 @@ interface AddressAutocompleteProps {
   iconClassName?: string;
   hideIcon?: boolean;
   readOnly?: boolean; // When true, disables autocomplete functionality
+  /** Increment to force-close suggestions (e.g. after applying a favorite). */
+  closeToken?: number;
 }
 
 export default function AddressAutocomplete({
@@ -39,6 +41,7 @@ export default function AddressAutocomplete({
   iconClassName = '',
   hideIcon = false,
   readOnly = false,
+  closeToken,
 }: AddressAutocompleteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const {
@@ -51,7 +54,7 @@ export default function AddressAutocomplete({
     closeDropdown,
     handleFocus,
     handleBlur,
-  } = useAddressAutocomplete(value, onChange, { onSelect, onEnter, disabled: readOnly });
+  } = useAddressAutocomplete(value, onChange, { onSelect, onEnter, disabled: readOnly, closeToken });
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

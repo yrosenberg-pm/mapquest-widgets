@@ -409,7 +409,31 @@
   display: block;
 }
 
-/* Footer logo variant switching based on widget theme */
+/* Official MapQuest wordmark (SVG: light = dark mark, dark theme = white mark — no chip) */
+.prism-footer-mq-brand {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  vertical-align: middle;
+}
+.prism-footer-mq-brand--inline {
+  vertical-align: middle;
+}
+.prism-footer-logo--mq-official {
+  height: 16.5375px;
+  width: auto;
+  max-width: min(123px, 29vw);
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+  opacity: 1;
+}
+.prism-footer-logo--mq-official-inline {
+  height: 9.9225px;
+  max-width: 86px;
+}
+
+/* Legacy dual SVG footer logos (kept for any stragglers) */
 .prism-footer-logo--dark {
   display: none;
   /* Render the provided dark-mode asset as-is (no filters) */

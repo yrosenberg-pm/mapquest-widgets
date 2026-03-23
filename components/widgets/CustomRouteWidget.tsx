@@ -5,6 +5,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { ArrowDown, ArrowUp, Loader2, Plus, RefreshCw, Trash2, ChevronDown, ChevronUp, Route } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
+import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
@@ -1064,16 +1065,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
           <span className="prism-footer-text" aria-label="Powered by MapQuest">
             Powered by
           </span>
-          <img
-            src="/brand/mapquest-footer-light.svg"
-            alt="MapQuest"
-            className="prism-footer-logo prism-footer-logo--light"
-          />
-          <img
-            src="/brand/mapquest-footer-dark.svg"
-            alt="MapQuest"
-            className="prism-footer-logo prism-footer-logo--dark"
-          />
+          <MapQuestPoweredLogo darkMode={isDark} />
         </div>
       )}
     </div>
@@ -1598,16 +1590,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
           <span className="prism-footer-text" aria-label="Powered by MapQuest">
             Powered by
           </span>
-          <img
-            src="/brand/mapquest-footer-light.svg"
-            alt="MapQuest"
-            className="prism-footer-logo prism-footer-logo--light"
-          />
-          <img
-            src="/brand/mapquest-footer-dark.svg"
-            alt="MapQuest"
-            className="prism-footer-logo prism-footer-logo--dark"
-          />
+          <MapQuestPoweredLogo darkMode={isDark} />
         </div>
       )}
     </div>
