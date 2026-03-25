@@ -1,7 +1,7 @@
 // components/widgets/MultiStopPlanner.tsx
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { 
   Plus, Trash2, GripVertical, Loader2, RotateCcw, Route, 
   Sparkles, Clock, Check, AlertTriangle, XCircle,
@@ -9,7 +9,8 @@ import {
   MapPin, Timer, TrendingDown, List, ArrowRight,
   Edit3, CornerDownRight, Waypoints, Calendar
 } from 'lucide-react';
-import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
+import { geocode, getDirections, reverseGeocode, searchPlaces } from '@/lib/mapquest';
+import { markerPinColorForIndex, numberedPinIconDataUri } from '@/lib/mapMarkerIcons';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -67,6 +68,12 @@ interface MultiStopPlannerProps {
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
+/** 1-based index of a stop in the full planner list (matches sidebar order). */
+function listStopSequenceNumber(allStops: Stop[], stop: Stop): number {
+  const i = allStops.findIndex((s) => s.id === stop.id);
+  return i >= 0 ? i + 1 : 0;
+}
+
 export default function MultiStopPlanner({
   accentColor = '#3B82F6',
   darkMode = false,
@@ -80,6 +87,8 @@ export default function MultiStopPlanner({
     { id: '1', address: '', duration: 0 },
     { id: '2', address: '', duration: 0 },
   ]);
+  const stopsRef = useRef(stops);
+  stopsRef.current = stops;
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
@@ -106,6 +115,9 @@ export default function MultiStopPlanner({
 
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const departurePickerRef = useRef<HTMLDivElement | null>(null);
+  const mapPanelRef = useRef<HTMLDivElement | null>(null);
+  const mapPinPromptRef = useRef<HTMLDivElement | null>(null);
+  const [mapPinPrompt, setMapPinPrompt] = useState<null | { x: number; y: number; lat: number; lng: number }>(null);
 
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
@@ -141,12 +153,92 @@ export default function MultiStopPlanner({
     return () => document.removeEventListener('mousedown', onDocMouseDown);
   }, [showMoreMenu, showDeparturePicker]);
 
+  useEffect(() => {
+    if (!mapPinPrompt) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (mapPinPromptRef.current && mapPinPromptRef.current.contains(target)) return;
+      setMapPinPrompt(null);
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [mapPinPrompt]);
+
   const addStop = () => {
     if (stops.length < maxStops) {
       setStops([...stops, { id: Date.now().toString(), address: '', duration: 0 }]);
       setRouteResult(null);
     }
   };
+
+  /** True if we can place a map pin: fill the next empty row, or append if there is room. */
+  const canPlaceStopFromMap = useCallback(
+    (list: Stop[]) =>
+      list.some((s) => s.lat == null || s.lng == null) || list.length < maxStops,
+    [maxStops]
+  );
+
+  const addStopAtLatLng = useCallback(
+    async (lat: number, lng: number) => {
+      if (!canPlaceStopFromMap(stopsRef.current)) {
+        setError('Maximum number of stops reached.');
+        return;
+      }
+      let useLat = lat;
+      let useLng = lng;
+      let address = '';
+      try {
+        const loc = await reverseGeocode(lat, lng);
+        if (loc) {
+          useLat = loc.lat ?? lat;
+          useLng = loc.lng ?? lng;
+          const street = String((loc as { street?: string }).street || '').trim();
+          const city = String((loc as { adminArea5?: string }).adminArea5 || '').trim();
+          const state = String((loc as { adminArea3?: string }).adminArea3 || '').trim();
+          const line2 = [city, state].filter(Boolean).join(', ');
+          address = [street, line2].filter(Boolean).join(', ').trim();
+        }
+      } catch {
+        /* keep coordinates fallback */
+      }
+      if (!address) address = `${useLat.toFixed(5)}, ${useLng.toFixed(5)}`;
+      setStops((prev) => {
+        if (!canPlaceStopFromMap(prev)) return prev;
+        const emptyIdx = prev.findIndex((s) => s.lat == null || s.lng == null);
+        if (emptyIdx !== -1) {
+          return prev.map((s, i) =>
+            i === emptyIdx
+              ? { ...s, address, lat: useLat, lng: useLng, geocoded: true }
+              : s
+          );
+        }
+        if (prev.length >= maxStops) return prev;
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        return [
+          ...prev,
+          { id, address, lat: useLat, lng: useLng, geocoded: true, duration: 0 },
+        ];
+      });
+      setRouteResult(null);
+      setError(null);
+    },
+    [maxStops, canPlaceStopFromMap]
+  );
+
+  const handleMapRightClick = useCallback(
+    (lat: number, lng: number, meta?: { clientX: number; clientY: number }) => {
+      if (!canPlaceStopFromMap(stopsRef.current)) {
+        setError('Maximum number of stops reached.');
+        return;
+      }
+      setError(null);
+      const rect = mapPanelRef.current?.getBoundingClientRect();
+      const x = rect ? (meta?.clientX ?? 0) - rect.left : 16;
+      const y = rect ? (meta?.clientY ?? 0) - rect.top : 16;
+      setMapPinPrompt({ x, y, lat, lng });
+    },
+    [canPlaceStopFromMap]
+  );
 
   const removeStop = (id: string) => {
     if (stops.length > 2) {
@@ -166,6 +258,7 @@ export default function MultiStopPlanner({
     setSidebarView('stops');
     setSegmentSettings({});
     setOpenWindowStopId(null);
+    setMapPinPrompt(null);
   };
 
   const updateStop = (id: string, address: string, lat?: number, lng?: number) => {
@@ -744,7 +837,14 @@ export default function MultiStopPlanner({
   const downloadRouteSheet = () => {
     if (!routeResult) return;
     const validStops = stops.filter(s => s.lat && s.lng);
-    const content = `ROUTE SHEET - ${new Date().toLocaleDateString()}\n${'='.repeat(40)}\n\nTotal: ${routeResult.totalDistance.toFixed(1)} mi | ${formatTime(routeResult.totalTime)}\n\nSTOPS:\n${validStops.map((s, i) => `${i + 1}. ${s.address}${s.eta ? ` (ETA: ${s.eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` : ''}`).join('\n')}\n\nLEGS:\n${routeResult.legs.map((l, i) => `${i + 1}. ${l.distance.toFixed(1)} mi, ${formatTime(l.time)}`).join('\n')}\n\nPowered by MapQuest`;
+    const content = `ROUTE SHEET - ${new Date().toLocaleDateString()}\n${'='.repeat(40)}\n\nTotal: ${routeResult.totalDistance.toFixed(1)} mi | ${formatTime(routeResult.totalTime)}\n\nSTOPS:\n${validStops.map((s) => {
+      const n = listStopSequenceNumber(stops, s);
+      return `${n}. ${s.address}${s.eta ? ` (ETA: ${s.eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` : ''}`;
+    }).join('\n')}\n\nLEGS:\n${routeResult.legs.map((l, i) => {
+      const fromN = validStops[i] ? listStopSequenceNumber(stops, validStops[i]) : i + 1;
+      const toN = validStops[i + 1] ? listStopSequenceNumber(stops, validStops[i + 1]) : i + 2;
+      return `${i + 1}. Stop ${fromN} → Stop ${toN}: ${l.distance.toFixed(1)} mi, ${formatTime(l.time)}`;
+    }).join('\n')}\n\nPowered by MapQuest`;
     const blob = new Blob([content], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -761,6 +861,7 @@ export default function MultiStopPlanner({
     setSidebarView('stops');
     setSegmentSettings({});
     setOpenWindowStopId(null);
+    setMapPinPrompt(null);
   };
 
   const formatTime = (minutes: number) => {
@@ -782,12 +883,23 @@ export default function MultiStopPlanner({
     ? { lat: validStops.reduce((sum, s) => sum + s.lat!, 0) / validStops.length, lng: validStops.reduce((sum, s) => sum + s.lng!, 0) / validStops.length }
     : { lat: 39.8283, lng: -98.5795 };
 
-  const markers = validStops.map((stop, index) => ({
-    lat: stop.lat!,
-    lng: stop.lng!,
-    label: `${index + 1}`,
-    color: index === 0 ? '#16A34A' : index === validStops.length - 1 ? '#DC2626' : (darkMode ? '#6b7280' : '#4b5563'),
-  }));
+  const markers = stops
+    .map((stop, index) => ({ stop, index }))
+    .filter(({ stop }) => stop.lat && stop.lng)
+    .map(({ stop, index }) => {
+      const pinColor = markerPinColorForIndex(index, stops.length);
+      const seq = String(index + 1);
+      return {
+        lat: stop.lat!,
+        lng: stop.lng!,
+        label: stop.address?.trim() || `Stop ${seq}`,
+        iconUrl: numberedPinIconDataUri({ label: seq, color: pinColor }),
+        iconSize: [28, 36] as [number, number],
+        iconAnchor: [14, 36] as [number, number],
+        iconCircular: false,
+        color: pinColor,
+      };
+    });
 
   const routeWaypoints = validStops.length > 2 
     ? validStops.slice(1, -1).map(s => ({ lat: s.lat!, lng: s.lng! }))
@@ -804,14 +916,14 @@ export default function MultiStopPlanner({
     >
       <WidgetHeader
         title="Multi-Stop Planner"
-        subtitle="Build, optimize, and share multi-stop routes."
+        subtitle="Build, optimize, and share multi-stop routes. Right-click the map for the option to add a stop."
         variant="impressive"
         layout="inline"
         icon={<Route className="w-4.5 h-4.5" />}
       />
       <div className="flex flex-col md:flex-row md:h-[715px]">
         {/* Map - shown first on mobile */}
-        <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
+        <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2" ref={mapPanelRef}>
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
@@ -826,7 +938,49 @@ export default function MultiStopPlanner({
             waypoints={routeResult ? routeWaypoints : []}
             highlightedSegment={highlightedSegment}
             stops={validStops.map(s => ({ lat: s.lat!, lng: s.lng! }))}
+            onRightClick={handleMapRightClick}
           />
+
+          {mapPinPrompt ? (
+            <div
+              ref={mapPinPromptRef}
+              className="absolute z-[650] rounded-xl border shadow-lg overflow-hidden max-w-[min(280px,calc(100%-16px))]"
+              style={{
+                left: Math.max(8, mapPinPrompt.x),
+                top: Math.max(8, mapPinPrompt.y),
+                borderColor: 'var(--border-subtle)',
+                background: 'var(--bg-panel)',
+                color: 'var(--text-main)',
+              }}
+            >
+              <div className="px-3 py-2 text-xs font-semibold" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                Add a stop here?
+              </div>
+              <div className="p-2 flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm hover:opacity-80"
+                  style={{ borderColor: 'var(--border-subtle)', background: 'transparent', color: 'var(--text-main)' }}
+                  onClick={async () => {
+                    if (!mapPinPrompt) return;
+                    const { lat, lng } = mapPinPrompt;
+                    setMapPinPrompt(null);
+                    await addStopAtLatLng(lat, lng);
+                  }}
+                >
+                  Add pin
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg px-3 py-2 text-xs font-semibold hover:opacity-80"
+                  style={{ color: 'var(--text-muted)' }}
+                  onClick={() => setMapPinPrompt(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
           
           {/* Optimizing Map Overlay */}
           {optimizing && (
@@ -912,6 +1066,17 @@ export default function MultiStopPlanner({
                 Summary
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={clearAllStops}
+              title="Clear all stops"
+              aria-label="Clear all stops"
+              className="p-2 rounded-lg transition-colors hover:bg-black/5 flex-shrink-0"
+              style={{ color: 'var(--color-error)' }}
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
 
             {/* More Menu */}
             <div className="relative flex-shrink-0" ref={moreMenuRef}>
@@ -1184,7 +1349,10 @@ export default function MultiStopPlanner({
                     {/* Editable Segments List */}
                     <div className="space-y-2">
                       {routeResult.legs.map((leg, index) => {
+                        const fromStop = validStops[index];
                         const toStop = validStops[index + 1];
+                        const fromSeq = fromStop ? listStopSequenceNumber(stops, fromStop) : index + 1;
+                        const toSeq = toStop ? listStopSequenceNumber(stops, toStop) : index + 2;
                         const defaultSettings = { 
                           routeType: 'fastest' as const, 
                           avoidHighways: false, 
@@ -1229,7 +1397,7 @@ export default function MultiStopPlanner({
                                     boxShadow: isHighlighted ? `0 2px 8px ${accentColor}50` : 'none',
                                   }}
                                 >
-                                  {index + 1}
+                                  {fromSeq}
                                 </div>
                                 <CornerDownRight className="w-3 h-3" style={{ color: isHighlighted ? accentColor : 'var(--text-muted)' }} />
                                 <div 
@@ -1241,10 +1409,10 @@ export default function MultiStopPlanner({
                                     boxShadow: isHighlighted ? `0 2px 8px ${accentColor}50` : 'none',
                                   }}
                                 >
-                                  {index + 2}
+                                  {toSeq}
                                 </div>
                                 <span className="text-xs font-semibold" style={{ color: isHighlighted ? accentColor : 'var(--text-main)' }}>
-                                  Segment {index + 1}
+                                  Stop {fromSeq} → {toSeq}
                                 </span>
                                 {isHighlighted && (
                                   <span 
@@ -1265,7 +1433,7 @@ export default function MultiStopPlanner({
                                 style={{ background: 'var(--bg-panel)' }}
                               >
                                 <p className="text-[10px] font-medium mb-0.5" style={{ color: 'var(--text-muted)' }}>
-                                  Destination (Stop {index + 2})
+                                  Destination (Stop {toSeq})
                                 </p>
                                 <p className="text-[11px] truncate" style={{ color: 'var(--text-main)' }} title={leg.to}>
                                   {leg.to}

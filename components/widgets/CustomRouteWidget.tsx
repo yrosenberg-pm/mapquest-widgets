@@ -9,6 +9,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
+import { stopDotIconDataUri, waypointIconDataUri } from '@/lib/mapMarkerIcons';
 
 export interface Waypoint {
   lat: number;
@@ -339,32 +340,6 @@ function pointsFromShape(shapePoints?: number[]) {
     if (Number.isFinite(lat) && Number.isFinite(lng)) pts.push({ lat, lng });
   }
   return pts;
-}
-
-function svgDataUri(svg: string) {
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function waypointIconDataUri(opts: { label: string; color: string }) {
-  const label = (opts.label || '').slice(0, 3);
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
-      <circle cx="18" cy="18" r="15.5" fill="${opts.color}" stroke="white" stroke-width="3"/>
-      <text x="18" y="19.5" text-anchor="middle" dominant-baseline="middle"
-            font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
-            font-size="14" font-weight="800" fill="white">${label}</text>
-    </svg>
-  `.trim();
-  return svgDataUri(svg);
-}
-
-function stopDotIconDataUri(opts: { color: string }) {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="8.5" fill="${opts.color}" opacity="0.35" stroke="white" stroke-width="2" />
-    </svg>
-  `.trim();
-  return svgDataUri(svg);
 }
 
 function bboxToFitBounds(bbox?: { ul?: { lat: number; lng: number }; lr?: { lat: number; lng: number } }) {

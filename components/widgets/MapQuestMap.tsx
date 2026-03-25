@@ -252,6 +252,8 @@ export default function MapQuestMap({
   const driverLayerRef = useRef<any>(null);
   const truckRestrictionsLayerRef = useRef<any>(null);
   const mapIdRef = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
+  const onRightClickRef = useRef(onRightClick);
+  onRightClickRef.current = onRightClick;
   const [mapReady, setMapReady] = useState(false);
   const [viewRevision, setViewRevision] = useState(0);
 
@@ -654,18 +656,20 @@ export default function MapQuestMap({
         });
       }
 
-      if (onRightClick) {
-        // Leaflet uses `contextmenu` for right-click / long-press context menu.
-        map.on('contextmenu', (e: any) => {
-          try {
-            const oe = e?.originalEvent;
-            onRightClick(e.latlng.lat, e.latlng.lng, {
-              clientX: typeof oe?.clientX === 'number' ? oe.clientX : 0,
-              clientY: typeof oe?.clientY === 'number' ? oe.clientY : 0,
-            });
-          } catch (_) {}
-        });
-      }
+      // Leaflet uses `contextmenu` for right-click / long-press. Ref keeps latest callback
+      // without re-initing the map (init effect deps are only [apiKey]).
+      map.on('contextmenu', (e: any) => {
+        const fn = onRightClickRef.current;
+        if (!fn) return;
+        try {
+          e.originalEvent?.preventDefault?.();
+          const oe = e?.originalEvent;
+          fn(e.latlng.lat, e.latlng.lng, {
+            clientX: typeof oe?.clientX === 'number' ? oe.clientX : 0,
+            clientY: typeof oe?.clientY === 'number' ? oe.clientY : 0,
+          });
+        } catch (_) {}
+      });
 
       // Notify parent of bounds changes (for viewport-based filtering)
       if (onBoundsChange) {
