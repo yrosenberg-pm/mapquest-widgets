@@ -210,8 +210,11 @@ body {
   animation: street-view-toast-in 0.22s ease-out both;
 }
 
-/* Neighborhood Score: drop zoom + street view control so the street view panel close
-   control does not sit on the same line as the camera chip / zoom buttons. */
+/* Neighborhood Score: nudge map zoom when street view panel (top bar) is open — class toggled in NeighborhoodScore. */
 .neighborhood-score-map .leaflet-top.leaflet-left {
+  top: 0;
+  transition: top 0.2s ease;
+}
+.neighborhood-score-map--streetview-active .leaflet-top.leaflet-left {
   top: 50px;
 }

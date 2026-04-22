@@ -1011,7 +1011,9 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         {/* Map + Chat overlay - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
-            className="neighborhood-score-map h-full min-h-0 w-full"
+            className={`neighborhood-score-map h-full min-h-0 w-full${
+              streetViewImageId ? ' neighborhood-score-map--streetview-active' : ''
+            }`}
             apiKey={apiKey}
             center={mapCenter}
             zoom={location ? 14 : 4}
@@ -1109,7 +1111,11 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
           {/* Draggable: drop camera on map to open street view */}
           <div
             className="absolute right-3 z-[900] flex select-none items-center gap-2"
-            style={{ top: 'calc(0.75rem + 50px)', pointerEvents: 'auto' }}
+            style={{
+              top: streetViewImageId ? 'calc(0.75rem + 50px)' : '0.75rem',
+              pointerEvents: 'auto',
+              transition: 'top 0.2s ease',
+            }}
           >
             <div
               draggable
