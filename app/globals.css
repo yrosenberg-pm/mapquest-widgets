@@ -193,3 +193,25 @@ body {
 .directions-transit-bar-segment--breathing {
   animation: directions-transit-bar-focus 2.75s ease-in-out infinite;
 }
+
+/* Neighborhood street view — bottom feedback toast */
+@keyframes street-view-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.street-view-toast-enter {
+  animation: street-view-toast-in 0.22s ease-out both;
+}
+
+/* Neighborhood Score: drop zoom + street view control so the street view panel close
+   control does not sit on the same line as the camera chip / zoom buttons. */
+.neighborhood-score-map .leaflet-top.leaflet-left {
+  top: 50px;
+}

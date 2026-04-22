@@ -13,6 +13,7 @@
     "@google/genai": "^1.42.0",
     "@turf/turf": "^7.3.3",
     "lucide-react": "^0.559.0",
+    "mapillary-js": "^4.1.2",
     "next": "16.0.8",
     "openai": "^6.25.0",
     "react": "19.2.1",

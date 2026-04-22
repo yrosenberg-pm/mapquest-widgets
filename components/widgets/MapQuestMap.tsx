@@ -90,6 +90,8 @@ interface MapQuestMapProps {
   routeSegments?: RouteSegment[]; // Pre-calculated colored segments (e.g., congestion along route)
   transitSegments?: TransitSegment[]; // For multi-segment transit routes with different line styles
   onClick?: (lat: number, lng: number) => void;
+  /** HTML5 drop on map: lat/lng at drop point (e.g. drag a control onto the map). */
+  onMapDrop?: (lat: number, lng: number) => void;
   onRightClick?: (lat: number, lng: number, meta?: { clientX: number; clientY: number }) => void;
   onRouteLineClick?: (lat: number, lng: number) => void;
   // Drag the route line to "shape" the route by dropping a waypoint on release.
@@ -223,6 +225,7 @@ export default function MapQuestMap({
   routeSegments,
   transitSegments,
   onClick,
+  onMapDrop,
   onRightClick,
   onRouteLineClick,
   onRouteLineDrag,
@@ -252,8 +255,12 @@ export default function MapQuestMap({
   const driverLayerRef = useRef<any>(null);
   const truckRestrictionsLayerRef = useRef<any>(null);
   const mapIdRef = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
+  /** Only auto-fit to polygons when their combined bounds change — not on unrelated re-renders. */
+  const polygonAutoFitKeyRef = useRef<string>('');
   const onRightClickRef = useRef(onRightClick);
   onRightClickRef.current = onRightClick;
+  const onMapDropRef = useRef(onMapDrop);
+  onMapDropRef.current = onMapDrop;
   const [mapReady, setMapReady] = useState(false);
   const [viewRevision, setViewRevision] = useState(0);
 
@@ -714,6 +721,41 @@ export default function MapQuestMap({
     };
   }, [apiKey]); // Only depend on apiKey - map should initialize once
 
+  // HTML5 drag-and-drop onto the map (lat/lng at cursor). Ref keeps latest callback.
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    const L = window.L;
+    if (!L) return;
+    const el = map.getContainer() as HTMLDivElement;
+    const onDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    };
+    const onDrop = (e: DragEvent) => {
+      const fn = onMapDropRef.current;
+      if (!fn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        const rect = el.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const latlng = map.containerPointToLatLng(L.point(x, y));
+        if (!latlng) return;
+        fn(latlng.lat, latlng.lng);
+      } catch {
+        /* ignore */
+      }
+    };
+    el.addEventListener('dragover', onDragOver);
+    el.addEventListener('drop', onDrop);
+    return () => {
+      el.removeEventListener('dragover', onDragOver);
+      el.removeEventListener('drop', onDrop);
+    };
+  }, [mapReady]);
+
   // Track tile layer reference
   const tileLayerRef = useRef<any>(null);
 
@@ -1159,9 +1201,17 @@ export default function MapQuestMap({
 
     // Fit bounds to show all polygons (if any). If fitBounds prop is set, that still takes precedence elsewhere.
     if (mapRef.current && combinedBounds && !fitBounds && !skipPolygonFitBounds) {
-      mapRef.current.fitBounds(combinedBounds, { padding: [30, 30] });
+      const sw = combinedBounds.getSouthWest();
+      const ne = combinedBounds.getNorthEast();
+      const key = `${polygons.length}|${sw.lat.toFixed(6)},${sw.lng.toFixed(6)},${ne.lat.toFixed(6)},${ne.lng.toFixed(6)}`;
+      if (key !== polygonAutoFitKeyRef.current) {
+        polygonAutoFitKeyRef.current = key;
+        mapRef.current.fitBounds(combinedBounds, { padding: [30, 30] });
+      }
+    } else if (!polygons || polygons.length === 0) {
+      polygonAutoFitKeyRef.current = '';
     }
-  }, [polygons, accentColor, mapReady, skipPolygonFitBounds]);
+  }, [polygons, accentColor, mapReady, skipPolygonFitBounds, fitBounds]);
 
   // Update polylines (generic overlay lines: closures, highlights, etc.)
   useEffect(() => {

@@ -1,16 +1,18 @@
 // components/widgets/NeighborhoodScore.tsx
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { 
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
   Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft,
-  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase, BatteryCharging, Bike, Car
+  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase, BatteryCharging, Bike, Car,
+  Camera,
 } from 'lucide-react';
 import { geocode, searchPlaces, getDirections } from '@/lib/mapquest';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import MapQuestMap from './MapQuestMap';
+import MapillaryViewerPanel from '../MapillaryViewerPanel';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
@@ -284,7 +286,44 @@ export default function NeighborhoodScore({
   const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
   const [mapZoom, setMapZoom] = useState(14);
+  const [streetViewImageId, setStreetViewImageId] = useState<string | null>(null);
+  const [streetViewLoading, setStreetViewLoading] = useState(false);
+  const [streetViewMsg, setStreetViewMsg] = useState<string | null>(null);
+  const streetViewDragImageRef = useRef<HTMLDivElement>(null);
+  const MIN_STREET_VIEW_ZOOM = 16;
   const handleMapBoundsChange = useCallback((b: { zoom: number }) => setMapZoom(b.zoom), []);
+
+  const handleMapillaryDrop = useCallback(
+    async (lat: number, lng: number) => {
+      setStreetViewMsg(null);
+      setStreetViewImageId(null);
+      if (mapZoom < MIN_STREET_VIEW_ZOOM) {
+        setStreetViewMsg('Zoom in closer on the map, then drop street view on a spot you care about.');
+        return;
+      }
+      setStreetViewLoading(true);
+      try {
+        const r = await fetch(
+          `/api/mapillary/nearest?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`
+        );
+        const j = (await r.json()) as { imageId?: string; error?: string };
+        if (!r.ok) {
+          if (r.status === 404 || j.error === 'no_coverage') {
+            setStreetViewMsg('No street-level photos here — try a nearby road.');
+          } else {
+            setStreetViewMsg(j.error || 'Could not find street view');
+          }
+          return;
+        }
+        if (j.imageId) setStreetViewImageId(j.imageId);
+      } catch {
+        setStreetViewMsg('Could not load street view');
+      } finally {
+        setStreetViewLoading(false);
+      }
+    },
+    [mapZoom]
+  );
   const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   // Walkability isoline state
@@ -332,6 +371,12 @@ export default function NeighborhoodScore({
       setTimeout(() => chatInputRef.current?.focus(), 150);
     }
   }, [chatOpen]);
+
+  useEffect(() => {
+    if (!streetViewMsg) return;
+    const t = setTimeout(() => setStreetViewMsg(null), 5000);
+    return () => clearTimeout(t);
+  }, [streetViewMsg]);
 
   const sendChatMessage = useCallback(async (text?: string) => {
     const msg = text ?? chatInput.trim();
@@ -921,6 +966,31 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
   const mapCenter = location || { lat: 39.8283, lng: -98.5795 };
 
+  /** Stable reference so MapQuestMap does not re-fit the map on every render (which blocked zooming). */
+  const mapPolygons = useMemo(
+    () => [
+      ...(boundaryPolygon
+        ? [
+            {
+              coordinates: boundaryPolygon,
+              color: accentColor,
+              fillOpacity: 0.08,
+              strokeWidth: 2,
+            },
+          ]
+        : []),
+      ...(showWalkability
+        ? walkabilityPolygons.map((p) => ({
+            coordinates: p.coordinates,
+            color: p.color,
+            fillOpacity: 0.12,
+            strokeWidth: 2,
+          }))
+        : []),
+    ],
+    [boundaryPolygon, accentColor, showWalkability, walkabilityPolygons]
+  );
+
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
@@ -941,6 +1011,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         {/* Map + Chat overlay - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
+            className="neighborhood-score-map h-full min-h-0 w-full"
             apiKey={apiKey}
             center={mapCenter}
             zoom={location ? 14 : 4}
@@ -1011,25 +1082,108 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
               return markers;
             })()}
-            polygons={[
-              ...(boundaryPolygon ? [{
-                coordinates: boundaryPolygon,
-                color: accentColor,
-                fillOpacity: 0.08,
-                strokeWidth: 2,
-              }] : []),
-              ...(showWalkability ? walkabilityPolygons.map(p => ({
-                coordinates: p.coordinates,
-                color: p.color,
-                fillOpacity: 0.12,
-                strokeWidth: 2,
-              })) : []),
-            ]}
+            polygons={mapPolygons}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
             mapType={mapZoom >= 18 ? 'hybrid' : undefined}
             onBoundsChange={handleMapBoundsChange}
+            onMapDrop={handleMapillaryDrop}
           />
+
+          {/* Hidden element used as HTML5 drag image (camera only) */}
+          <div
+            ref={streetViewDragImageRef}
+            className="fixed w-10 h-10 flex items-center justify-center rounded-full shadow-lg"
+            style={{
+              left: -9999,
+              top: 0,
+              background: bgWidget,
+              border: `2px solid ${accentColor}`,
+              pointerEvents: 'none',
+            }}
+            aria-hidden
+          >
+            <Camera className="w-5 h-5" style={{ color: accentColor }} />
+          </div>
+
+          {/* Draggable: drop camera on map to open street view */}
+          <div
+            className="absolute right-3 z-[900] flex select-none items-center gap-2"
+            style={{ top: 'calc(0.75rem + 50px)', pointerEvents: 'auto' }}
+          >
+            <div
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', 'street-view');
+                e.dataTransfer.effectAllowed = 'copy';
+                const ghost = streetViewDragImageRef.current;
+                if (ghost) {
+                  e.dataTransfer.setDragImage(ghost, 20, 20);
+                }
+              }}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl shadow-lg cursor-grab active:cursor-grabbing"
+              style={{
+                background: bgWidget,
+                border: `1px solid ${border}`,
+                color: textMain,
+              }}
+              title="Drag the camera onto the map to open street-level imagery"
+            >
+              <Camera className="w-4 h-4" style={{ color: accentColor }} />
+            </div>
+            <span
+              className="text-xs font-semibold max-w-[7rem] rounded-lg px-2.5 py-1.5 leading-tight shadow-md"
+              style={{
+                color: textMain,
+                background: bgWidget,
+                border: `1px solid ${border}`,
+                backdropFilter: 'blur(8px)',
+              }}
+            >
+              Street view
+            </span>
+          </div>
+
+          {streetViewLoading && (
+            <div
+              className="absolute inset-0 z-[750] flex items-center justify-center"
+              style={{ background: 'rgba(0,0,0,0.35)', pointerEvents: 'auto' }}
+            >
+              <div
+                className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
+                style={{ background: bgWidget, border: `1px solid ${border}`, color: textMain }}
+              >
+                <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />
+                Finding street view…
+              </div>
+            </div>
+          )}
+
+          {streetViewMsg && !streetViewImageId && !streetViewLoading && (
+            <div
+              className="street-view-toast-enter absolute bottom-5 left-1/2 z-[920] w-[min(100%,20rem)] rounded-2xl px-4 py-3 text-center text-sm leading-snug shadow-lg"
+              style={{
+                background: bgWidget,
+                border: `1px solid ${border}`,
+                color: textMain,
+                boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+              }}
+            >
+              {streetViewMsg}
+            </div>
+          )}
+
+          {streetViewImageId && (
+            <MapillaryViewerPanel
+              imageId={streetViewImageId}
+              accentColor={accentColor}
+              darkMode={darkMode}
+              onClose={() => {
+                setStreetViewImageId(null);
+                setStreetViewMsg(null);
+              }}
+            />
+          )}
 
           {/* Chat overlay — bottom-right of map */}
           <div className="absolute bottom-3 right-3 z-[1000]" style={{ pointerEvents: 'auto' }}>
