@@ -33,6 +33,22 @@ The widget is rendered by the Next route:
 
 - `GET /embed/traffic?apiKey=...&centerLat=...&centerLng=...`
 
+## Mapillary Street View showcase (demo widget)
+
+Internal sales/marketing embed that combines **MapQuest** (map, autosuggest, geocoding) with **Mapillary** street view (`mapillary-js`).
+
+- **Demo page:** [http://localhost:3000/embed/streetview-showcase](http://localhost:3000/embed/streetview-showcase) (optional: `?apiKey=...&darkMode=1&accentColor=...`)
+- **Component:** `MapillaryStreetViewShowcase` from `@/components/widgets` (see `MapillaryStreetViewShowcase.tsx`)
+
+**Environment variables**
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_MAPQUEST_API_KEY` | Map tiles + `/api/mapquest` (autosuggest, geocoding) |
+| `NEXT_PUBLIC_MAPILLARY_ACCESS_TOKEN` | Mapillary Graph API + `mapillary-js` viewer in the **browser** |
+
+Copy `.env.example` to `.env.local` and set both. Without the Mapillary token, the right-hand panel shows a configuration message.
+
 ## Development
 
 ```bash

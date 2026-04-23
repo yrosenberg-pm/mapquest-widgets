@@ -31,6 +31,7 @@ import {
   PropertyIntelligence,
   NeighborhoodProfile,
   ComparableSalesMap,
+  MapillaryStreetViewShowcase,
 } from '@/components/widgets';
 
 const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -61,6 +62,7 @@ const VALID_WIDGETS = [
   'property-intel',
   'neighborhood-profile',
   'comp-sales',
+  'streetview-showcase',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -311,6 +313,19 @@ export default function WidgetPage() {
         return <NeighborhoodProfile {...commonProps} />;
       case 'comp-sales':
         return <ComparableSalesMap {...commonProps} />;
+      case 'streetview-showcase':
+        return (
+          <MapillaryStreetViewShowcase
+            mapquestApiKey={effectiveApiKey}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            fontFamily={fontFamily}
+            borderRadius={borderRadius}
+            showBranding={showBranding}
+            companyName={companyName || undefined}
+            companyLogo={companyLogo || undefined}
+          />
+        );
       default:
         return null;
     }

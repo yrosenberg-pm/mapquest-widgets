@@ -218,3 +218,22 @@ body {
 .neighborhood-score-map--streetview-active .leaflet-top.leaflet-left {
   top: 50px;
 }
+
+/* Street View widget: search floats left; zoom control top-right (clears the search bar) */
+.streetview-showcase-map .leaflet-top.leaflet-left {
+  left: auto;
+  right: 12px;
+  top: 12px;
+  transition: top 0.2s ease, right 0.2s ease;
+}
+
+/* Mapillary host: WebGL canvas gets drags; avoid CSS that blurs/upscales badly */
+.mapillary-streetview-host,
+.mapillary-streetview-host canvas {
+  touch-action: none;
+  pointer-events: auto;
+  image-rendering: auto;
+}
+.mapillary-streetview-host {
+  isolation: isolate;
+}

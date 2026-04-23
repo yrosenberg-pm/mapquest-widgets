@@ -100,7 +100,9 @@ export default function AddressAutocomplete({
 
       {/* Suggestions Dropdown */}
       {isOpen && suggestions.length > 0 && (
-        <div className={`absolute z-[100] w-full mt-1 ${darkMode ? 'bg-gray-800' : 'bg-white'} border ${border} rounded-lg shadow-lg max-h-60 overflow-y-auto`}>
+        <div
+          className={`absolute z-[2000] w-full mt-1 ${darkMode ? 'bg-gray-800' : 'bg-white'} border ${border} rounded-lg shadow-lg max-h-60 overflow-y-auto`}
+        >
           {suggestions.map((suggestion, index) => {
             const addressResult = {
               displayString: suggestion.displayString || suggestion.name || '',

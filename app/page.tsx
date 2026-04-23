@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, DollarSign, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, DollarSign, User, LucideIcon } from 'lucide-react';
 import {
   StarbucksFinder,
   CitiBikeFinder,
@@ -31,6 +31,7 @@ import {
   PropertyIntelligence,
   NeighborhoodProfile,
   ComparableSalesMap,
+  MapillaryStreetViewShowcase,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 
@@ -61,7 +62,8 @@ type WidgetId =
   | 'zone-coverage'
   | 'property-intel'
   | 'neighborhood-profile'
-  | 'comp-sales';
+  | 'comp-sales'
+  | 'streetview-showcase';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
 const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike']);
@@ -82,6 +84,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   // — Other widgets ———————————————————————————————————————————
   { id: 'zone-coverage' as WidgetId, name: 'Coverage Zone Builder', description: 'Multi-zone boundary visualization tool', section: 'other', menuLucide: Layers },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
+  { id: 'streetview-showcase' as WidgetId, name: 'Street View', description: 'Street View Image Widget', section: 'other', menuLucide: User },
   { id: 'delivery' as WidgetId, name: 'Delivery ETA', description: 'Real-time delivery tracking and estimates', section: 'other', menuLucide: Package },
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', section: 'other', menuLucide: ShoppingBag },
   { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', section: 'other', menuLucide: BatteryCharging },
@@ -246,8 +249,11 @@ function HomeContent() {
       const isBigWidget = false; // All widgets now render at 1:1 scale
       const cap = isTablet ? 0.56 : isLargeDesktop && isBigWidget ? 0.9 : 1;
       const nextScale = Math.min(cap, availableWidth / naturalWidth);
-      setWidgetScale(nextScale);
-      setScaledHeight(Math.round(naturalHeight * nextScale));
+      // Street View only: present ~20% smaller (layout max-width is still full-column when selected).
+      const isStreetView = activeWidget === 'streetview-showcase';
+      const displayScale = nextScale * (isStreetView ? 0.8 : 1);
+      setWidgetScale(displayScale);
+      setScaledHeight(Math.round(naturalHeight * displayScale));
     };
 
     // Run after layout
@@ -263,8 +269,6 @@ function HomeContent() {
       ro?.disconnect();
     };
   }, [activeWidget, sidebarHidden, darkMode, accentColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo]);
-
-  const currentWidget = WIDGETS.find(w => w.id === activeWidget);
 
   const handleWidgetSelect = (widgetId: WidgetId) => {
     setActiveWidget(widgetId);
@@ -460,6 +464,19 @@ function HomeContent() {
         );
       case 'neighborhood':
         return <NeighborhoodScore {...commonProps} />;
+      case 'streetview-showcase':
+        return (
+          <MapillaryStreetViewShowcase
+            mapquestApiKey={API_KEY}
+            darkMode={darkMode}
+            accentColor={accentColor}
+            fontFamily={fontFamily}
+            borderRadius={borderRadius}
+            showBranding={brandingMode !== 'whitelabel'}
+            companyName={brandingMode === 'cobranded' ? companyName : undefined}
+            companyLogo={brandingMode === 'cobranded' ? companyLogo : undefined}
+          />
+        );
       case 'multistop':
         return <MultiStopPlanner {...commonProps} />;
       case 'delivery':
@@ -490,6 +507,9 @@ function HomeContent() {
         return null;
     }
   };
+
+  // Street View is the only widget that should use a full-width measure box; others keep fit-content (intrinsic size).
+  const isStreetViewPlayground = activeWidget === 'streetview-showcase';
 
   // Embed mode: show only the widget without header/menu
   if (embedMode) {
@@ -762,25 +782,16 @@ function HomeContent() {
       {/* Main */}
       <div className="flex-1 min-w-0">
         <div className="p-2 md:p-6">
-          <div className="max-w-[1600px] mx-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3 min-w-0">
-                {/* Menu button: mobile drawer only (desktop uses the sticky left tab when hidden) */}
-                <button
-                  className="md:hidden p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
-                  onClick={() => setSidebarMobileOpen(true)}
-                  title="Open widget menu"
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-gray-900 truncate">{currentWidget?.name}</div>
-                  <div className="text-xs text-gray-500 truncate">{currentWidget?.description}</div>
-                </div>
-              </div>
-
-              {/* Right Controls */}
+          <div className="max-w-[min(100%,2400px)] mx-auto">
+            {/* Header: toolbar only (no widget title in the canvas) */}
+            <div className="mb-6 flex w-full items-center justify-end gap-2">
+              <button
+                className="mr-auto md:hidden p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
+                onClick={() => setSidebarMobileOpen(true)}
+                title="Open widget menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
               <div className="flex items-center gap-2">
                 <button
                   onClick={copyPermalink}
@@ -818,16 +829,20 @@ function HomeContent() {
             </div>
 
             {/* Widget Display (auto-scales on iPad/tablet to prevent clipping) */}
-            <div className="flex flex-col items-center w-full relative z-10" ref={widgetViewportRef}>
+            <div className="relative z-10 flex w-full justify-center" ref={widgetViewportRef}>
               <div
-                className="w-full relative"
+                className="relative w-full"
                 style={{
                   height: scaledHeight != null ? `${scaledHeight}px` : undefined,
                   transition: 'height 180ms ease',
                 }}
               >
                 <div
-                  className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
+                  className={
+                    isStreetViewPlayground
+                      ? 'w-full max-w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl'
+                      : 'w-full max-w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl md:w-auto'
+                  }
                   ref={widgetMeasureRef}
                   style={{
                     position: 'absolute',
@@ -836,7 +851,8 @@ function HomeContent() {
                     transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
                     transformOrigin: 'top center',
                     transition: 'transform 180ms ease',
-                    width: 'fit-content',
+                    width: isStreetViewPlayground ? '100%' : 'fit-content',
+                    maxWidth: '100%',
                   }}
                 >
                   {renderWidget()}

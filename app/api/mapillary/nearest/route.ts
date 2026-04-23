@@ -51,7 +51,7 @@ function pickNearestId(images: ImageItem[], targetLat: number, targetLng: number
 const IMAGE_FIELDS = 'id,geometry,computed_geometry';
 
 /**
- * Find a Mapillary image id near a point. Uses API radius search (up to 25m), then
+ * Find a Mapillary image id near a point. Uses API radius search (max 50m), then
  * progressively larger bboxes (still under 0.01° per side) and always returns the
  * geographically nearest image, not the first in the list.
  * @see https://www.mapillary.com/developer/api-documentation
@@ -76,14 +76,14 @@ export async function GET(request: NextRequest) {
 
   const parseImages = (data: { data?: ImageItem[] }) => data?.data ?? [];
 
-  // 1) Radius search: API max radius is 25m — request many candidates, pick nearest.
+  // 1) Radius search: API requires radius <= 50m — request many candidates, pick nearest.
   const tryRadius = async () => {
     const url = new URL(`${GRAPH}/images`);
     url.searchParams.set('access_token', token);
     url.searchParams.set('fields', IMAGE_FIELDS);
     url.searchParams.set('lat', String(lat));
     url.searchParams.set('lng', String(lng));
-    url.searchParams.set('radius', '25');
+    url.searchParams.set('radius', '50');
     url.searchParams.set('limit', '50');
     const res = await fetch(url.toString(), { headers });
     if (!res.ok) {

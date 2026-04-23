@@ -8,6 +8,7 @@ export { default as InstacartDeliveryETA } from './InstacartDeliveryETA';
 export { default as DirectionsEmbed } from './DirectionsEmbed';
 
 export { default as NeighborhoodScore } from './NeighborhoodScore';
+export { default as MapillaryStreetViewShowcase } from './MapillaryStreetViewShowcase';
 export { default as MultiStopPlanner } from './MultiStopPlanner';
 export { default as DeliveryETA } from './DeliveryETA';
 export { default as CommuteTimeCalculator } from './CommuteTimeCalculator';
