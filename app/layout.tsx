@@ -9,6 +9,10 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'MapQuest Widgets',
   description: 'White-label embeddable widgets powered by MapQuest',
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    shortcut: ['/icon.svg'],
+  },
 };
 
 export default function RootLayout({
@@ -19,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link
           rel="stylesheet"
           href="https://api.mqcdn.com/sdk/mapquest-js/v1.3.2/mapquest.css"
