@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { setApiKey } from '@/lib/mapquest';
+import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 import { 
   StarbucksFinder,
   CitiBikeFinder,
@@ -75,7 +76,7 @@ export default function WidgetPage() {
   const [darkMode, setDarkMode] = useState(false);
   const [accentColor, setAccentColor] = useState('#2563eb');
   const [fontFamily, setFontFamily] = useState('system-ui, -apple-system, sans-serif');
-  const [borderRadius, setBorderRadius] = useState('0.5rem');
+  const [borderRadius, setBorderRadius] = useState('16px');
   const [showBranding, setShowBranding] = useState(true);
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
@@ -331,6 +332,8 @@ export default function WidgetPage() {
     }
   };
 
+  const isStreetViewRoute = widgetId === 'streetview-showcase';
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
       <div className="w-full flex justify-center" ref={widgetViewportRef}>
@@ -342,7 +345,11 @@ export default function WidgetPage() {
           }}
         >
           <div
-            className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
+            className={
+              isStreetViewRoute
+                ? 'w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]'
+                : 'w-full md:w-auto'
+            }
             ref={widgetMeasureRef}
             style={{
               position: 'absolute',
@@ -351,7 +358,10 @@ export default function WidgetPage() {
               transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
               transformOrigin: 'top center',
               transition: 'transform 180ms ease',
-              width: 'fit-content',
+              borderRadius: isStreetViewRoute ? streetViewBorderRadius(borderRadius) : borderRadius,
+              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+              width: isStreetViewRoute ? '100%' : 'fit-content',
+              maxWidth: isStreetViewRoute ? undefined : '100%',
             }}
           >
             {renderWidget()}

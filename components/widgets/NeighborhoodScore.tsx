@@ -1,18 +1,17 @@
 // components/widgets/NeighborhoodScore.tsx
 'use client';
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
   Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft,
-  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase, BatteryCharging, Bike, Car,
-  Camera,
+  HeartPulse, Baby, Dog, Store, Wine, Zap, Footprints, Briefcase, BatteryCharging, Bike, Car
 } from 'lucide-react';
-import { geocode, searchPlaces, getDirections } from '@/lib/mapquest';
+import { geocode, fetchNtpoisPlacePool, getDirections } from '@/lib/mapquest';
+import { matchesMqCategoryFromNormalized } from '@/lib/mapquestPoiMatch';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import MapQuestMap from './MapQuestMap';
-import MapillaryViewerPanel from '../MapillaryViewerPanel';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
@@ -67,37 +66,50 @@ interface NeighborhoodScoreProps {
 }
 
 const DEFAULT_CATEGORIES: Category[] = [
-  { id: 'grocery', name: 'Groceries', icon: ShoppingCart, group: 'Amenities', mqCategory: 'multi:sic:541105,sic:541101,grocery store,supermarket', weight: 3 },
+  { id: 'grocery', name: 'Groceries', icon: ShoppingCart, group: 'Amenities', mqCategory: 'multi:sic:541105,sic:541101,sic:541103,grocery store,supermarket', weight: 3 },
   { id: 'restaurant', name: 'Restaurants', icon: Utensils, group: 'Amenities', mqCategory: 'q:restaurant', weight: 2 },
-  { id: 'coffee', name: 'Coffee Shops', icon: Coffee, group: 'Amenities', mqCategory: 'sic:581228', weight: 1 },
-  { id: 'shopping', name: 'Shopping', icon: Store, group: 'Amenities', mqCategory: 'multi:sic:531101,sic:531102,shopping center,convenience store,retail store', weight: 1 },
+  { id: 'coffee', name: 'Coffee Shops', icon: Coffee, group: 'Amenities', mqCategory: 'multi:sic:581214,sic:581228,q:coffee,q:coffee shop', weight: 1 },
+  { id: 'shopping', name: 'Shopping', icon: Store, group: 'Amenities', mqCategory: 'multi:sic:531101,sic:531102,sic:531104,sic:533101,q:shopping mall,q:department store,q:retail store', weight: 1 },
   { id: 'pharmacy', name: 'Pharmacy', icon: Pill, group: 'Amenities', mqCategory: 'sic:591205', weight: 2 },
-  { id: 'banks', name: 'Banks', icon: Building2, group: 'Amenities', mqCategory: 'sic:602101', weight: 1 },
-  { id: 'parks', name: 'Parks', icon: Trees, group: 'Lifestyle', mqCategory: 'sic:799951', weight: 2 },
+  { id: 'banks', name: 'Banks', icon: Building2, group: 'Amenities', mqCategory: 'multi:sic:602101,q:bank,q:credit union', weight: 1 },
+  { id: 'parks', name: 'Parks', icon: Trees, group: 'Lifestyle', mqCategory: 'multi:sic:799601,sic:799604,sic:799951,sic:799971,q:playground,q:public park,q:recreation center', weight: 2 },
   { id: 'fitness', name: 'Fitness', icon: Dumbbell, group: 'Lifestyle', mqCategory: 'sic:799101', weight: 1 },
-  { id: 'nightlife', name: 'Nightlife', icon: Wine, group: 'Lifestyle', mqCategory: 'multi:sic:581301,bar,nightclub,theater,entertainment venue', weight: 1 },
-  { id: 'petFriendly', name: 'Pet-Friendly', icon: Dog, group: 'Lifestyle', mqCategory: 'multi:sic:074201,dog park,pet store,veterinary clinic', weight: 1 },
+  { id: 'nightlife', name: 'Nightlife', icon: Wine, group: 'Lifestyle', mqCategory: 'multi:sic:581301,q:bar,q:nightclub,q:theater,q:entertainment venue', weight: 1 },
+  { id: 'petFriendly', name: 'Pet-Friendly', icon: Dog, group: 'Lifestyle', mqCategory: 'multi:sic:074201,sic:074220,sic:599902,sic:599969,sic:599929,q:dog park,q:pet store,q:veterinary,q:pet supplies,q:animal hospital,q:pet grooming', weight: 1 },
   { id: 'healthcare', name: 'Healthcare', icon: HeartPulse, group: 'Healthcare', mqCategory: 'multi:sic:801101,sic:806201,hospital,urgent care,medical clinic', weight: 3 },
-  { id: 'schools', name: 'Schools', icon: GraduationCap, group: 'Education', mqCategory: 'sic:821101', weight: 2 },
-  { id: 'daycare', name: 'Daycare', icon: Baby, group: 'Education', mqCategory: 'multi:sic:835101,daycare center,preschool,child care center', weight: 2 },
+  { id: 'schools', name: 'Schools', icon: GraduationCap, group: 'Education', mqCategory: 'multi:sic:821101,sic:821102,sic:821103,sic:821104,sic:822101', weight: 2 },
+  { id: 'daycare', name: 'Daycare', icon: Baby, group: 'Education', mqCategory: 'multi:sic:835101,sic:835071,sic:835999,q:preschool,q:daycare,q:child care,q:nursery school', weight: 2 },
   { id: 'publicTransit', name: 'Public Transit', icon: Bus, group: 'Transportation', mqCategory: 'multi:sic:411101,sic:411104,sic:411201,sic:401101,sic:413101,sic:448301,metro station,subway,train station,light rail,trolley,streetcar,ferry terminal,transit center,amtrak,commuter rail', weight: 2 },
-  { id: 'evCharging', name: 'EV Charging', icon: Zap, group: 'Transportation', mqCategory: 'multi:ev charging station,electric vehicle charger', weight: 1 },
+  { id: 'evCharging', name: 'EV Charging', icon: Zap, group: 'Transportation', mqCategory: 'multi:sic:554112,q:ev charging,q:charging station', weight: 1 },
+];
+
+const GROCERY_NAME_BLOCKLIST = [
+  'apple', 'microsoft', 'google', 'best buy', 'target mobile',
+  'verizon', 'at&t', 't-mobile', 'sprint', 'gamestop',
+  'foot locker', 'nike', 'adidas', 'lululemon', 'gap',
+  'banana republic', 'old navy', 'h&m', 'zara', 'forever 21',
+  'sephora', 'ulta', 'mac cosmetics', 'bath & body works',
+  'victoria\'s secret', 'pink', 'american eagle', 'hollister',
+  'abercrombie', 'express', 'buckle', 'zumiez', 'hot topic',
+  'spencer\'s', 'build-a-bear', 'claire\'s', 'piercing pagoda',
+  'kay jewelers', 'jared', 'zales', 'pandora', 'swarovski',
+  'tesla', 'bmw', 'mercedes', 'lexus', 'audi', 'porsche',
 ];
 
 const STANDARD_THRESHOLDS = [
-  { maxDistance: 0.2, score: 5 },
-  { maxDistance: 0.4, score: 4 },
-  { maxDistance: 0.75, score: 3 },
+  { maxDistance: 0.12, score: 5 },  // ~630 ft — strong walk / short drive
+  { maxDistance: 0.32, score: 4 },
+  { maxDistance: 0.72, score: 3 },
   { maxDistance: 1.25, score: 2 },
-  { maxDistance: 1.75, score: 1 },
+  { maxDistance: 2.0, score: 1 },
 ];
 
 const WALKABLE_THRESHOLDS = [
-  { maxDistance: 0.15, score: 5 },
-  { maxDistance: 0.3, score: 4 },
-  { maxDistance: 0.5, score: 3 },
-  { maxDistance: 0.75, score: 2 },
-  { maxDistance: 1.0, score: 1 },
+  { maxDistance: 0.07, score: 5 },
+  { maxDistance: 0.17, score: 4 },
+  { maxDistance: 0.38, score: 3 },
+  { maxDistance: 0.65, score: 2 },
+  { maxDistance: 0.95, score: 1 },
 ];
 
 function getClosestScore(distance: number, thresholdType: ThresholdType): number {
@@ -135,18 +147,63 @@ function geojsonToMapCoords(geometry: any): { lat: number; lng: number }[] | nul
   return null;
 }
 
-// Ray-casting point-in-polygon test
-function pointInPolygon(pt: { lat: number; lng: number }, ring: { lat: number; lng: number }[]): boolean {
+function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3959;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Ray-cast: true if (lat,lng) is inside a simple polygon ring (map coords). */
+function pointInPolygon(lat: number, lng: number, polygon: { lat: number; lng: number }[]): boolean {
+  if (polygon.length < 3) return false;
   let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const yi = ring[i].lat, xi = ring[i].lng;
-    const yj = ring[j].lat, xj = ring[j].lng;
-    if ((yi > pt.lat) !== (yj > pt.lat) &&
-        pt.lng < (xj - xi) * (pt.lat - yi) / (yj - yi) + xi) {
-      inside = !inside;
-    }
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const yi = polygon[i].lat;
+    const xi = polygon[i].lng;
+    const yj = polygon[j].lat;
+    const xj = polygon[j].lng;
+    const denom = yj - yi || 1e-12;
+    const intersect =
+      (yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / denom + xi;
+    if (intersect) inside = !inside;
   }
   return inside;
+}
+
+/**
+ * Minimum disk (center + radius) that covers the axis-aligned bbox of the neighborhood.
+ * Search from this center with this radius reaches every point inside the polygon's bbox,
+ * then we clip to the true boundary with pointInPolygon.
+ */
+function bboxSearchDisk(poly: { lat: number; lng: number }[]): { centerLat: number; centerLng: number; radiusMiles: number } {
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  let minLng = Infinity;
+  let maxLng = -Infinity;
+  for (const p of poly) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  }
+  const centerLat = (minLat + maxLat) / 2;
+  const centerLng = (minLng + maxLng) / 2;
+  const corners = [
+    { lat: minLat, lng: minLng },
+    { lat: minLat, lng: maxLng },
+    { lat: maxLat, lng: minLng },
+    { lat: maxLat, lng: maxLng },
+  ];
+  let radiusMiles = 0;
+  for (const c of corners) {
+    radiusMiles = Math.max(radiusMiles, haversineMiles(centerLat, centerLng, c.lat, c.lng));
+  }
+  return { centerLat, centerLng, radiusMiles: Math.min(75, radiusMiles * 1.06) };
 }
 
 const categoryConfigs: Record<string, CategoryConfig> = {
@@ -159,7 +216,7 @@ const categoryConfigs: Record<string, CategoryConfig> = {
   parks: { idealCount: 3, searchRadius: 1, thresholdType: 'walkable' },
   fitness: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
   nightlife: { idealCount: 5, searchRadius: 2, thresholdType: 'standard' },
-  petFriendly: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
+  petFriendly: { idealCount: 5, searchRadius: 3, thresholdType: 'standard' },
   healthcare: { idealCount: 3, searchRadius: 3, thresholdType: 'standard' },
   schools: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
   daycare: { idealCount: 3, searchRadius: 2, thresholdType: 'standard' },
@@ -223,40 +280,41 @@ function categoryPinSvg(categoryId: string, color: string, isHighlighted: boolea
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
+/** 0–5: calibrated so suburbs with real walkable amenity spread (e.g. 0.3–0.6 mi) land ~3–4, strong urban higher, rural lower. */
 function calculateCategoryScore(pois: POI[], config: CategoryConfig): number {
   if (pois.length === 0) return 0;
 
-  const CLOSEST_WEIGHT = 0.5;
-  const DENSITY_WEIGHT = 0.3;
-  const AVERAGE_DIST_WEIGHT = 0.2;
-
-  const closestDistance = Math.min(...pois.map(p => p.distance));
+  const sorted = [...pois].sort((a, b) => a.distance - b.distance);
+  const closestDistance = sorted[0].distance;
   const closestScore = getClosestScore(closestDistance, config.thresholdType);
 
-  const cappedCount = Math.min(pois.length, config.idealCount * 2);
-  const densityScore = Math.min(5, (cappedCount / config.idealCount) * 5);
+  const kMed = Math.min(5, sorted.length);
+  const medianIdx = Math.floor((kMed - 1) / 2);
+  const medianDistance = sorted[medianIdx].distance;
+  const medianProximityScore = getClosestScore(medianDistance, config.thresholdType);
 
-  const avgDistance = pois.reduce((sum, p) => sum + p.distance, 0) / pois.length;
-  const avgScore = Math.max(0, 5 - (avgDistance * 2.5));
+  const effectiveCount = Math.min(sorted.length, config.idealCount * 3 + 4);
+  const densityScore =
+    (5 * effectiveCount) / (effectiveCount + config.idealCount * 1.15);
 
-  const rawScore = (closestScore * CLOSEST_WEIGHT) + 
-                   (densityScore * DENSITY_WEIGHT) + 
-                   (avgScore * AVERAGE_DIST_WEIGHT);
+  const proximityBlend = closestScore * 0.45 + medianProximityScore * 0.22;
+  const raw = proximityBlend + densityScore * 0.33;
 
-  return Math.round(rawScore * 10) / 10;
+  const rounded = Math.round(Math.min(5, Math.max(0, raw)) * 10) / 10;
+  return rounded;
 }
 
 function calculateOverallScore(categoryScores: CategoryScore[]): number {
-  const scores = categoryScores
-    .filter(catScore => !catScore.error)
-    .map(catScore => catScore.score);
-  
-  if (scores.length === 0) return 0;
-  
-  const sum = scores.reduce((total, score) => total + score, 0);
-  const average = sum / scores.length;
-  
-  return Math.round(average * 10) / 10;
+  let weightSum = 0;
+  let weighted = 0;
+  for (const cs of categoryScores) {
+    if (cs.error) continue;
+    const w = Math.max(1, cs.category.weight);
+    weightSum += w;
+    weighted += w * cs.score;
+  }
+  if (weightSum === 0) return 0;
+  return Math.round((weighted / weightSum) * 10) / 10;
 }
 
 export default function NeighborhoodScore({
@@ -286,44 +344,7 @@ export default function NeighborhoodScore({
   const [mapFitBounds, setMapFitBounds] = useState<{ north: number; south: number; east: number; west: number } | undefined>(undefined);
   const [mapZoomToLocation, setMapZoomToLocation] = useState<{ lat: number; lng: number; zoom?: number } | undefined>(undefined);
   const [mapZoom, setMapZoom] = useState(14);
-  const [streetViewImageId, setStreetViewImageId] = useState<string | null>(null);
-  const [streetViewLoading, setStreetViewLoading] = useState(false);
-  const [streetViewMsg, setStreetViewMsg] = useState<string | null>(null);
-  const streetViewDragImageRef = useRef<HTMLDivElement>(null);
-  const MIN_STREET_VIEW_ZOOM = 16;
   const handleMapBoundsChange = useCallback((b: { zoom: number }) => setMapZoom(b.zoom), []);
-
-  const handleMapillaryDrop = useCallback(
-    async (lat: number, lng: number) => {
-      setStreetViewMsg(null);
-      setStreetViewImageId(null);
-      if (mapZoom < MIN_STREET_VIEW_ZOOM) {
-        setStreetViewMsg('Zoom in closer on the map, then drop street view on a spot you care about.');
-        return;
-      }
-      setStreetViewLoading(true);
-      try {
-        const r = await fetch(
-          `/api/mapillary/nearest?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`
-        );
-        const j = (await r.json()) as { imageId?: string; error?: string };
-        if (!r.ok) {
-          if (r.status === 404 || j.error === 'no_coverage') {
-            setStreetViewMsg('No street-level photos here — try a nearby road.');
-          } else {
-            setStreetViewMsg(j.error || 'Could not find street view');
-          }
-          return;
-        }
-        if (j.imageId) setStreetViewImageId(j.imageId);
-      } catch {
-        setStreetViewMsg('Could not load street view');
-      } finally {
-        setStreetViewLoading(false);
-      }
-    },
-    [mapZoom]
-  );
   const placeItemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   // Walkability isoline state
@@ -371,12 +392,6 @@ export default function NeighborhoodScore({
       setTimeout(() => chatInputRef.current?.focus(), 150);
     }
   }, [chatOpen]);
-
-  useEffect(() => {
-    if (!streetViewMsg) return;
-    const t = setTimeout(() => setStreetViewMsg(null), 5000);
-    return () => clearTimeout(t);
-  }, [streetViewMsg]);
 
   const sendChatMessage = useCallback(async (text?: string) => {
     const msg = text ?? chatInput.trim();
@@ -680,27 +695,36 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     setError(null);
 
     try {
-      const haversine = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-        const R = 3959;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLng = (lng2 - lng1) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      };
+      const boundaryResult = await resolveBoundary(address, loc);
+      const neighborhoodPoly =
+        boundaryResult && boundaryResult !== 'too_large' ? boundaryResult.polygon : null;
+      const areaDisk = neighborhoodPoly ? bboxSearchDisk(neighborhoodPoly) : null;
 
-      // Fetch boundary AND raw POI data in parallel
-      const [boundaryResult, rawCategoryScores] = await Promise.all([
-        resolveBoundary(address, loc),
-        Promise.all(
-          categories.map(async (category) => {
+      const poiSearchCenterLat = areaDisk?.centerLat ?? loc!.lat;
+      const poiSearchCenterLng = areaDisk?.centerLng ?? loc!.lng;
+      const poiApiRadiusMiles = areaDisk?.radiusMiles ?? null;
+      const maxFallbackRadius = Math.max(
+        ...categories
+          .filter((c) => c.id !== 'publicTransit')
+          .map((c) => (categoryConfigs[c.id] || { searchRadius: 2 }).searchRadius),
+        2,
+      );
+      const radiusForApiAll = poiApiRadiusMiles ?? maxFallbackRadius;
+
+      let ntpoisPool: Awaited<ReturnType<typeof fetchNtpoisPlacePool>> = [];
+      if (categories.some((c) => c.id !== 'publicTransit')) {
+        ntpoisPool = await fetchNtpoisPlacePool(poiSearchCenterLat, poiSearchCenterLng, radiusForApiAll, 2500);
+      }
+
+      const rawCategoryScores = await Promise.all(
+        categories.map(async (category) => {
             try {
               const config = categoryConfigs[category.id] || { idealCount: 3, searchRadius: 2, thresholdType: 'standard' as ThresholdType };
 
               if (category.id === 'publicTransit') {
-                const fetchRadius = Math.round(Math.max(config.searchRadius, 2) * 1609.34);
-                const inStr = `${loc!.lat},${loc!.lng};r=${fetchRadius}`;
+                const transitRadiusMi = poiApiRadiusMiles ?? Math.max(config.searchRadius, 2);
+                const fetchRadius = Math.round(Math.max(transitRadiusMi, 2) * 1609.34);
+                const inStr = `${poiSearchCenterLat},${poiSearchCenterLng};r=${fetchRadius}`;
                 const res = await fetch(`/api/here?endpoint=stations&in=${encodeURIComponent(inStr)}&maxPlaces=50`);
                 if (!res.ok) throw new Error('Station search failed');
                 const data = await res.json();
@@ -710,10 +734,10 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
                 interface StationPOI extends POI { isRail: boolean }
 
-                const allStations: StationPOI[] = (data.stations || []).map((s: any) => {
+                let allStations: StationPOI[] = (data.stations || []).map((s: any) => {
                   const sLat = s.place?.location?.lat ?? s.place?.lat ?? 0;
                   const sLng = s.place?.location?.lng ?? s.place?.lng ?? 0;
-                  const dist = haversine(loc!.lat, loc!.lng, sLat, sLng);
+                  const dist = haversineMiles(loc!.lat, loc!.lng, sLat, sLng);
                   const transports: any[] = s.transports || s.place?.transports || [];
                   const modeNames = transports.map((t: any) => t.mode || t.name || '').filter(Boolean);
                   const uniqueModes = [...new Set(modeNames)];
@@ -726,7 +750,13 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     lng: sLng || undefined,
                     isRail,
                   };
-                }).filter((p: StationPOI) => p.distance > 0 && p.distance <= config.searchRadius);
+                }).filter((p: StationPOI) => p.distance > 0 && p.distance <= transitRadiusMi);
+
+                if (neighborhoodPoly) {
+                  allStations = allStations.filter(
+                    p => p.lat != null && p.lng != null && pointInPolygon(p.lat, p.lng, neighborhoodPoly),
+                  );
+                }
 
                 const railStations = allStations.filter(s => s.isRail).sort((a, b) => a.distance - b.distance);
                 const busStations = allStations.filter(s => !s.isRail).sort((a, b) => a.distance - b.distance);
@@ -745,12 +775,16 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                 return { category, score, description, places: stationPois, poiCount, closestDistance };
               }
 
-              const places = await searchPlaces(
-                loc!.lat,
-                loc!.lng,
-                category.mqCategory,
-                config.searchRadius,
-                100
+              const places = ntpoisPool.filter((row) =>
+                matchesMqCategoryFromNormalized(
+                  {
+                    name: row.name,
+                    sic: row.sic,
+                    sicName: row.sicName,
+                    sicNameExt: row.sicNameExt,
+                  },
+                  category.mqCategory,
+                ),
               );
 
               if (!places || places.length === 0) {
@@ -764,22 +798,8 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                 };
               }
 
-              const groceryBlocklist = [
-                'apple', 'microsoft', 'google', 'best buy', 'target mobile',
-                'verizon', 'at&t', 't-mobile', 'sprint', 'gamestop',
-                'foot locker', 'nike', 'adidas', 'lululemon', 'gap',
-                'banana republic', 'old navy', 'h&m', 'zara', 'forever 21',
-                'sephora', 'ulta', 'mac cosmetics', 'bath & body works',
-                'victoria\'s secret', 'pink', 'american eagle', 'hollister',
-                'abercrombie', 'express', 'buckle', 'zumiez', 'hot topic',
-                'spencer\'s', 'build-a-bear', 'claire\'s', 'piercing pagoda',
-                'kay jewelers', 'jared', 'zales', 'pandora', 'swarovski',
-                'tesla', 'bmw', 'mercedes', 'lexus', 'audi', 'porsche',
-              ];
-
               const pois: POI[] = places
                 .map(p => {
-                  let distance = p.distance;
                   let lat: number | undefined;
                   let lng: number | undefined;
 
@@ -788,29 +808,46 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     if (coords && coords.length >= 2) {
                       lng = coords[0];
                       lat = coords[1];
-                      if ((distance === undefined || distance === null || distance === 0)) {
-                        distance = haversine(loc!.lat, loc!.lng, lat, lng);
-                      }
                     }
                   }
 
-                  if ((distance === undefined || distance === null || distance === 0) && (p as any).distanceKm) {
+                  const pl: any = p.place;
+                  if (lat == null || lng == null) {
+                    if (pl?.latLng?.lat != null && pl?.latLng?.lng != null) {
+                      lat = pl.latLng.lat;
+                      lng = pl.latLng.lng;
+                    } else if (pl?.displayLatLng?.lat != null && pl?.displayLatLng?.lng != null) {
+                      lat = pl.displayLatLng.lat;
+                      lng = pl.displayLatLng.lng;
+                    }
+                  }
+
+                  let distance = 0;
+                  if (lat != null && lng != null) {
+                    distance = haversineMiles(loc!.lat, loc!.lng, lat, lng);
+                  } else if ((p as any).distanceKm) {
                     distance = (p as any).distanceKm * 0.621371;
+                  } else if (p.distance != null && Number.isFinite(Number(p.distance))) {
+                    distance = Number(p.distance);
                   }
 
                   return {
-                    distance: distance || 0,
+                    distance: Math.round(distance * 1000) / 1000,
                     name: p.name || 'Unknown',
                     lat,
                     lng,
                   };
                 })
-                .filter(p => p.distance > 0)
-                .filter(p => p.distance <= config.searchRadius)
+                .filter(p => p.lat != null && p.lng != null)
+                .filter(p =>
+                  neighborhoodPoly
+                    ? pointInPolygon(p.lat!, p.lng!, neighborhoodPoly)
+                    : p.distance >= 0 && p.distance <= config.searchRadius,
+                )
                 .filter(p => {
                   if (category.id === 'grocery') {
                     const nameLower = p.name.toLowerCase();
-                    return !groceryBlocklist.some(blocked => nameLower.includes(blocked));
+                    return !GROCERY_NAME_BLOCKLIST.some(blocked => nameLower.includes(blocked));
                   }
                   return true;
                 })
@@ -821,11 +858,12 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
               const score = calculateCategoryScore(pois, config);
 
               let description: string;
-              if (score >= 4) description = `Excellent ${category.name.toLowerCase()} options nearby`;
-              else if (score >= 3) description = `Good variety within walking distance`;
-              else if (score >= 2) description = `Some options available`;
-              else if (score >= 1) description = `Limited options in this area`;
-              else description = `None found nearby`;
+              const areaPhrase = neighborhoodPoly ? 'in this area' : 'nearby';
+              if (score >= 4) description = `Excellent ${category.name.toLowerCase()} options ${areaPhrase}`;
+              else if (score >= 3) description = `Good variety ${areaPhrase}`;
+              else if (score >= 2) description = `Some options ${areaPhrase}`;
+              else if (score >= 1) description = `Limited options ${areaPhrase}`;
+              else description = `None found ${areaPhrase}`;
 
               return { category, score, description, places: pois, poiCount, closestDistance };
             } catch {
@@ -840,8 +878,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
               };
             }
           })
-        ),
-      ]);
+        );
 
       // Set boundary state
       if (boundaryResult === 'too_large') {
@@ -858,39 +895,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         setBoundaryHint('');
       }
 
-      // Filter POIs to only those within the boundary, then recalculate scores
-      const ring = (boundaryResult && boundaryResult !== 'too_large') ? boundaryResult.polygon : null;
-      const categoryScores: CategoryScore[] = ring
-        ? rawCategoryScores.map(cs => {
-            if (cs.error || cs.places.length === 0) return cs;
-            const filtered = cs.places.filter(p =>
-              p.lat != null && p.lng != null
-                ? pointInPolygon({ lat: p.lat, lng: p.lng }, ring)
-                : false
-            );
-            const config = categoryConfigs[cs.category.id] || { idealCount: 3, searchRadius: 2, thresholdType: 'standard' as ThresholdType };
-            const score = filtered.length > 0 ? calculateCategoryScore(filtered, config) : 0;
-            const poiCount = filtered.length;
-            const closestDistance = poiCount > 0 ? Math.min(...filtered.map(p => p.distance)) : Infinity;
-
-            let description: string;
-            if (cs.category.id === 'publicTransit') {
-              const railCount = filtered.filter(p => p.name.includes('(subway') || p.name.includes('(metro') || p.name.includes('(light') || p.name.includes('(train') || p.name.includes('(rail')).length;
-              if (score >= 4) description = `Excellent transit access${railCount > 0 ? ` — ${railCount} subway/rail station${railCount > 1 ? 's' : ''}` : ''}`;
-              else if (score >= 3) description = `Good transit options${railCount > 0 ? ` — ${railCount} subway/rail` : ''}`;
-              else if (score >= 2) description = 'Some transit stops available';
-              else if (score >= 1) description = 'Limited transit in this area';
-              else description = 'No transit stops found in this area';
-            } else {
-              if (score >= 4) description = `Excellent ${cs.category.name.toLowerCase()} options nearby`;
-              else if (score >= 3) description = `Good variety within the area`;
-              else if (score >= 2) description = `Some options available`;
-              else if (score >= 1) description = `Limited options in this area`;
-              else description = `None found in this area`;
-            }
-            return { ...cs, places: filtered, score, poiCount, closestDistance, description };
-          })
-        : rawCategoryScores;
+      const categoryScores = rawCategoryScores;
 
       setScores(categoryScores);
 
@@ -966,31 +971,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
   const mapCenter = location || { lat: 39.8283, lng: -98.5795 };
 
-  /** Stable reference so MapQuestMap does not re-fit the map on every render (which blocked zooming). */
-  const mapPolygons = useMemo(
-    () => [
-      ...(boundaryPolygon
-        ? [
-            {
-              coordinates: boundaryPolygon,
-              color: accentColor,
-              fillOpacity: 0.08,
-              strokeWidth: 2,
-            },
-          ]
-        : []),
-      ...(showWalkability
-        ? walkabilityPolygons.map((p) => ({
-            coordinates: p.coordinates,
-            color: p.color,
-            fillOpacity: 0.12,
-            strokeWidth: 2,
-          }))
-        : []),
-    ],
-    [boundaryPolygon, accentColor, showWalkability, walkabilityPolygons]
-  );
-
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
@@ -1011,9 +991,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
         {/* Map + Chat overlay - shown first on mobile */}
         <div className="relative h-[300px] md:h-auto md:flex-1 md:order-2">
           <MapQuestMap
-            className={`neighborhood-score-map h-full min-h-0 w-full${
-              streetViewImageId ? ' neighborhood-score-map--streetview-active' : ''
-            }`}
             apiKey={apiKey}
             center={mapCenter}
             zoom={location ? 14 : 4}
@@ -1084,112 +1061,25 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
               return markers;
             })()}
-            polygons={mapPolygons}
+            polygons={[
+              ...(boundaryPolygon ? [{
+                coordinates: boundaryPolygon,
+                color: accentColor,
+                fillOpacity: 0.08,
+                strokeWidth: 2,
+              }] : []),
+              ...(showWalkability ? walkabilityPolygons.map(p => ({
+                coordinates: p.coordinates,
+                color: p.color,
+                fillOpacity: 0.12,
+                strokeWidth: 2,
+              })) : []),
+            ]}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
             mapType={mapZoom >= 18 ? 'hybrid' : undefined}
             onBoundsChange={handleMapBoundsChange}
-            onMapDrop={handleMapillaryDrop}
           />
-
-          {/* Hidden element used as HTML5 drag image (camera only) */}
-          <div
-            ref={streetViewDragImageRef}
-            className="fixed w-10 h-10 flex items-center justify-center rounded-full shadow-lg"
-            style={{
-              left: -9999,
-              top: 0,
-              background: bgWidget,
-              border: `2px solid ${accentColor}`,
-              pointerEvents: 'none',
-            }}
-            aria-hidden
-          >
-            <Camera className="w-5 h-5" style={{ color: accentColor }} />
-          </div>
-
-          {/* Draggable: drop camera on map to open street view */}
-          <div
-            className="absolute right-3 z-[900] flex select-none items-center gap-2"
-            style={{
-              top: streetViewImageId ? 'calc(0.75rem + 50px)' : '0.75rem',
-              pointerEvents: 'auto',
-              transition: 'top 0.2s ease',
-            }}
-          >
-            <div
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData('text/plain', 'street-view');
-                e.dataTransfer.effectAllowed = 'copy';
-                const ghost = streetViewDragImageRef.current;
-                if (ghost) {
-                  e.dataTransfer.setDragImage(ghost, 20, 20);
-                }
-              }}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl shadow-lg cursor-grab active:cursor-grabbing"
-              style={{
-                background: bgWidget,
-                border: `1px solid ${border}`,
-                color: textMain,
-              }}
-              title="Drag the camera onto the map to open street-level imagery"
-            >
-              <Camera className="w-4 h-4" style={{ color: accentColor }} />
-            </div>
-            <span
-              className="text-xs font-semibold max-w-[7rem] rounded-lg px-2.5 py-1.5 leading-tight shadow-md"
-              style={{
-                color: textMain,
-                background: bgWidget,
-                border: `1px solid ${border}`,
-                backdropFilter: 'blur(8px)',
-              }}
-            >
-              Street view
-            </span>
-          </div>
-
-          {streetViewLoading && (
-            <div
-              className="absolute inset-0 z-[750] flex items-center justify-center"
-              style={{ background: 'rgba(0,0,0,0.35)', pointerEvents: 'auto' }}
-            >
-              <div
-                className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
-                style={{ background: bgWidget, border: `1px solid ${border}`, color: textMain }}
-              >
-                <Loader2 className="w-5 h-5 animate-spin" style={{ color: accentColor }} />
-                Finding street view…
-              </div>
-            </div>
-          )}
-
-          {streetViewMsg && !streetViewImageId && !streetViewLoading && (
-            <div
-              className="street-view-toast-enter absolute bottom-5 left-1/2 z-[920] w-[min(100%,20rem)] rounded-2xl px-4 py-3 text-center text-sm leading-snug shadow-lg"
-              style={{
-                background: bgWidget,
-                border: `1px solid ${border}`,
-                color: textMain,
-                boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-              }}
-            >
-              {streetViewMsg}
-            </div>
-          )}
-
-          {streetViewImageId && (
-            <MapillaryViewerPanel
-              imageId={streetViewImageId}
-              accentColor={accentColor}
-              darkMode={darkMode}
-              onClose={() => {
-                setStreetViewImageId(null);
-                setStreetViewMsg(null);
-              }}
-            />
-          )}
 
           {/* Chat overlay — bottom-right of map */}
           <div className="absolute bottom-3 right-3 z-[1000]" style={{ pointerEvents: 'auto' }}>

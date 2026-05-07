@@ -34,7 +34,7 @@ import {
   MapillaryStreetViewShowcase,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
-
+import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
 type WidgetId =
@@ -130,6 +130,7 @@ const RADIUS_OPTIONS = [
   { name: 'Medium', value: '0.5rem' },
   { name: 'Large', value: '0.75rem' },
   { name: 'XL', value: '1rem' },
+  { name: 'Prism', value: '16px' },
 ];
 
 function HomeContent() {
@@ -161,7 +162,8 @@ function HomeContent() {
   const [accentColor, setAccentColor] = useState('#2563eb');
   const [customColor, setCustomColor] = useState('#2563eb');
   const [fontFamily, setFontFamily] = useState('system-ui, -apple-system, sans-serif');
-  const [borderRadius, setBorderRadius] = useState('0.5rem');
+  /* Default matches --widget-radius (16px) so widgets align with prism-widget unless Shape is changed. */
+  const [borderRadius, setBorderRadius] = useState('16px');
   const [brandingMode, setBrandingMode] = useState<'mapquest' | 'cobranded' | 'whitelabel'>('mapquest');
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
@@ -249,11 +251,8 @@ function HomeContent() {
       const isBigWidget = false; // All widgets now render at 1:1 scale
       const cap = isTablet ? 0.56 : isLargeDesktop && isBigWidget ? 0.9 : 1;
       const nextScale = Math.min(cap, availableWidth / naturalWidth);
-      // Street View only: present ~20% smaller (layout max-width is still full-column when selected).
-      const isStreetView = activeWidget === 'streetview-showcase';
-      const displayScale = nextScale * (isStreetView ? 0.8 : 1);
-      setWidgetScale(displayScale);
-      setScaledHeight(Math.round(naturalHeight * displayScale));
+      setWidgetScale(nextScale);
+      setScaledHeight(Math.round(naturalHeight * nextScale));
     };
 
     // Run after layout
@@ -524,7 +523,11 @@ function HomeContent() {
             }}
           >
             <div
-              className="w-full md:w-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl"
+              className={
+                activeWidget === 'streetview-showcase'
+                  ? 'w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]'
+                  : 'w-full md:w-auto'
+              }
               ref={widgetMeasureRef}
               style={{
                 position: 'absolute',
@@ -533,7 +536,11 @@ function HomeContent() {
                 transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
                 transformOrigin: 'top center',
                 transition: 'transform 180ms ease',
-                width: 'fit-content',
+                borderRadius:
+                  activeWidget === 'streetview-showcase' ? streetViewBorderRadius(borderRadius) : borderRadius,
+                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                width: activeWidget === 'streetview-showcase' ? '100%' : 'fit-content',
+                maxWidth: activeWidget === 'streetview-showcase' ? undefined : '100%',
               }}
             >
               {renderWidget()}
@@ -840,8 +847,8 @@ function HomeContent() {
                 <div
                   className={
                     isStreetViewPlayground
-                      ? 'w-full max-w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl'
-                      : 'w-full max-w-full shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] rounded-xl md:w-auto'
+                      ? 'w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]'
+                      : 'w-full max-w-full md:w-auto'
                   }
                   ref={widgetMeasureRef}
                   style={{
@@ -851,8 +858,10 @@ function HomeContent() {
                     transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
                     transformOrigin: 'top center',
                     transition: 'transform 180ms ease',
+                    borderRadius: isStreetViewPlayground ? streetViewBorderRadius(borderRadius) : borderRadius,
+                    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
                     width: isStreetViewPlayground ? '100%' : 'fit-content',
-                    maxWidth: '100%',
+                    maxWidth: isStreetViewPlayground ? undefined : '100%',
                   }}
                 >
                   {renderWidget()}
@@ -866,7 +875,7 @@ function HomeContent() {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-          <div className={`w-full max-w-5xl rounded-2xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
+          <div className={`w-full max-w-[min(100%,calc(64rem*0.7))] rounded-2xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
             {/* Modal Header */}
             <div className={`flex items-center justify-between p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <h2 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -1052,7 +1061,7 @@ function HomeContent() {
                 {settingsTab === 'shape' && (
                   <div>
                     <h3 className={`font-medium mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Border Radius</h3>
-                    <div className="grid grid-cols-5 gap-3">
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                       {RADIUS_OPTIONS.map((radius) => (
                         <button
                           key={radius.name}

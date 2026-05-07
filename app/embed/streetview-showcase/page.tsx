@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { setApiKey } from '@/lib/mapquest';
 import MapillaryStreetViewShowcase from '@/components/widgets/MapillaryStreetViewShowcase';
+import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 
 const ENV_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -30,13 +31,19 @@ function StreetViewShowcaseDemoInner() {
       className="min-h-screen p-4 md:p-8"
       style={{ background: dark ? 'var(--bg-canvas, #0f1419)' : '#e5e7eb' }}
     >
-      <div className="mx-auto max-w-[min(100%,3500px)]">
-        <h1
-          className="mb-4 text-center text-sm font-medium md:text-left"
-          style={{ color: dark ? '#e2e8f0' : '#334155' }}
-        >
-          MapQuest Platform — Street View (demo)
-        </h1>
+      <h1
+        className="mb-4 text-center text-sm font-medium md:text-left"
+        style={{ color: dark ? '#e2e8f0' : '#334155' }}
+      >
+        MapQuest Platform — Street View (demo)
+      </h1>
+      <div
+        className="mx-auto w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]"
+        style={{
+          borderRadius: streetViewBorderRadius(undefined),
+          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+        }}
+      >
         <MapillaryStreetViewShowcase
           mapquestApiKey={apiKey}
           darkMode={dark}

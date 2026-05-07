@@ -13,11 +13,23 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { geocode, setApiKey } from '@/lib/mapquest';
 import { fetchMapillaryImagesNear } from '@/lib/mapillaryClient';
+import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 
 const MAP_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 const MAPILLARY_KEY = process.env.NEXT_PUBLIC_MAPILLARY_ACCESS_TOKEN || '';
 
 const DEFAULT_CENTER = { lat: 38.8977, lng: -77.0365 };
+
+/** User-facing copy when MapillaryJS / Graph returns a generic IO failure. */
+function formatMapillaryFatalMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : typeof e === 'string' ? e : '';
+  const t = raw.trim();
+  if (!t) return 'Street view could not load.';
+  if (/failed to fetch data/i.test(t)) {
+    return 'Mapillary could not load imagery (network error, blocked request, or invalid token). Confirm MAPILLARY_ACCESS_TOKEN or NEXT_PUBLIC_MAPILLARY_ACCESS_TOKEN in .env.local, then restart the dev server.';
+  }
+  return t;
+}
 
 type Props = {
   mapquestApiKey?: string;
@@ -30,6 +42,7 @@ type Props = {
   companyName?: string;
   companyLogo?: string;
   fontFamily?: string;
+  /** Matches other widgets’ Shape, with a slight extra rounding (see `streetViewBorderRadius`). */
   borderRadius?: string;
 };
 
@@ -44,7 +57,7 @@ export default function MapillaryStreetViewShowcase({
   companyName,
   companyLogo,
   fontFamily,
-  borderRadius = '0.5rem',
+  borderRadius,
 }: Props) {
   useEffect(() => {
     if (mapquestApiKey) setApiKey(mapquestApiKey);
@@ -140,6 +153,12 @@ export default function MapillaryStreetViewShowcase({
     setErr(null);
   }, []);
 
+  const onViewerFatal = useCallback((message: string) => {
+    setImageId(null);
+    setLoading(false);
+    setErr(formatMapillaryFatalMessage(message));
+  }, []);
+
   const handlePegmanDrop = useCallback(
     async (lat: number, lng: number) => {
       if (mapZoomState.current < 16) {
@@ -193,14 +212,14 @@ export default function MapillaryStreetViewShowcase({
 
   return (
     <div
-      className="prism-widget w-full max-w-[min(100%,3500px)]"
+      className="prism-widget flex min-h-0 w-full flex-col"
       data-streetview="true"
       data-theme={darkMode ? 'dark' : 'light'}
       style={
         {
           fontFamily: fontFamily || 'var(--brand-font)',
-          '--brand-primary': accentColor,
-          borderRadius: borderRadius || '0.5rem',
+          borderRadius: streetViewBorderRadius(borderRadius),
+          ['--brand-primary' as any]: accentColor,
         } as React.CSSProperties
       }
     >
@@ -209,17 +228,16 @@ export default function MapillaryStreetViewShowcase({
         subtitle="Search or drop the camera, then ✕ to return to the map"
         variant="impressive"
         layout="inline"
-        size="relaxed"
-        icon={<MapPin className="h-6 w-6" strokeWidth={2} />}
+        icon={<MapPin className="h-4 w-4" strokeWidth={2} />}
       />
 
       <div
-        className="relative w-full min-w-0 border-t border-[var(--border-default)]"
+        className="streetview-showcase-stage relative w-full min-w-0 min-h-0 overflow-hidden border-t border-[var(--border-default)]"
         style={{ minHeight: 'min(82vh, 920px)' }}
       >
         {/* Map stays mounted (hidden while 360° is open) so position is preserved when closing */}
         <div
-          className={`absolute inset-0 z-0 min-h-0 min-w-0 transition-opacity duration-200 ${
+          className={`absolute inset-0 z-0 min-h-0 min-w-0 overflow-hidden transition-opacity duration-200 ${
             inStreetView ? 'pointer-events-none opacity-0' : 'opacity-100'
           }`}
           aria-hidden={inStreetView}
@@ -347,12 +365,12 @@ export default function MapillaryStreetViewShowcase({
             token={resolvedMapillaryToken}
             imageId={imageId}
             onClose={exitStreetView}
+            onFatal={onViewerFatal}
             loading={loading}
             err={err}
             accentColor={accentColor}
             darkMode={darkMode}
             textMain={textMain}
-            border={border}
           />
         )}
       </div>
@@ -384,22 +402,22 @@ function MapillaryLayer({
   token,
   imageId,
   onClose,
+  onFatal,
   loading,
   err,
   accentColor,
   darkMode,
   textMain,
-  border,
 }: {
   token: string;
   imageId: string;
   onClose: () => void;
+  onFatal: (message: string) => void;
   loading: boolean;
   err: string | null;
   accentColor: string;
   darkMode: boolean;
   textMain: string;
-  border: string;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
@@ -428,14 +446,21 @@ function MapillaryLayer({
     }
     if (!hostRef.current) return;
 
+    let cancelled = false;
+
     (async () => {
+      const fail = (e: unknown) => {
+        if (cancelled) return;
+        onFatal(e instanceof Error ? e.message : formatMapillaryFatalMessage(e));
+      };
+
       // Reuse a single viewer when only imageId changes — recreating the viewer is slow.
       if (viewerRef.current && viewerTokenRef.current === token) {
         try {
           await viewerRef.current.moveTo(imageId);
           requestViewerResize();
-        } catch {
-          /* */
+        } catch (e) {
+          fail(e);
         }
         return;
       }
@@ -449,56 +474,61 @@ function MapillaryLayer({
         viewerTokenRef.current = null;
       }
 
-      const { Viewer, CameraControls, RenderMode } = await import('mapillary-js');
-      if (!hostRef.current || !token) return;
+      try {
+        const { Viewer, CameraControls, RenderMode } = await import('mapillary-js');
+        if (!hostRef.current || !token || cancelled) return;
 
-      // No imageId in constructor, then moveTo — fully navigable. Do NOT set component.spatial: true
-      // (the spatial *data* overlay defaults off and can steal drags from panning the panorama).
-      const viewer = new Viewer({
-        accessToken: token,
-        container: hostRef.current,
-        cameraControls: CameraControls.Street,
-        combinedPanning: true,
-        trackResize: true,
-        imageTiling: true,
-        renderMode: RenderMode.Fill,
-        component: {
-          cover: false,
-          image: true,
-          bearing: true,
-          pointer: true,
-          direction: true,
-          sequence: true,
-          keyboard: true,
-          zoom: true,
-          cache: {
-            depth: {
-              sequence: 4,
-              spherical: 2,
-              step: 3,
-              turn: 1,
+        // No imageId in constructor, then moveTo — fully navigable. Do NOT set component.spatial: true
+        // (the spatial *data* overlay defaults off and can steal drags from panning the panorama).
+        // imageTiling: false — SDK notes this avoids console spam when tile endpoints error (helps dev stability).
+        const viewer = new Viewer({
+          accessToken: token,
+          container: hostRef.current,
+          cameraControls: CameraControls.Street,
+          combinedPanning: true,
+          trackResize: true,
+          imageTiling: false,
+          renderMode: RenderMode.Fill,
+          component: {
+            cover: false,
+            image: true,
+            bearing: true,
+            pointer: true,
+            direction: true,
+            sequence: true,
+            keyboard: true,
+            zoom: true,
+            cache: {
+              depth: {
+                sequence: 4,
+                spherical: 2,
+                step: 3,
+                turn: 1,
+              },
             },
           },
-        },
-      });
-      viewerRef.current = viewer;
-      viewerTokenRef.current = token;
-      viewer.on('load', () => {
-        try {
-          viewer.activateCombinedPanning();
-        } catch {
-          /* */
-        }
-        requestViewerResize();
-      });
-      try {
+        });
+        viewerRef.current = viewer;
+        viewerTokenRef.current = token;
+        viewer.on('load', () => {
+          try {
+            viewer.activateCombinedPanning();
+          } catch {
+            /* */
+          }
+          requestViewerResize();
+        });
         await viewer.moveTo(imageId);
         requestViewerResize();
-      } catch {
-        /* */
+      } catch (e) {
+        fail(e);
       }
     })();
-  }, [token, imageId, requestViewerResize]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, imageId, requestViewerResize, onFatal]);
 
   useEffect(
     () => () => {

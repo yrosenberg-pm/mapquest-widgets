@@ -1,13 +1,17 @@
 // app/api/mapquest/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { searchV2MatchesFilter } from '@/lib/mapquestPoiMatch';
 
 const MAPQUEST_KEY = process.env.MAPQUEST_API_KEY;
+
+/** Search v4 /place often returns [] for standard developer keys; v2 radius + mqap.ntpois returns POIs. Response normalized to v4-style `{ results }`. */
+const SEARCH_V2_RADIUS = 'https://www.mapquestapi.com/search/v2/radius';
 
 const ENDPOINTS: Record<string, string> = {
   geocoding: 'https://www.mapquestapi.com/geocoding/v1/address',
   reverse: 'https://www.mapquestapi.com/geocoding/v1/reverse',
   searchahead: 'https://www.mapquestapi.com/search/v3/prediction',
-  search: 'https://www.mapquestapi.com/search/v4/place',
+  search: SEARCH_V2_RADIUS,
   directions: 'https://www.mapquestapi.com/directions/v2/route',
   routematrix: 'https://www.mapquestapi.com/directions/v2/routematrix',
   optimizedroute: 'https://www.mapquestapi.com/directions/v2/optimizedroute',
@@ -19,6 +23,153 @@ const ENDPOINTS: Record<string, string> = {
   isoline_walking: 'https://www.mapquestapi.com/isolines/v1/walking',
   isoline_bicycling: 'https://www.mapquestapi.com/isolines/v1/bicycling',
 };
+
+function mapSearchV2ResultToPlaceRow(sr: any): any {
+  const f = sr.fields || {};
+  const sp = sr.shapePoints;
+  let lat = Number(f.lat ?? f.disp_lat);
+  let lng = Number(f.lng ?? f.disp_lng);
+  if (Array.isArray(sp) && sp.length >= 2) {
+    lat = Number(sp[0]);
+    lng = Number(sp[1]);
+  }
+  const name = f.name || sr.name || 'Unknown';
+  const displayString = [name, f.address, f.city, f.state, f.postal_code].filter(Boolean).join(', ');
+  let distance = typeof sr.distance === 'number' ? sr.distance : parseFloat(String(sr.distance));
+  if (!Number.isFinite(distance)) distance = undefined;
+  if (sr.distanceUnit === 'k' && Number.isFinite(distance)) {
+    distance = distance * 0.621371;
+  }
+  return {
+    id: f.mqap_id || f.id || sr.key,
+    name,
+    sic: String(f.group_sic_code || f.group_sic_code_ext || ''),
+    sicName: String(f.group_sic_code_name || ''),
+    sicNameExt: String(f.group_sic_code_name_ext || ''),
+    displayString,
+    distance,
+    place: {
+      type: 'Feature',
+      geometry:
+        Number.isFinite(lat) && Number.isFinite(lng)
+          ? { type: 'Point', coordinates: [lng, lat] }
+          : undefined,
+      properties: {
+        street: f.address,
+        city: f.city,
+        state: f.state,
+        phone: f.phone,
+        postalCode: f.postal_code,
+      },
+    },
+  };
+}
+
+function filterAndNormalizeSearchV2(pool: any[], opts: { q: string | null; category: string | null; limit: number }) {
+  const filtered = pool.filter((sr) => searchV2MatchesFilter(sr, opts.q, opts.category));
+  const mapped = filtered.map(mapSearchV2ResultToPlaceRow);
+  mapped.sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9));
+  return mapped.slice(0, opts.limit);
+}
+
+/** Straight-line miles for one ntpois row (handles km unit). */
+function rowDistanceMiles(sr: any): number {
+  let d = typeof sr.distance === 'number' ? sr.distance : parseFloat(String(sr.distance));
+  if (!Number.isFinite(d)) return 0;
+  if (sr.distanceUnit === 'k') d *= 0.621371;
+  return d;
+}
+
+function maxNtpoisPoolDistanceMiles(pool: any[]): number {
+  let m = 0;
+  for (const sr of pool) m = Math.max(m, rowDistanceMiles(sr));
+  return m;
+}
+
+/**
+ * v2 radius returns at most maxMatches POIs sorted by distance. In dense metros the closest N
+ * are all within a few blocks, so important POIs farther out (e.g. a supermarket 2 mi away)
+ * never appear. When we're category/text filtering and the disk is "full" but still short
+ * relative to the requested radius, merge pools from cardinal offsets at ±radius miles.
+ */
+function needsNtpoisPoolExpansion(pool: any[], maxMatches: number, radiusMiles: number): boolean {
+  if (pool.length < maxMatches) return false;
+  return maxNtpoisPoolDistanceMiles(pool) < radiusMiles * 0.55;
+}
+
+function offsetOriginMiles(lat: number, lng: number, northMiles: number, eastMiles: number) {
+  const dLat = northMiles / 69.0;
+  const dLng = eastMiles / (69.0 * Math.cos((lat * Math.PI) / 180));
+  return { lat: lat + dLat, lng: lng + dLng };
+}
+
+function ntpoisDedupeKey(sr: any): string {
+  const f = sr.fields || {};
+  const id = f.mqap_id || f.id || sr.key;
+  if (id) return `id:${id}`;
+  const sp = sr.shapePoints;
+  if (Array.isArray(sp) && sp.length >= 2) return `sp:${sp[0]},${sp[1]}`;
+  return `n:${f.name || sr.name || ''}|${f.lat}|${f.lng}`;
+}
+
+function dedupeNtpoisPools(pools: any[][]): any[] {
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const pool of pools) {
+    for (const sr of pool) {
+      const k = ntpoisDedupeKey(sr);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(sr);
+    }
+  }
+  return out;
+}
+
+/** Recompute straight-line miles from the user's origin (merged multi-center pools keep each arm's own distance). */
+function recalcNtpoisDistancesFromOrigin(pool: any[], originLat: number, originLng: number) {
+  const R = 3959;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const haversineMi = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  };
+
+  for (const sr of pool) {
+    const f = sr.fields || {};
+    const sp = sr.shapePoints;
+    let lat = Number(f.lat ?? f.disp_lat);
+    let lng = Number(f.lng ?? f.disp_lng);
+    if (Array.isArray(sp) && sp.length >= 2) {
+      lat = Number(sp[0]);
+      lng = Number(sp[1]);
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+    sr.distance = haversineMi(originLat, originLng, lat, lng);
+    sr.distanceUnit = 'm';
+  }
+}
+
+async function fetchNtpoisRadiusRaw(
+  apiKey: string,
+  lat: number,
+  lng: number,
+  radius: string,
+  maxMatches: number,
+): Promise<any[]> {
+  const v2Url = `${SEARCH_V2_RADIUS}?key=${apiKey}&origin=${encodeURIComponent(`${lat},${lng}`)}&radius=${encodeURIComponent(radius)}&units=m&maxMatches=${maxMatches}&hostedData=mqap.ntpois&ambiguities=ignore`;
+  const response = await fetch(v2Url);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`MapQuest Search v2 error: ${response.status} ${errorText}`);
+  }
+  const v2 = await response.json();
+  return Array.isArray(v2.searchResults) ? v2.searchResults : [];
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -62,31 +213,92 @@ export async function GET(request: NextRequest) {
       case 'search': {
         const location = searchParams.get('location');
         const category = searchParams.get('category');
-        const q = searchParams.get('q'); // Text search parameter
+        const q = searchParams.get('q');
         const radius = searchParams.get('radius') || '5';
-        const pageSize = searchParams.get('pageSize') || '10';
-        const sort = searchParams.get('sort') || 'distance';
-        
-        // Parse location - format is "lat,lng" from our API, but MapQuest expects "lng,lat"
-        const [lat, lng] = location?.split(',') || ['', ''];
-        
-        // Convert radius from miles to meters (1 mile = 1609.34 meters)
-        const radiusMeters = Math.round(parseFloat(radius) * 1609.34);
-        
-        // MapQuest Search API v4/place expects location in format "lng,lat" (longitude first!)
-        // Based on NHL Arena Explorer implementation
-        // Support both category (SIC codes) and q (text search) parameters
-        let searchParam = '';
-        if (q) {
-          searchParam = `&q=${encodeURIComponent(q)}`;
-        } else if (category) {
-          searchParam = `&category=${encodeURIComponent(category)}`;
+        const pageSizeRaw = searchParams.get('pageSize') || '10';
+        const rawPool = searchParams.get('rawPool') === '1';
+        const limitRequested = Math.max(1, parseInt(pageSizeRaw, 10) || (rawPool ? 2500 : 10));
+        const limitForCategorySearch = Math.min(500, limitRequested);
+        const limit = limitForCategorySearch;
+        const [latStr, lngStr] = location?.split(',').map((s) => s.trim()) || ['', ''];
+        const latNum = parseFloat(latStr);
+        const lngNum = parseFloat(lngStr);
+        if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+          return NextResponse.json({ error: 'Invalid location (expected lat,lng)' }, { status: 400 });
         }
-        
-        url = `${ENDPOINTS.search}?key=${apiKey}&location=${lng},${lat}&radius=${radiusMeters}${searchParam}&pageSize=${pageSize}&sort=${sort}`;
-        
-        console.log('[API] Search request:', { lat, lng, location: `${lng},${lat}`, category, q, radius, radiusMeters, pageSize, sort });
-        break;
+
+        const radiusNum = Math.min(Math.max(parseFloat(radius) || 5, 0.1), 75);
+        const maxMatches = Math.min(500, Math.max(rawPool ? 500 : limit * 50, 200));
+        const radiusParam = String(radiusNum);
+        const hasFilter =
+          (category && category.trim() !== '') || (q && q.trim() !== '');
+
+        console.log('[API] Search v2 radius:', {
+          lat: latNum,
+          lng: lngNum,
+          radiusMiles: radiusParam,
+          maxMatches,
+          limit,
+          rawPool,
+          category,
+          q,
+        });
+
+        let pool: any[];
+        try {
+          pool = await fetchNtpoisRadiusRaw(apiKey, latNum, lngNum, radiusParam, maxMatches);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(msg);
+          return NextResponse.json({ error: 'MapQuest search failed', details: msg }, { status: 502 });
+        }
+
+        const shouldExpand =
+          (hasFilter || rawPool) && needsNtpoisPoolExpansion(pool, maxMatches, radiusNum);
+
+        if (shouldExpand) {
+          const r = radiusNum;
+          const north = offsetOriginMiles(latNum, lngNum, r, 0);
+          const south = offsetOriginMiles(latNum, lngNum, -r, 0);
+          const east = offsetOriginMiles(latNum, lngNum, 0, r);
+          const west = offsetOriginMiles(latNum, lngNum, 0, -r);
+          try {
+            const [n, s, e, w] = await Promise.all([
+              fetchNtpoisRadiusRaw(apiKey, north.lat, north.lng, radiusParam, maxMatches),
+              fetchNtpoisRadiusRaw(apiKey, south.lat, south.lng, radiusParam, maxMatches),
+              fetchNtpoisRadiusRaw(apiKey, east.lat, east.lng, radiusParam, maxMatches),
+              fetchNtpoisRadiusRaw(apiKey, west.lat, west.lng, radiusParam, maxMatches),
+            ]);
+            pool = dedupeNtpoisPools([pool, n, s, e, w]);
+            console.log('[API] Search v2 expanded pool (cardinal offsets):', { merged: pool.length });
+          } catch (err) {
+            console.error('[API] Search v2 expansion failed', err);
+          }
+        }
+
+        recalcNtpoisDistancesFromOrigin(pool, latNum, lngNum);
+
+        if (rawPool) {
+          const mapped = pool.map(mapSearchV2ResultToPlaceRow);
+          mapped.sort((a, b) => (a.distance ?? 1e9) - (b.distance ?? 1e9));
+          const maxOut = Math.min(4000, limitRequested);
+          return NextResponse.json(
+            { results: mapped.slice(0, maxOut), pagination: { currentPage: 1 } },
+            { headers: { 'Cache-Control': 'public, max-age=60' } },
+          );
+        }
+
+        const normalized = filterAndNormalizeSearchV2(pool, { q, category, limit });
+
+        return NextResponse.json(
+          {
+            results: normalized,
+            pagination: { currentPage: 1 },
+          },
+          {
+            headers: { 'Cache-Control': 'public, max-age=60' },
+          },
+        );
       }
 
       case 'directions': {
@@ -240,18 +452,7 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
-    
-    // Log search endpoint responses for debugging
-    if (endpoint === 'search') {
-      console.log('[API] Search response structure:', {
-        hasResults: !!data.results,
-        hasSearchResults: !!data.searchResults,
-        isArray: Array.isArray(data),
-        keys: Object.keys(data),
-        resultCount: data.results?.length || data.searchResults?.results?.length || (Array.isArray(data) ? data.length : 0)
-      });
-    }
-    
+
     // Log optimizedroute responses for debugging
     if (endpoint === 'optimizedroute') {
       console.log('[API] Optimizedroute response:', {

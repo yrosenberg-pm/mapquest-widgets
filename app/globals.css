@@ -194,37 +194,16 @@ body {
   animation: directions-transit-bar-focus 2.75s ease-in-out infinite;
 }
 
-/* Neighborhood street view — bottom feedback toast */
-@keyframes street-view-toast-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 0.5rem);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-.street-view-toast-enter {
-  animation: street-view-toast-in 0.22s ease-out both;
-}
-
-/* Neighborhood Score: nudge map zoom when street view panel (top bar) is open — class toggled in NeighborhoodScore. */
-.neighborhood-score-map .leaflet-top.leaflet-left {
-  top: 0;
-  transition: top 0.2s ease;
-}
-.neighborhood-score-map--streetview-active .leaflet-top.leaflet-left {
-  top: 50px;
-}
-
-/* Street View widget: search floats left; zoom control top-right (clears the search bar) */
 .streetview-showcase-map .leaflet-top.leaflet-left {
   left: auto;
   right: 12px;
   top: 12px;
   transition: top 0.2s ease, right 0.2s ease;
+}
+
+/* Clip map tiles to the card (avoids square map corners fighting prism-widget radius). */
+.prism-widget[data-streetview] .streetview-showcase-map.leaflet-container {
+  overflow: hidden !important;
 }
 
 /* Mapillary host: WebGL canvas gets drags; avoid CSS that blurs/upscales badly */

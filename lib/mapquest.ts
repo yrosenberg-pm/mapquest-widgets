@@ -220,6 +220,10 @@ interface PlaceSearchResult {
   name: string;
   displayString?: string;
   distance?: number;
+  /** MapQuest group SIC (present on rawPool / ntpois rows). */
+  sic?: string;
+  sicName?: string;
+  sicNameExt?: string;
   place?: {
     geometry?: {
       coordinates?: [number, number];
@@ -249,8 +253,12 @@ export async function searchPlaces(
       
       // Search for each term in parallel
       // If term starts with "sic:", use it as-is, otherwise treat as text query
-      const searchPromises = searchTerms.map(term => {
-        const searchCategory = term.startsWith('sic:') ? term : `q:${term}`;
+      const searchPromises = searchTerms.map((term) => {
+        const searchCategory = term.startsWith('sic:')
+          ? term
+          : term.startsWith('q:')
+            ? term
+            : `q:${term}`;
         return searchPlacesSingle(lat, lng, searchCategory, radiusMiles, Math.ceil(maxResults / searchTerms.length) + 5);
       });
       
@@ -284,6 +292,48 @@ export async function searchPlaces(
   }
 }
 
+/**
+ * One merged ntpois pool (optional cardinal expansion) for Neighborhood Score.
+ * Client filters by category with matchesMqCategoryFromNormalized — avoids dozens of MapQuest round-trips.
+ */
+export async function fetchNtpoisPlacePool(
+  lat: number,
+  lng: number,
+  radiusMiles: number,
+  maxPlaces: number = 2500,
+): Promise<PlaceSearchResult[]> {
+  try {
+    const params = new URLSearchParams({
+      endpoint: 'search',
+      location: `${lat},${lng}`,
+      radius: radiusMiles.toString(),
+      pageSize: String(Math.min(4000, Math.max(500, maxPlaces))),
+      rawPool: '1',
+    });
+
+    const res = await fetch(buildUrl(params));
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('Place pool API error:', res.status, errorText);
+      return [];
+    }
+    const data = await res.json();
+    const results: any[] = Array.isArray(data.results) ? data.results : [];
+    return results.map((item: any) => ({
+      name: item.name || item.displayString || 'Unknown',
+      displayString: item.displayString || item.name,
+      distance: item.distance,
+      sic: item.sic,
+      sicName: item.sicName,
+      sicNameExt: item.sicNameExt,
+      place: item.place,
+    }));
+  } catch (err) {
+    console.error('fetchNtpoisPlacePool failed:', err);
+    return [];
+  }
+}
+
 async function searchPlacesSingle(
   lat: number,
   lng: number,
@@ -295,21 +345,20 @@ async function searchPlacesSingle(
     const params = new URLSearchParams({
       endpoint: 'search',
       location: `${lat},${lng}`,
-      sort: 'distance',
       pageSize: maxResults.toString(),
       radius: radiusMiles.toString(),
     });
-    
-    // Support both category (SIC codes) and q (text search) parameters
-    // Format: "sic:581208" for category, "q:restaurant" for text search
+
     if (category.startsWith('q:')) {
-      params.append('q', category.substring(2)); // Remove "q:" prefix
+      params.append('q', category.substring(2));
     } else {
       params.append('category', category);
     }
-    
-    console.log(`[searchPlaces] Requesting: ${category.startsWith('q:') ? 'q=' + category.substring(2) : 'category=' + category}, location=${lat},${lng}, radius=${radiusMiles}mi`);
-    
+
+    console.log(
+      `[searchPlaces] Requesting: ${category.startsWith('q:') ? 'q=' + category.substring(2) : 'category=' + category}, location=${lat},${lng}, radius=${radiusMiles}mi`
+    );
+
     const res = await fetch(buildUrl(params));
     if (!res.ok) {
       const errorText = await res.text();
@@ -317,66 +366,19 @@ async function searchPlacesSingle(
       return [];
     }
     const data = await res.json();
-    
-    console.log(`[searchPlaces] Raw API response for ${category}:`, JSON.stringify(data, null, 2).substring(0, 500));
-    
-    // MapQuest Search API v4/place returns results in different possible structures
-    // Check for: data.results, data.searchResults.results, or direct array
-    let results: any[] = [];
-    
-    if (data.results && Array.isArray(data.results)) {
-      results = data.results;
-    } else if (data.searchResults && data.searchResults.results && Array.isArray(data.searchResults.results)) {
-      results = data.searchResults.results;
-    } else if (Array.isArray(data)) {
-      results = data;
-    } else if (data.searchResults && Array.isArray(data.searchResults)) {
-      results = data.searchResults;
-    }
-    
-    console.log(`[searchPlaces] Category: ${category}, Found ${results.length} results`);
-    
-    // Map results to PlaceSearchResult format, ensuring distance is in miles
-    const mappedResults: PlaceSearchResult[] = results.map((item: any) => {
-      // Distance might be in meters, convert to miles if > 1
-      let distance = item.distance;
-      if (distance && distance > 10) {
-        // Likely in meters, convert to miles (1 meter = 0.000621371 miles)
-        distance = distance * 0.000621371;
-      } else if (item.distanceKm) {
-        // If in kilometers, convert to miles
-        distance = item.distanceKm * 0.621371;
-      } else if (item.place?.distance) {
-        distance = item.place.distance;
-        if (distance > 10) distance = distance * 0.000621371;
-      }
-      
-      return {
-        name: item.name || item.displayString || item.title || 'Unknown',
-        displayString: item.displayString || item.name || item.title,
-        distance: distance || undefined,
-        place: item.place || {
-          geometry: item.geometry || {
-            coordinates: item.coordinates || [item.lng, item.lat] || undefined
-          },
-          properties: item.properties || {
-            street: item.street,
-            city: item.city,
-            phone: item.phone
-          }
-        }
-      };
-    });
-    
-    if (mappedResults.length > 0) {
-      console.log(`[searchPlaces] First mapped result:`, {
-        name: mappedResults[0].name,
-        distance: mappedResults[0].distance,
-        hasPlace: !!mappedResults[0].place
-      });
-    }
-    
-    return mappedResults;
+    const results: any[] = Array.isArray(data.results) ? data.results : [];
+
+    console.log(`[searchPlaces] Category: ${category}, Found ${results.length} results (after proxy filter)`);
+
+    return results.map((item: any) => ({
+      name: item.name || item.displayString || 'Unknown',
+      displayString: item.displayString || item.name,
+      distance: item.distance,
+      sic: item.sic,
+      sicName: item.sicName,
+      sicNameExt: item.sicNameExt,
+      place: item.place,
+    }));
   } catch (err) {
     console.error('Place search failed:', err);
     return [];
