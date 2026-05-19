@@ -325,7 +325,7 @@ export default function MapQuestMap({
   useEffect(() => {
     // In dev (Fast Refresh), MapQuestMap may not remount, so we need to *update* the style tag
     // rather than bailing early when it already exists. This also guarantees tooltip tweaks apply.
-    const styleId = 'mapquest-modern-styles-v3';
+    const styleId = 'mapquest-modern-styles-v4';
     const css = `
       /* Fix tile gaps - make tiles slightly overlap */
       .leaflet-tile {
@@ -395,17 +395,27 @@ export default function MapQuestMap({
         color: inherit !important;
       }
 
-      /* Clean popup */
+      /* Clean popup — wide enough for full street addresses */
+      .leaflet-container .leaflet-popup {
+        max-width: min(520px, calc(100vw - 32px)) !important;
+      }
       .leaflet-popup-content-wrapper {
         border-radius: 8px !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
         padding: 0 !important;
+        max-width: min(520px, calc(100vw - 32px)) !important;
+        box-sizing: border-box !important;
       }
       .leaflet-popup-content {
         margin: 10px 14px !important;
         font-size: 13px !important;
         font-weight: 500 !important;
         color: #1f2937;
+        max-width: none !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
       }
       .leaflet-popup-tip {
         box-shadow: none !important;
@@ -540,26 +550,27 @@ export default function MapQuestMap({
         }
       }
       
-      /* Custom tooltip styling for marker hover */
-      .marker-tooltip {
+      /* Custom tooltip + popup: Leaflet/MapQuest cap width (~200–300px) — allow full addresses */
+      .leaflet-container .leaflet-tooltip.marker-tooltip {
         background: rgba(15, 23, 42, 0.95) !important;
         color: #fff !important;
         border: none !important;
         border-radius: 8px !important;
-        padding: 7px 10px !important;
+        padding: 10px 14px !important;
         font-size: 12px !important;
         font-weight: 500 !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
-        /* Compact: wrap to ~2 lines, half the previous width */
         white-space: normal !important;
         word-wrap: break-word !important;
-        line-height: 1.35 !important;
+        overflow-wrap: anywhere !important;
+        word-break: break-word !important;
+        line-height: 1.45 !important;
+        box-sizing: border-box !important;
         min-width: 0 !important;
-        max-width: 200px !important;
-        overflow: hidden !important;
-        display: -webkit-box !important;
-        -webkit-line-clamp: 3 !important;
-        -webkit-box-orient: vertical !important;
+        width: auto !important;
+        max-width: min(520px, calc(100vw - 32px)) !important;
+        max-height: none !important;
+        overflow: visible !important;
       }
       .marker-tooltip::before {
         border-top-color: rgba(15, 23, 42, 0.95) !important;
@@ -1037,7 +1048,7 @@ export default function MapQuestMap({
         });
         
         // Also keep popup for click (more detailed view)
-        m.bindPopup(marker.label, { closeButton: false });
+        m.bindPopup(marker.label, { closeButton: false, maxWidth: 520 });
       }
       
       // Add click handler if provided
