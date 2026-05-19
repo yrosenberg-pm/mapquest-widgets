@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, DollarSign, User, LucideIcon } from 'lucide-react';
+import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, DollarSign, User, House, LucideIcon } from 'lucide-react';
 import {
   StarbucksFinder,
   CitiBikeFinder,
@@ -12,6 +12,7 @@ import {
 
   NeighborhoodScore,
   MultiStopPlanner,
+  ListingTourPlanner,
   DeliveryETA,
   InstacartDeliveryETA,
   NHLArenaExplorer,
@@ -46,6 +47,7 @@ type WidgetId =
 
   | 'neighborhood'
   | 'multistop'
+  | 'listing-tour'
   | 'delivery'
   | 'instacart'
   | 'route-weather'
@@ -75,6 +77,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'directions' as WidgetId, name: 'Directions Embed', description: 'Turn-by-turn directions between locations', section: 'routing', menuLucide: Navigation },
   { id: 'custom-route' as WidgetId, name: 'Custom Route', description: 'Build & embed forced waypoint routes', section: 'routing', menuLucide: Waypoints },
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', section: 'routing', menuLucide: Route },
+  { id: 'listing-tour' as WidgetId, name: 'Listing Tour Planner', description: 'Multi-day open house routing for listing agents', section: 'routing', menuLucide: House },
   { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', section: 'routing', menuLucide: Truck },
   { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing', menuLucide: AlertTriangle },
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', section: 'routing', menuLucide: CloudSun },
@@ -355,7 +358,8 @@ function HomeContent() {
       }
     }
 
-    const iframeHeight = activeWidget === 'isoline-overlap' ? 740 : 640;
+    const iframeHeight =
+      activeWidget === 'isoline-overlap' ? 740 : activeWidget === 'listing-tour' ? 840 : 640;
     const safeSrc = url.toString();
 
     return [
@@ -478,6 +482,8 @@ function HomeContent() {
         );
       case 'multistop':
         return <MultiStopPlanner {...commonProps} />;
+      case 'listing-tour':
+        return <ListingTourPlanner {...commonProps} />;
       case 'delivery':
         return <DeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
       case 'instacart':

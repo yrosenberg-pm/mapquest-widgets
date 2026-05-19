@@ -216,3 +216,36 @@ body {
 .mapillary-streetview-host {
   isolation: isolate;
 }
+
+/* Listing Tour Planner: overview batch calculation toast (chip at bottom center) */
+@keyframes listing-tour-toast-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.listing-tour-overview-toast {
+  animation: listing-tour-toast-up 0.32s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listing-tour-overview-toast {
+    animation: none;
+  }
+}
+
+/* Nearby POI drawer: no panel drop shadow (large blur read as inner top/bottom shading). */
+.listing-tour-nearby-drawer {
+  box-shadow: none;
+}
+
+/* Scroll body: no scroll-edge mask (Safari / compositing). */
+.listing-tour-nearby-scroll {
+  -webkit-mask-image: none;
+  mask-image: none;
+}

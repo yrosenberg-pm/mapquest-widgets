@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import { getDirections } from '@/lib/mapquest';
 import MapQuestMap from '@/components/widgets/MapQuestMap';
+import ListingTourShareView, {
+  type SharedListingTourPayload,
+} from './ListingTourShareView';
 
 interface SharedStop {
   address: string;
@@ -63,6 +66,7 @@ export default function ShareRoutePage() {
   const params = useParams();
   const routeId = params.routeId as string;
   
+  const [listingTourData, setListingTourData] = useState<SharedListingTourPayload | null>(null);
   const [routeData, setRouteData] = useState<SharedRouteData | null>(null);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,27 +84,65 @@ export default function ShareRoutePage() {
   const accentColor = '#3B82F6';
   const darkMode = false;
 
-  // Decode route data from URL
   useEffect(() => {
+    setRouteData(null);
+    setListingTourData(null);
+    setError(null);
+
     if (!routeId) {
       setError('No route ID provided');
       setLoading(false);
       return;
     }
-    
+
     try {
       const decoded = urlSafeBase64Decode(routeId);
-      const parsedData = JSON.parse(decoded) as SharedRouteData;
-      
+      const parsedUnknown: unknown = JSON.parse(decoded);
+
+      if (
+        parsedUnknown !== null &&
+        typeof parsedUnknown === 'object' &&
+        (parsedUnknown as { kind?: string }).kind === 'listing-tour'
+      ) {
+        const p = parsedUnknown as SharedListingTourPayload;
+        const days = Array.isArray(p.days) ? p.days : [];
+        const valid =
+          days.length > 0 &&
+          days.every(
+            (d) =>
+              d &&
+              Array.isArray(d.stops) &&
+              d.stops.length >= 2 &&
+              d.stops.every((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+          );
+        if (!valid) {
+          setError('Invalid listing tour: each day needs at least two listings with coordinates.');
+          setListingTourData(null);
+        } else {
+          setListingTourData({
+            ...p,
+            kind: 'listing-tour',
+            days,
+          });
+          setRouteData(null);
+          setError(null);
+        }
+        setLoading(false);
+        return;
+      }
+
+      const parsedData = parsedUnknown as SharedRouteData;
       if (parsedData.stops && parsedData.stops.length >= 2) {
         setRouteData(parsedData);
         setError(null);
       } else {
         setError('Invalid route data: need at least 2 stops');
+        setLoading(false);
       }
     } catch (err) {
       console.error('Decode error:', err);
       setError('Failed to decode route. The link may be corrupted or incomplete.');
+      setLoading(false);
     }
   }, [routeId]);
 
@@ -346,7 +388,9 @@ export default function ShareRoutePage() {
     }
   };
 
-  if (error && !routeData) {
+  if (listingTourData) return <ListingTourShareView data={listingTourData} />;
+
+  if (error && !routeData && !listingTourData) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
@@ -354,7 +398,7 @@ export default function ShareRoutePage() {
           <h1 className="text-xl font-bold text-gray-900 mb-2">Route Not Found</h1>
           <p className="text-gray-600 mb-4">{error}</p>
           <p className="text-xs text-gray-400">
-            Try copying the share link again from the Multi-Stop Planner.
+            Try copying the share link again from the planner widget.
           </p>
         </div>
       </div>

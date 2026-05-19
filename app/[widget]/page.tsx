@@ -14,6 +14,7 @@ import {
 
   NeighborhoodScore,
   MultiStopPlanner,
+  ListingTourPlanner,
   DeliveryETA,
   InstacartDeliveryETA,
   NHLArenaExplorer,
@@ -48,6 +49,7 @@ const VALID_WIDGETS = [
   'transit',
   'neighborhood',
   'multistop',
+  'listing-tour',
   'delivery',
   'instacart',
   'isoline',
@@ -290,6 +292,8 @@ export default function WidgetPage() {
         return <NeighborhoodScore {...commonProps} />;
       case 'multistop':
         return <MultiStopPlanner {...commonProps} />;
+      case 'listing-tour':
+        return <ListingTourPlanner {...commonProps} />;
       case 'delivery':
         return <DeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
       case 'instacart':

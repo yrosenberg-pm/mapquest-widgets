@@ -8,28 +8,152 @@ function escapeXmlText(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Solid hex fills for map pins only (distinct per index). White digits stay readable. */
-const PIN_SOLID_COLORS = [
-  '#15803d', '#1d4ed8', '#7c3aed', '#c2410c', '#be185d', '#0f766e', '#a16207', '#1e40af',
-  '#b91c1c', '#047857', '#6d28d9', '#ea580c', '#db2777', '#0e7490', '#4f46e5', '#ca8a04',
-  '#166534', '#2563eb', '#9333ea', '#c026d3', '#0891b2', '#d97706', '#dc2626', '#059669',
-  '#7e22ce', '#e11d48', '#0d9488', '#4338ca',
+/** Muted slate ramp — readable white digits, restrained enterprise look (map + inline badges). */
+const ENTERPRISE_PIN_MIDDLE = [
+  '#475569',
+  '#526273',
+  '#5d7080',
+  '#657588',
+  '#6d7c90',
+  '#758397',
+  '#7d8a9f',
 ] as const;
 
-/** Distinct solid color per stop index for **map pins only** (not list UI). */
+/** Distinct solid color per middle-stop index (map pins / list badges). */
 export function pinColorForStopIndex(index: number): string {
-  return PIN_SOLID_COLORS[index % PIN_SOLID_COLORS.length];
+  return ENTERPRISE_PIN_MIDDLE[index % ENTERPRISE_PIN_MIDDLE.length];
 }
 
-/** First stop = green, last = red, middle stops = distinct palette (map pins only). */
-export const MAP_PIN_START = '#16A34A';
-export const MAP_PIN_END = '#DC2626';
+/** First / last stops slightly darker than middles — neutral, not traffic-light green/red. */
+export const MAP_PIN_START = '#334155';
+export const MAP_PIN_END = '#1e293b';
 
 export function markerPinColorForIndex(index: number, stopCount: number): string {
   if (stopCount <= 0) return MAP_PIN_START;
   if (index === 0) return MAP_PIN_START;
   if (index === stopCount - 1) return MAP_PIN_END;
-  return pinColorForStopIndex(index);
+  return pinColorForStopIndex(index - 1);
+}
+
+function parseHexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const raw = hex.trim().replace(/^#/, '');
+  if (raw.length === 3) {
+    const r = parseInt(raw[0] + raw[0], 16);
+    const g = parseInt(raw[1] + raw[1], 16);
+    const b = parseInt(raw[2] + raw[2], 16);
+    if ([r, g, b].some((x) => Number.isNaN(x))) return null;
+    return { r, g, b };
+  }
+  if (raw.length === 6) {
+    const r = parseInt(raw.slice(0, 2), 16);
+    const g = parseInt(raw.slice(2, 4), 16);
+    const b = parseInt(raw.slice(4, 6), 16);
+    if ([r, g, b].some((x) => Number.isNaN(x))) return null;
+    return { r, g, b };
+  }
+  return null;
+}
+
+function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case rn:
+        h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+        break;
+      case gn:
+        h = ((bn - rn) / d + 2) / 6;
+        break;
+      default:
+        h = ((rn - gn) / d + 4) / 6;
+        break;
+    }
+  }
+  return { h: h * 360, s, l };
+}
+
+function hslToRgb(h: number, sat: number, light: number): { r: number; g: number; b: number } {
+  const hh = ((h % 360) + 360) % 360;
+  const c = (1 - Math.abs(2 * light - 1)) * sat;
+  const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+  const m = light - c / 2;
+  let rp = 0;
+  let gp = 0;
+  let bp = 0;
+  if (hh < 60) {
+    rp = c;
+    gp = x;
+  } else if (hh < 120) {
+    rp = x;
+    gp = c;
+  } else if (hh < 180) {
+    gp = c;
+    bp = x;
+  } else if (hh < 240) {
+    gp = x;
+    bp = c;
+  } else if (hh < 300) {
+    rp = x;
+    bp = c;
+  } else {
+    rp = c;
+    bp = x;
+  }
+  return {
+    r: Math.round((rp + m) * 255),
+    g: Math.round((gp + m) * 255),
+    b: Math.round((bp + m) * 255),
+  };
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const c = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+/**
+ * Per-day colors for overview map pins: same brand family but clearly distinguishable
+ * (lightness ramp + bounded hue shift + saturation sweep). One hex per day.
+ */
+export function accentShadesForDays(baseHex: string, dayCount: number): string[] {
+  const rgb = parseHexToRgb(baseHex);
+  if (!rgb || dayCount <= 0) return [];
+  if (dayCount === 1) return [rgbToHex(rgb.r, rgb.g, rgb.b)];
+  let { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  // Near-grayscale brands: give enough saturation so hue differences register on the map.
+  if (s < 0.14) s = 0.48;
+
+  const out: string[] = [];
+  for (let i = 0; i < dayCount; i++) {
+    const t = i / (dayCount - 1);
+    // Lightness: wide end-to-end ramp (strongest separator)
+    const lSpread = Math.min(0.46, 0.2 + (dayCount - 1) * 0.05);
+    const l2 = Math.max(0.2, Math.min(0.6, l + (t - 0.5) * lSpread * 2));
+
+    // Hue: analogous swing around the enterprise color (reads as same family, not rainbow)
+    const hueHalfSpan = Math.min(46, 11 + (dayCount - 1) * 5.5);
+    const h2 = (h + (t - 0.5) * hueHalfSpan * 2 + 360 * 3) % 360;
+
+    // Saturation: blend monotonic sweep + phase so adjacent days don’t track each other
+    const sFactor =
+      0.7 +
+      0.26 * t +
+      0.22 * Math.sin((i + 0.35) * (Math.PI * 2.3) / Math.max(1, dayCount - 1 || 1));
+    const s2 = Math.max(0.18, Math.min(1, s * sFactor));
+
+    const { r, g, b } = hslToRgb(h2, s2, l2);
+    out.push(rgbToHex(r, g, b));
+  }
+  return out;
 }
 
 /**

@@ -23,6 +23,8 @@ interface AddressAutocompleteProps {
   readOnly?: boolean; // When true, disables autocomplete functionality
   /** Increment to force-close suggestions (e.g. after applying a favorite). */
   closeToken?: number;
+  /** Runs after blur (called after autocomplete closes dropdown). Useful for deferred geocode. */
+  onInputBlur?: () => void;
 }
 
 export default function AddressAutocomplete({
@@ -42,6 +44,7 @@ export default function AddressAutocomplete({
   hideIcon = false,
   readOnly = false,
   closeToken,
+  onInputBlur,
 }: AddressAutocompleteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const {
@@ -89,7 +92,10 @@ export default function AddressAutocomplete({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={handleFocus}
-          onBlur={handleBlur}
+          onBlur={() => {
+            handleBlur();
+            onInputBlur?.();
+          }}
           placeholder={placeholder}
           className={`w-full ${hideIcon ? 'pl-3' : 'pl-10'} pr-10 py-2.5 text-sm ${bg} ${text} rounded-lg border ${border} focus:outline-none focus:ring-2 focus:ring-blue-500/50`}
         />

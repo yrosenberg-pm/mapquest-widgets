@@ -16,8 +16,14 @@ interface MapMarker {
   iconCircular?: boolean;
   // Opt out of marker clustering (when enabled).
   clusterable?: boolean;
+  /** Pulse animation (highlight a sidebar-hovered marker, etc.) */
+  pulse?: boolean;
   zIndexOffset?: number;
+  /** Opacity of the marker graphic (0–1), e.g. dim non-hovered days on overview */
+  iconOpacity?: number;
   onClick?: () => void;
+  /** Right-click / long-press on the marker (stops propagation to the map) */
+  onContextMenu?: (lat: number, lng: number, meta?: { clientX: number; clientY: number }) => void;
   draggable?: boolean;
   onDragEnd?: (lat: number, lng: number) => void;
 }
@@ -940,11 +946,12 @@ export default function MapQuestMap({
         iconSize = size as [number, number];
         iconAnchor = marker.iconAnchor || [size[0] / 2, size[1] / 2] as [number, number];
         popupAnchor = [0, -iconAnchor[1]] as [number, number];
+        const iconOp = typeof marker.iconOpacity === 'number' ? marker.iconOpacity : 1;
         markerHtml = `
           <img src="${marker.iconUrl}" 
                width="${size[0]}" 
                height="${size[1]}" 
-               style="${iconCircular ? 'border-radius: 50%;' : ''}"
+               style="${iconCircular ? 'border-radius: 50%;' : ''} opacity: ${iconOp}; transition: opacity 0.15s ease;"
                alt=""
           />
         `;
@@ -999,10 +1006,12 @@ export default function MapQuestMap({
                 : 500;
       
       // Custom icon markers don't get shadow, others do
-      const markerClassName = marker.iconUrl 
-        ? 'modern-marker' 
-        : type === 'home' 
-          ? 'modern-marker modern-marker-with-shadow pulse-marker' 
+      const markerClassName = marker.iconUrl
+        ? marker.pulse
+          ? 'modern-marker pulse-marker'
+          : 'modern-marker'
+        : type === 'home'
+          ? 'modern-marker modern-marker-with-shadow pulse-marker'
           : 'modern-marker modern-marker-with-shadow';
       
       const icon = L.divIcon({
@@ -1035,6 +1044,21 @@ export default function MapQuestMap({
       if (marker.onClick) {
         m.on('click', () => {
           marker.onClick!();
+        });
+      }
+
+      if (marker.onContextMenu) {
+        m.on('contextmenu', (e: any) => {
+          try {
+            L.DomEvent.stopPropagation(e);
+            e.originalEvent?.preventDefault?.();
+            const oe = e.originalEvent;
+            const ll = e.latlng;
+            marker.onContextMenu!(ll.lat, ll.lng, {
+              clientX: typeof oe?.clientX === 'number' ? oe.clientX : 0,
+              clientY: typeof oe?.clientY === 'number' ? oe.clientY : 0,
+            });
+          } catch (_) {}
         });
       }
 
