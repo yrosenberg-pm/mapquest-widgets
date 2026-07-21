@@ -1,6 +1,20 @@
 'use client';
 
+import { easeInOutCubic, jitter } from '@/lib/gallery/jitter';
 import { useEffect, useRef, useState } from 'react';
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Leaflet tooltip body — block min-width prevents single-character vertical wrapping. */
+function markerTooltipHtml(label: string): string {
+  return `<div class="marker-tooltip-inner">${escapeHtml(label)}</div>`;
+}
 
 interface MapMarker {
   lat: number;
@@ -117,6 +131,21 @@ interface MapQuestMapProps {
   showTruckRestrictions?: boolean; // Show truck restriction overlay on map
   skipPolygonFitBounds?: boolean;
   mapType?: 'map' | 'dark' | 'satellite' | 'hybrid';
+  /** Fires once when the Leaflet map instance is ready (tiles can load). */
+  onMapReady?: () => void;
+  /** Stagger tile fade-in with jittered delays (gallery demo). */
+  tilesRaggedReveal?: boolean;
+  /** Trace precomputed route over ~1.3–1.6s with ease + mid-path hesitation. */
+  animateRouteReveal?: boolean;
+  routeRevealDurationMs?: number;
+  /** Fires when animated route trace completes. */
+  onRouteRevealComplete?: () => void;
+  /** Skip fitBounds after drawing route (gallery — keep Durham framing). */
+  suppressRouteAutoFit?: boolean;
+  /** Smooth camera move (re-runs when `key` changes). */
+  flyToView?: { lat: number; lng: number; zoom: number; durationMs?: number; key?: number | string };
+  /** Keep road/street tiles at any zoom (no satellite/hybrid). */
+  lockBasemap?: 'road';
 }
 
 declare global {
@@ -127,6 +156,205 @@ declare global {
 
 // Fallback when neither routeColor nor accentColor is set
 const DEFAULT_ROUTE_BLUE = '#3B82F6';
+
+function haversineMi(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3959;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/** Trim a polyline to a fraction of its path length (0–1). */
+function trimPolylineByFraction(latLngs: [number, number][], fraction: number): [number, number][] {
+  if (latLngs.length === 0) return [];
+  if (fraction <= 0) return [latLngs[0]];
+  if (fraction >= 1) return latLngs;
+  if (latLngs.length < 2) return latLngs;
+
+  const segLens: number[] = [];
+  let total = 0;
+  for (let i = 1; i < latLngs.length; i++) {
+    const d = haversineMi(latLngs[i - 1][0], latLngs[i - 1][1], latLngs[i][0], latLngs[i][1]);
+    segLens.push(d);
+    total += d;
+  }
+  if (total <= 0) return latLngs.slice(0, 2);
+
+  const target = total * fraction;
+  let acc = 0;
+  const out: [number, number][] = [latLngs[0]];
+  for (let i = 0; i < segLens.length; i++) {
+    const seg = segLens[i];
+    if (acc + seg >= target) {
+      const t = (target - acc) / seg;
+      const [lat0, lng0] = latLngs[i];
+      const [lat1, lng1] = latLngs[i + 1];
+      out.push([lat0 + (lat1 - lat0) * t, lng0 + (lng1 - lng0) * t]);
+      return out;
+    }
+    acc += seg;
+    out.push(latLngs[i + 1]);
+  }
+  return latLngs;
+}
+
+function computeLinearProgressWithPause(
+  elapsedMs: number,
+  durationMs: number,
+  pauseAtLinear: number,
+  pauseMs: number,
+): number {
+  const pauseStart = durationMs * pauseAtLinear;
+  let effective = elapsedMs;
+  if (elapsedMs > pauseStart) {
+    effective = pauseStart + Math.max(0, elapsedMs - pauseStart - pauseMs);
+  }
+  return Math.min(1, effective / durationMs);
+}
+
+type SimpleRouteDrawOpts = {
+  showTraffic?: boolean;
+  routeColor?: string;
+  accentColor?: string;
+  interactive?: boolean;
+  onRouteLineClick?: (lat: number, lng: number) => void;
+  onRouteLineDrag?: (evt: { phase: 'start' | 'move' | 'end'; lat: number; lng: number }) => void;
+  map?: any;
+};
+
+/** Draw a precomputed route polyline (full or partial). Returns main line for fitBounds. */
+function drawSimpleRoutePolyline(
+  L: any,
+  layer: any,
+  latLngs: [number, number][],
+  opts: SimpleRouteDrawOpts,
+): any | null {
+  if (latLngs.length < 2) return null;
+
+  const { showTraffic, routeColor, accentColor, interactive = true, onRouteLineClick, onRouteLineDrag, map } =
+    opts;
+
+  if (showTraffic) {
+    L.polyline(latLngs, {
+      color: routeColor || accentColor || DEFAULT_ROUTE_BLUE,
+      weight: 8,
+      opacity: 0.3,
+      lineCap: 'round',
+      lineJoin: 'round',
+      smoothFactor: 1,
+      pane: 'routeCasingPane',
+    }).addTo(layer);
+  } else {
+    L.polyline(latLngs, {
+      color: '#000000',
+      weight: 13,
+      opacity: 0.1,
+      lineCap: 'round',
+      lineJoin: 'round',
+    }).addTo(layer);
+    L.polyline(latLngs, {
+      color: '#ffffff',
+      weight: 11,
+      opacity: 0.98,
+      lineCap: 'round',
+      lineJoin: 'round',
+    }).addTo(layer);
+  }
+
+  const lineBlue = routeColor || accentColor || DEFAULT_ROUTE_BLUE;
+  const routeLine = showTraffic
+    ? L.polyline(latLngs, {
+        color: lineBlue,
+        weight: 18,
+        opacity: 0,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(layer)
+    : L.polyline(latLngs, {
+        color: lineBlue,
+        weight: 5,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(layer);
+
+  if (interactive && (onRouteLineClick || onRouteLineDrag)) {
+    const hitLine = L.polyline(latLngs, {
+      color: '#000000',
+      weight: 22,
+      opacity: 0.001,
+      lineCap: 'round',
+      lineJoin: 'round',
+      interactive: true,
+    }).addTo(layer);
+
+    if (onRouteLineClick) {
+      hitLine.on('click', (e: any) => {
+        const ll = e?.latlng;
+        if (!ll) return;
+        onRouteLineClick(ll.lat, ll.lng);
+      });
+    }
+
+    if (onRouteLineDrag && map) {
+      let active = false;
+
+      const emit = (phase: 'start' | 'move' | 'end', e: any) => {
+        const ll = e?.latlng;
+        if (!ll) return;
+        try {
+          onRouteLineDrag({ phase, lat: ll.lat, lng: ll.lng });
+        } catch (_) {}
+      };
+
+      const moveHandler = (e: any) => {
+        if (!active) return;
+        emit('move', e);
+      };
+
+      const endHandler = (e: any) => {
+        if (!active) return;
+        active = false;
+        try {
+          map.dragging?.enable?.();
+        } catch (_) {}
+        emit('end', e);
+        try {
+          map.off('mousemove', moveHandler);
+          map.off('mouseup', endHandler);
+          map.off('touchmove', moveHandler);
+          map.off('touchend', endHandler);
+          map.off('touchcancel', endHandler);
+        } catch (_) {}
+      };
+
+      const startHandler = (e: any) => {
+        active = true;
+        try {
+          map.dragging?.disable?.();
+        } catch (_) {}
+        emit('start', e);
+        try {
+          map.on('mousemove', moveHandler);
+          map.on('mouseup', endHandler);
+          map.on('touchmove', moveHandler);
+          map.on('touchend', endHandler);
+          map.on('touchcancel', endHandler);
+        } catch (_) {}
+      };
+
+      hitLine.on('mousedown', startHandler);
+      hitLine.on('touchstart', startHandler);
+    }
+  }
+
+  return routeLine;
+}
 
 /** Remove OSM copyright from attribution (preferred over moving it). Runs on each layout pass. */
 function stripOsmAttribution(container: HTMLElement) {
@@ -248,8 +476,19 @@ export default function MapQuestMap({
   showTruckRestrictions = false,
   skipPolygonFitBounds = false,
   mapType,
+  onMapReady,
+  tilesRaggedReveal = false,
+  animateRouteReveal = false,
+  routeRevealDurationMs = 1450,
+  onRouteRevealComplete,
+  suppressRouteAutoFit = false,
+  flyToView,
+  lockBasemap,
 }: MapQuestMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const onMapReadyRef = useRef(onMapReady);
+  onMapReadyRef.current = onMapReady;
+  const mapReadyNotifiedRef = useRef(false);
   const mapRef = useRef<any>(null);
   const markersLayerRef = useRef<any>(null);
   const routeLayerRef = useRef<any>(null);
@@ -325,13 +564,22 @@ export default function MapQuestMap({
   useEffect(() => {
     // In dev (Fast Refresh), MapQuestMap may not remount, so we need to *update* the style tag
     // rather than bailing early when it already exists. This also guarantees tooltip tweaks apply.
-    const styleId = 'mapquest-modern-styles-v4';
+    const styleId = 'mapquest-modern-styles-v5';
     const css = `
       /* Fix tile gaps - make tiles slightly overlap */
       .leaflet-tile {
         margin: -0.5px !important;
         width: 257px !important;
         height: 257px !important;
+      }
+
+      /* Gallery demo: tiles pop in at uneven times */
+      .mq-tiles-ragged-reveal .leaflet-tile {
+        opacity: 0;
+        transition: opacity 0.12s ease-out;
+      }
+      .mq-tiles-ragged-reveal .leaflet-tile.mq-tile-visible {
+        opacity: 1;
       }
 
       /* Clean zoom controls */
@@ -550,27 +798,34 @@ export default function MapQuestMap({
         }
       }
       
-      /* Custom tooltip + popup: Leaflet/MapQuest cap width (~200–300px) — allow full addresses */
+      /* Marker hover tooltip — min-width keeps addresses on horizontal lines (not 1 char/line) */
       .leaflet-container .leaflet-tooltip.marker-tooltip {
         background: rgba(15, 23, 42, 0.95) !important;
         color: #fff !important;
         border: none !important;
         border-radius: 8px !important;
-        padding: 10px 14px !important;
+        padding: 0 !important;
         font-size: 12px !important;
         font-weight: 500 !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
-        white-space: normal !important;
-        word-wrap: break-word !important;
-        overflow-wrap: anywhere !important;
-        word-break: break-word !important;
-        line-height: 1.45 !important;
         box-sizing: border-box !important;
-        min-width: 0 !important;
-        width: auto !important;
-        max-width: min(520px, calc(100vw - 32px)) !important;
+        min-width: 220px !important;
+        width: max-content !important;
+        max-width: min(360px, calc(100vw - 32px)) !important;
         max-height: none !important;
         overflow: visible !important;
+        white-space: normal !important;
+      }
+      .leaflet-container .leaflet-tooltip.marker-tooltip .marker-tooltip-inner {
+        display: block;
+        padding: 10px 14px;
+        line-height: 1.45;
+        min-width: 220px;
+        max-width: min(360px, calc(100vw - 32px));
+        white-space: normal;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        word-break: normal;
       }
       .marker-tooltip::before {
         border-top-color: rgba(15, 23, 42, 0.95) !important;
@@ -714,6 +969,10 @@ export default function MapQuestMap({
       }
 
       setMapReady(true);
+      if (!mapReadyNotifiedRef.current) {
+        mapReadyNotifiedRef.current = true;
+        onMapReadyRef.current?.();
+      }
     };
 
     timeoutId = setTimeout(initMap, 50);
@@ -721,6 +980,7 @@ export default function MapQuestMap({
     return () => {
       isMounted = false;
       clearTimeout(timeoutId);
+      mapReadyNotifiedRef.current = false;
       // Only clean up on unmount
       if (mapRef.current) {
         try {
@@ -805,7 +1065,9 @@ export default function MapQuestMap({
 
     // Resolve tile layer type: explicit mapType overrides dark/light default
     let tileType: string;
-    if (mapType === 'satellite' || mapType === 'hybrid') {
+    if (lockBasemap === 'road') {
+      tileType = darkMode ? 'dark' : 'map';
+    } else if (mapType === 'satellite' || mapType === 'hybrid') {
       tileType = 'hybrid';
     } else if (mapType === 'dark' || (!mapType && darkMode)) {
       tileType = 'dark';
@@ -823,7 +1085,7 @@ export default function MapQuestMap({
         mapRef.current.invalidateSize();
       }
     }, 100);
-  }, [darkMode, mapReady, mapType]);
+  }, [darkMode, mapReady, mapType, lockBasemap]);
 
   // Bottom-left: attribution (OSM stripped) + logo; Terms docked bottom-right on map container
   useEffect(() => {
@@ -839,14 +1101,23 @@ export default function MapQuestMap({
     };
   }, [mapReady, darkMode, mapType]);
 
-  // Update center and zoom
+  // Smooth flyTo (gallery demo — avoids hard setView jumps)
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !flyToView) return;
+    const { lat, lng, zoom: z, durationMs = 1000 } = flyToView;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    mapRef.current.flyTo([lat, lng], z, { duration: durationMs / 1000, easeLinearity: 0.25 });
+  }, [flyToView?.lat, flyToView?.lng, flyToView?.zoom, flyToView?.durationMs, flyToView?.key, mapReady]);
+
+  // Update center and zoom (skipped while flyToView is driving the camera)
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return;
     if (fitBounds) return;
     if (transitSegments && transitSegments.length > 0) return;
+    if (flyToView) return;
     mapRef.current.setView([center.lat, center.lng], zoom);
-  }, [center?.lat, center?.lng, zoom, mapReady, fitBounds, transitSegments]);
+  }, [center?.lat, center?.lng, zoom, mapReady, fitBounds, transitSegments, flyToView]);
 
   // Fit bounds (for showing all markers)
   useEffect(() => {
@@ -1040,7 +1311,7 @@ export default function MapQuestMap({
         // Tooltip for hover state - shows location name on hover.
         // direction:'auto' repositions the tooltip to stay within the map
         // when the marker is near an edge.
-        m.bindTooltip(marker.label, { 
+        m.bindTooltip(markerTooltipHtml(marker.label), {
           direction: 'auto',
           offset: type === 'home' ? [0, -20] : type === 'poi' ? [0, -14] : [0, -18],
           className: 'marker-tooltip',
@@ -1173,7 +1444,7 @@ export default function MapQuestMap({
       zIndexOffset: 2000, // Always on top
     }).addTo(driverLayerRef.current);
     
-    driverMarker.bindTooltip('Driver Location (Simulated)', {
+    driverMarker.bindTooltip(markerTooltipHtml('Driver Location (Simulated)'), {
       direction: 'auto',
       offset: [0, -24],
       className: 'marker-tooltip',
@@ -1817,160 +2088,172 @@ export default function MapQuestMap({
     // Fallback to simple routePolyline if no segments
     if (!routePolyline || routePolyline.length === 0) return;
 
-    const latLngs = routePolyline.map(p => [p.lat, p.lng] as [number, number]);
-    console.log('[MapQuestMap] Drawing routePolyline:', latLngs.length, 'points, first:', latLngs[0], 'last:', latLngs[latLngs.length - 1]);
+    if (animateRouteReveal) return;
 
-    if (showTraffic) {
-      // The native MapQuest traffic layer (overlayPane, z=400) sits ABOVE our
-      // routeCasingPane (z=380).  Light blue casing below so the path is faintly visible under traffic.
-      // Core route tint — light blue so the route is identifiable under traffic
-      L.polyline(latLngs, {
-        color: routeColor || accentColor || DEFAULT_ROUTE_BLUE,
-        weight: 8,
-        opacity: 0.3,
-        lineCap: 'round',
-        lineJoin: 'round',
-        smoothFactor: 1,
-        pane: 'routeCasingPane',
-      }).addTo(routeLayerRef.current);
-    } else {
-      // Bottom → top: outer stroke, white ribbon, then main line below
-      L.polyline(latLngs, {
-        color: '#000000',
-        weight: 13,
-        opacity: 0.1,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(routeLayerRef.current);
-      L.polyline(latLngs, {
-        color: '#ffffff',
-        weight: 11,
-        opacity: 0.98,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(routeLayerRef.current);
-    }
+    const latLngs = routePolyline.map((p) => [p.lat, p.lng] as [number, number]);
+    const routeLine = drawSimpleRoutePolyline(L, routeLayerRef.current, latLngs, {
+      showTraffic,
+      routeColor,
+      accentColor,
+      onRouteLineClick,
+      onRouteLineDrag,
+      map: mapRef.current,
+    });
 
-    // Main route line (when traffic overlay is off, this is the primary visual;
-    // when it's on, the traffic layer covers it so we use a faint blue casing plus
-    // an invisible hit-detection line).
-    const lineBlue = routeColor || accentColor || DEFAULT_ROUTE_BLUE;
-    const routeLine = showTraffic
-      ? L.polyline(latLngs, {
-          color: lineBlue,
-          weight: 18,
-          opacity: 0,     // invisible – needed only for click/drag hit detection
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(routeLayerRef.current)
-      : L.polyline(latLngs, {
-          color: lineBlue,
-          weight: 5,
-          opacity: 0.9,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(routeLayerRef.current);
-
-    // Clickable hit area so callers can add waypoints by clicking the route line.
-    if (onRouteLineClick || onRouteLineDrag) {
-      const hitLine = L.polyline(latLngs, {
-        color: '#000000',
-        weight: 22,
-        opacity: 0.001,
-        lineCap: 'round',
-        lineJoin: 'round',
-        interactive: true,
-      }).addTo(routeLayerRef.current);
-
-      if (onRouteLineClick) {
-        hitLine.on('click', (e: any) => {
-          const ll = e?.latlng;
-          if (!ll) return;
-          onRouteLineClick(ll.lat, ll.lng);
-        });
-      }
-
-      // Drag gesture: drag the hitLine and we emit start/move/end lat,lng.
-      // This creates a "shape route" experience by dropping a waypoint on release.
-      if (onRouteLineDrag && mapRef.current) {
-        const map = mapRef.current;
-        let active = false;
-
-        const emit = (phase: 'start' | 'move' | 'end', e: any) => {
-          const ll = e?.latlng;
-          if (!ll) return;
-          try {
-            onRouteLineDrag({ phase, lat: ll.lat, lng: ll.lng });
-          } catch (_) {}
-        };
-
-        const moveHandler = (e: any) => {
-          if (!active) return;
-          emit('move', e);
-        };
-
-        const endHandler = (e: any) => {
-          if (!active) return;
-          active = false;
-          try {
-            map.dragging?.enable?.();
-          } catch (_) {}
-          emit('end', e);
-          try {
-            map.off('mousemove', moveHandler);
-            map.off('mouseup', endHandler);
-            map.off('touchmove', moveHandler);
-            map.off('touchend', endHandler);
-            map.off('touchcancel', endHandler);
-          } catch (_) {}
-        };
-
-        const startHandler = (e: any) => {
-          active = true;
-          try {
-            map.dragging?.disable?.();
-          } catch (_) {}
-          emit('start', e);
-          try {
-            map.on('mousemove', moveHandler);
-            map.on('mouseup', endHandler);
-            map.on('touchmove', moveHandler);
-            map.on('touchend', endHandler);
-            map.on('touchcancel', endHandler);
-          } catch (_) {}
-        };
-
-        hitLine.on('mousedown', startHandler);
-        hitLine.on('touchstart', startHandler);
-
-        return () => {
-          try {
-            hitLine.off('mousedown', startHandler);
-            hitLine.off('touchstart', startHandler);
-          } catch (_) {}
-          try {
-            map.off('mousemove', moveHandler);
-            map.off('mouseup', endHandler);
-            map.off('touchmove', moveHandler);
-            map.off('touchend', endHandler);
-            map.off('touchcancel', endHandler);
-          } catch (_) {}
-          try {
-            map.dragging?.enable?.();
-          } catch (_) {}
-        };
-      }
-    }
-
-    if (mapRef.current && latLngs.length > 1) {
+    if (mapRef.current && routeLine && latLngs.length > 1 && !suppressRouteAutoFit) {
       mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
     }
-  }, [routePolyline, routeSegments, transitSegments, routeColor, accentColor, showRoute, showTraffic, routeStart, routeEnd, darkMode, mapReady, onRouteLineClick, onRouteLineDrag]);
+  }, [
+    routePolyline,
+    routeSegments,
+    transitSegments,
+    routeColor,
+    accentColor,
+    showRoute,
+    showTraffic,
+    routeStart,
+    routeEnd,
+    darkMode,
+    mapReady,
+    onRouteLineClick,
+    onRouteLineDrag,
+    animateRouteReveal,
+    suppressRouteAutoFit,
+  ]);
+
+  // Animated route trace (gallery demo)
+  useEffect(() => {
+    if (!animateRouteReveal || !mapReady || !routeLayerRef.current) return;
+    if (!showRoute || !routePolyline || routePolyline.length < 2) {
+      if (animateRouteReveal && showRoute) {
+        onRouteRevealComplete?.();
+      }
+      return;
+    }
+    if (transitSegments?.length || routeSegments?.length) return;
+
+    const L = window.L;
+    if (!L) return;
+
+    const fullLatLngs = routePolyline.map((p) => [p.lat, p.lng] as [number, number]);
+    const durationMs = routeRevealDurationMs;
+    const pauseLinearAt = 0.38 + Math.random() * 0.12;
+    const pauseMs = jitter(275, 0.35);
+
+    let raf = 0;
+    let startTs = 0;
+    let cancelled = false;
+
+    const drawFrame = (fraction: number) => {
+      routeLayerRef.current.clearLayers();
+      const partial = trimPolylineByFraction(fullLatLngs, fraction);
+      if (partial.length < 2) return;
+      drawSimpleRoutePolyline(L, routeLayerRef.current, partial, {
+        showTraffic,
+        routeColor,
+        accentColor,
+        interactive: false,
+      });
+    };
+
+    const finish = () => {
+      if (cancelled) return;
+      routeLayerRef.current.clearLayers();
+      const routeLine = drawSimpleRoutePolyline(L, routeLayerRef.current, fullLatLngs, {
+        showTraffic,
+        routeColor,
+        accentColor,
+        onRouteLineClick,
+        onRouteLineDrag,
+        map: mapRef.current,
+      });
+      if (mapRef.current && routeLine && !suppressRouteAutoFit) {
+        mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+      }
+      onRouteRevealComplete?.();
+    };
+
+    const tick = (ts: number) => {
+      if (cancelled) return;
+      if (!startTs) startTs = ts;
+      const elapsed = ts - startTs;
+      const linear = computeLinearProgressWithPause(elapsed, durationMs, pauseLinearAt, pauseMs);
+      const fraction = easeInOutCubic(linear);
+      drawFrame(fraction);
+      if (linear < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        finish();
+      }
+    };
+
+    raf = requestAnimationFrame(tick);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [
+    animateRouteReveal,
+    routePolyline,
+    routeRevealDurationMs,
+    mapReady,
+    showRoute,
+    showTraffic,
+    routeColor,
+    accentColor,
+    routeSegments,
+    transitSegments,
+    onRouteLineClick,
+    onRouteLineDrag,
+    suppressRouteAutoFit,
+    onRouteRevealComplete,
+  ]);
+
+  // Ragged tile pop-in (gallery demo)
+  useEffect(() => {
+    if (!tilesRaggedReveal || !mapReady || !mapRef.current) return;
+
+    const map = mapRef.current;
+    const container = map.getContainer() as HTMLElement;
+    const timeoutIds = new WeakMap<Element, number>();
+
+    const revealTile = (tileEl: Element) => {
+      if (timeoutIds.has(tileEl)) return;
+      const stagger = jitter(12 + Math.random() * 40, 0.55);
+      const hang = Math.random() < 0.2 ? jitter(180, 0.4) : 0;
+      const lag = Math.random() < 0.14 ? jitter(260, 0.35) : 0;
+      const id = window.setTimeout(() => {
+        tileEl.classList.add('mq-tile-visible');
+      }, stagger + hang + lag);
+      timeoutIds.set(tileEl, id);
+    };
+
+    const onTileLoad = (e: { tile?: Element }) => {
+      if (e?.tile) revealTile(e.tile);
+    };
+
+    map.on('tileload', onTileLoad);
+    container.querySelectorAll('.leaflet-tile').forEach(revealTile);
+
+    return () => {
+      map.off('tileload', onTileLoad);
+      container.querySelectorAll('.leaflet-tile').forEach((el) => {
+        const id = timeoutIds.get(el);
+        if (id) window.clearTimeout(id);
+        el.classList.remove('mq-tile-visible');
+      });
+    };
+  }, [tilesRaggedReveal, mapReady]);
+
+  const containerClass = [className, tilesRaggedReveal ? 'mq-tiles-ragged-reveal' : '']
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
       ref={containerRef}
-      className={className}
+      className={containerClass}
       style={{
         width: '100%',
         height,

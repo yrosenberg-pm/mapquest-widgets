@@ -25,6 +25,8 @@ export interface SharedListingTourPayload {
   kind: 'listing-tour';
   days: SharedTourDayPayload[];
   type: 'fastest' | 'shortest' | 'balanced';
+  /** When true, route legs request MapQuest toll avoidance (best-effort). */
+  avoidTolls?: boolean;
   companyName?: string;
 }
 
@@ -86,7 +88,8 @@ export default function ListingTourShareView({ data }: { data: SharedListingTour
             from,
             to,
             routeTypeEffective,
-            isNaN(dep.getTime()) ? undefined : dep
+            isNaN(dep.getTime()) ? undefined : dep,
+            { avoidTolls: data.avoidTolls === true }
           );
           if (directions) {
             totalDistance += directions.distance;

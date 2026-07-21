@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, DollarSign, User, House, LucideIcon } from 'lucide-react';
 import {
   StarbucksFinder,
+  CoffeeShopFinder,
   CitiBikeFinder,
   DirectionsEmbed,
 
@@ -41,6 +42,7 @@ const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 type WidgetId =
   | 'nhl'
   | 'starbucks'
+  | 'coffee-shop'
   | 'citibike'
   | 'directions'
   | 'truck'
@@ -92,6 +94,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'checkout' as WidgetId, name: 'Checkout Flow', description: 'Checkout demo with address validation + delivery map', section: 'other', menuLucide: ShoppingBag },
   { id: 'ev-charging' as WidgetId, name: 'EV Charging', description: 'Tesla-like trip planning with chargers + range checks', section: 'other', menuLucide: BatteryCharging },
   { id: 'parking' as WidgetId, name: 'Parking Finder', description: 'Find on-street and off-street parking near a destination', section: 'other', menuLucide: ParkingCircle },
+  { id: 'coffee-shop' as WidgetId, name: 'Coffee Shop Finder', description: 'Find nearby coffee shops on a map', section: 'other', menuLucide: Coffee },
   { id: 'construction' as WidgetId, name: 'Construction Heatmap', description: 'Building permit activity heat map powered by Shovels.ai', section: 'other', menuLucide: Hammer },
   { id: 'contractor-finder' as WidgetId, name: 'Contractor Finder', description: 'Find contractors by specialty with coverage maps', section: 'other', menuLucide: HardHat },
   { id: 'property-intel' as WidgetId, name: 'Property Intelligence', description: 'Property data, valuations & AVM heat map powered by ATTOM', section: 'other', menuLucide: LandPlot },
@@ -391,23 +394,27 @@ function HomeContent() {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
+  const widgetCommonProps = {
+    apiKey: API_KEY,
+    darkMode,
+    accentColor,
+    fontFamily,
+    borderRadius,
+    showBranding: brandingMode !== 'whitelabel',
+    companyName: brandingMode === 'cobranded' ? companyName : undefined,
+    companyLogo: brandingMode === 'cobranded' ? companyLogo : undefined,
+  };
+
   const renderWidget = () => {
-    const commonProps = {
-      apiKey: API_KEY,
-      darkMode,
-      accentColor,
-      fontFamily,
-      borderRadius,
-      showBranding: brandingMode !== 'whitelabel',
-      companyName: brandingMode === 'cobranded' ? companyName : undefined,
-      companyLogo: brandingMode === 'cobranded' ? companyLogo : undefined,
-    };
+    const commonProps = widgetCommonProps;
 
     switch (activeWidget) {
       case 'nhl':
         return <NHLArenaExplorer {...commonProps} />;
       case 'starbucks':
         return <StarbucksFinder {...commonProps} />;
+      case 'coffee-shop':
+        return <CoffeeShopFinder {...commonProps} />;
       case 'citibike':
         return <CitiBikeFinder {...commonProps} />;
       case 'directions':

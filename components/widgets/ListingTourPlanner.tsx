@@ -332,6 +332,8 @@ export default function ListingTourPlanner({
   const [selectedRouteType, setSelectedRouteType] = useState<'fastest' | 'shortest' | 'balanced'>(
     'fastest'
   );
+  /** Prefer non-toll routes when calculating legs (MapQuest `avoids=Toll Road`; best-effort). */
+  const [avoidTolls, setAvoidTolls] = useState(false);
   const [sidebarView, setSidebarView] = useState<SidebarView>('stops');
   const [showDeparturePicker, setShowDeparturePicker] = useState(false);
   /** Tour-wide depart picker on Overview (multi-day) — top of panel */
@@ -1069,7 +1071,9 @@ export default function ListingTourPlanner({
       for (let i = 0; i < validStops.length - 1; i++) {
         const from = `${validStops[i].lat},${validStops[i].lng}`;
         const to = `${validStops[i + 1].lat},${validStops[i + 1].lng}`;
-        const dirs = await getDirections(from, to, routeTypeEffective, tourStart);
+        const dirs = await getDirections(from, to, routeTypeEffective, tourStart, {
+          avoidTolls,
+        });
         if (dirs) {
           totalDistance += dirs.distance;
           totalTime += dirs.time;
@@ -1212,7 +1216,8 @@ export default function ListingTourPlanner({
             from,
             to,
             selectedRouteType === 'shortest' ? 'shortest' : 'fastest',
-            tourStartForOptimize
+            tourStartForOptimize,
+            { avoidTolls }
           );
           if (d) {
             originalDistance += d.distance;
@@ -1269,7 +1274,9 @@ export default function ListingTourPlanner({
       for (let i = 0; i < finalStopsState.length - 1; i++) {
         const from = `${finalStopsState[i].lat},${finalStopsState[i].lng}`;
         const to = `${finalStopsState[i + 1].lat},${finalStopsState[i + 1].lng}`;
-        const dirs = await getDirections(from, to, routeTypeEffective, tourStartForOptimize);
+        const dirs = await getDirections(from, to, routeTypeEffective, tourStartForOptimize, {
+          avoidTolls,
+        });
         if (dirs) {
           totalDistance += dirs.distance;
           totalTime += dirs.time;
@@ -1360,6 +1367,7 @@ export default function ListingTourPlanner({
       kind: 'listing-tour',
       days: shareDays,
       type: selectedRouteType,
+      ...(avoidTolls ? { avoidTolls: true } : {}),
       companyName: companyName ?? undefined,
     };
 
@@ -2349,6 +2357,26 @@ export default function ListingTourPlanner({
                           <span className="capitalize">{rt}</span>
                         </label>
                       ))}
+                      <label
+                        className="flex items-center gap-2 text-sm cursor-pointer pt-1"
+                        style={{ color: textMain }}
+                      >
+                        <input
+                          type="checkbox"
+                          name="listing-tour-avoid-tolls"
+                          className="accent-current rounded border-gray-400"
+                          style={{ accentColor }}
+                          checked={avoidTolls}
+                          onChange={(e) => {
+                            setAvoidTolls(e.target.checked);
+                            markAllRoutedDaysStale();
+                          }}
+                        />
+                        <span>Avoid toll roads</span>
+                      </label>
+                      <p className="text-[10px] leading-snug pl-7 -mt-1" style={{ color: textMuted }}>
+                        Best-effort per MapQuest; some legs may still include tolls if no reasonable alternate exists.
+                      </p>
                     </div>
                   </div>
 
