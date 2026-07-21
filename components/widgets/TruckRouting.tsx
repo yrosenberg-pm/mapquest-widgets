@@ -1,9 +1,21 @@
 // components/widgets/TruckRouting.tsx
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2 } from 'lucide-react';
+import { jitter, sleep } from '@/lib/gallery/jitter';
 import { geocode, searchPlaces } from '@/lib/mapquest';
+import {
+  TRUCK_GALLERY_DURHAM_FROM,
+  TRUCK_GALLERY_DURHAM_TO,
+  TRUCK_GALLERY_DURHAM_MAP_VIEW,
+} from '@/lib/truckRouting/constants';
+import {
+  DEFAULT_VEHICLE,
+  fetchHereTruckDirections,
+  fetchMapQuestTruckDirections,
+  type VehicleProfile,
+} from '@/lib/truckRouting/directions';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -26,13 +38,16 @@ interface RouteInfo {
   maxElevationFt?: number | null;
 }
 
-interface VehicleProfile {
-  height: number; // feet
-  weight: number; // tons
-  length: number; // feet
-  width: number;  // feet
-  axleCount: number;
+export type TruckRoutingGalleryReveal = 'header' | 'map' | 'controls' | 'full';
+
+export interface TruckRoutingHandle {
+  /** Runs the built-in Durham, NC bridge-clearance demo (same as the Durham demo button). */
+  runDurhamDemo: () => void;
+  /** Gallery sequence: loading first, then route API + traced reveal. */
+  startGalleryDurhamRoute: () => Promise<void>;
 }
+
+export { TRUCK_GALLERY_DURHAM_FROM, TRUCK_GALLERY_DURHAM_TO, TRUCK_GALLERY_DURHAM_MAP_VIEW };
 
 interface TruckRoutingProps {
   defaultFrom?: string;
@@ -60,112 +75,42 @@ interface TruckRoutingProps {
     axleCount?: { min: number; max: number };
   };
   onRouteCalculated?: (route: RouteInfo, vehicle: VehicleProfile) => void;
+  /** Gallery scripted build: stagger header → map → controls (default: full). */
+  galleryReveal?: TruckRoutingGalleryReveal;
+  /** When `skeleton`, map area shows a placeholder until `live`. */
+  mapDisplayMode?: 'skeleton' | 'live';
+  /** Hide route polyline until `runDurhamDemo()` (gallery demo — route draws on camera). */
+  deferRouteVisualization?: boolean;
+  /** Hide Durham / Donner preset buttons (gallery demo). */
+  hidePresetDemoButtons?: boolean;
+  onMapReady?: () => void;
+  /** Stagger Leaflet tile fade-in (gallery demo). */
+  mapTilesRaggedReveal?: boolean;
+  /** Trace route polyline over ~1.3–1.6s with ease + mid-path hesitation. */
+  animateRouteReveal?: boolean;
+  routeRevealDurationMs?: number;
+  /** Scripted gallery build (empty form → staged fill). */
+  galleryScriptedDemo?: boolean;
+  /** Keep road/street basemap at all zoom levels (no satellite auto-switch). */
+  lockBasemap?: 'road';
+  /** Map center/zoom before route coords exist (gallery). */
+  mapViewOverride?: { lat: number; lng: number; zoom: number };
+  /** Bumps to trigger a smooth flyTo via MapQuestMap. */
+  mapFlyToKey?: number;
+  mapFlyToDurationMs?: number;
+  /** Display strings for staged address fill (gallery). */
+  galleryFromDisplay?: string;
+  galleryToDisplay?: string;
+  /** When true, vehicle profile fields show real values. */
+  galleryVehicleReady?: boolean;
+  /** Keep CTA in "Calculating…" until route trace animation finishes. */
+  holdLoadingUntilRouteReveal?: boolean;
+  onRouteRevealComplete?: () => void;
+  /** No card shadow/border during gallery build (parent adds elevation when done). */
+  suppressCardElevation?: boolean;
 }
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
-
-// Flexible Polyline decoder (provider format)
-// Based on https://github.com/heremaps/flexible-polyline
-function decodeHerePolyline(encoded: string): { lat: number; lng: number }[] {
-  const DECODING_TABLE = [
-    62, -1, -1, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1, -1,
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-    22, 23, 24, 25, -1, -1, -1, -1, 63, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
-    36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
-  ];
-
-  const result: { lat: number; lng: number }[] = [];
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
-
-  // Decode header
-  let version = 0;
-  let shift = 0;
-  let value = 0;
-
-  // Skip header bytes (version + precision info)
-  while (index < encoded.length) {
-    const char = encoded.charCodeAt(index++) - 45;
-    const v = DECODING_TABLE[char];
-    value |= (v & 31) << shift;
-    if ((v & 32) === 0) {
-      version = value;
-      break;
-    }
-    shift += 5;
-  }
-
-  // Skip precision bytes
-  shift = 0;
-  value = 0;
-  while (index < encoded.length) {
-    const char = encoded.charCodeAt(index++) - 45;
-    const v = DECODING_TABLE[char];
-    value |= (v & 31) << shift;
-    if ((v & 32) === 0) break;
-    shift += 5;
-  }
-
-  const precision = Math.pow(10, -(value & 15));
-  const precision3D = Math.pow(10, -((value >> 4) & 15));
-  const hasElevation = (value >> 8) & 1;
-
-  // Decode points
-  while (index < encoded.length) {
-    // Decode latitude delta
-    shift = 0;
-    value = 0;
-    while (index < encoded.length) {
-      const char = encoded.charCodeAt(index++) - 45;
-      if (char < 0 || char >= DECODING_TABLE.length) break;
-      const v = DECODING_TABLE[char];
-      if (v === -1) break;
-      value |= (v & 31) << shift;
-      if ((v & 32) === 0) break;
-      shift += 5;
-    }
-    const latDelta = (value & 1) ? ~(value >> 1) : (value >> 1);
-    lat += latDelta;
-
-    // Decode longitude delta
-    shift = 0;
-    value = 0;
-    while (index < encoded.length) {
-      const char = encoded.charCodeAt(index++) - 45;
-      if (char < 0 || char >= DECODING_TABLE.length) break;
-      const v = DECODING_TABLE[char];
-      if (v === -1) break;
-      value |= (v & 31) << shift;
-      if ((v & 32) === 0) break;
-      shift += 5;
-    }
-    const lngDelta = (value & 1) ? ~(value >> 1) : (value >> 1);
-    lng += lngDelta;
-
-    // Skip elevation if present
-    if (hasElevation) {
-      shift = 0;
-      value = 0;
-      while (index < encoded.length) {
-        const char = encoded.charCodeAt(index++) - 45;
-        if (char < 0 || char >= DECODING_TABLE.length) break;
-        const v = DECODING_TABLE[char];
-        if (v === -1) break;
-        value |= (v & 31) << shift;
-        if ((v & 32) === 0) break;
-        shift += 5;
-      }
-    }
-
-    result.push({
-      lat: lat * precision,
-      lng: lng * precision
-    });
-  }
-
-  return result;
-}
 
 // Default vehicle constraints (can be overridden via props)
 const DEFAULT_CONSTRAINTS = {
@@ -176,13 +121,12 @@ const DEFAULT_CONSTRAINTS = {
   axleCount: { min: 2, max: 6 },
 };
 
-// Default vehicle profile
-const DEFAULT_VEHICLE: VehicleProfile = {
-  height: 13.5,
-  weight: 20,
-  length: 48,
-  width: 8.5,
-  axleCount: 5,
+const EMPTY_VEHICLE: VehicleProfile = {
+  height: 0,
+  weight: 0,
+  length: 0,
+  width: 0,
+  axleCount: 0,
 };
 
 function metersToFeet(m: number) {
@@ -191,40 +135,6 @@ function metersToFeet(m: number) {
 
 function feetToMeters(ft: number) {
   return ft / 3.28084;
-}
-
-function extractElevationSamplesMeters(route: any): number[] {
-  // NOTE: Routing elevation profile response shape can vary by provider/config.
-  // We handle a few common patterns defensively.
-  const out: number[] = [];
-
-  const pushFromMaybe = (v: any) => {
-    if (!Array.isArray(v)) return;
-    for (const item of v) {
-      if (typeof item === 'number' && Number.isFinite(item)) out.push(item);
-      else if (item && typeof item === 'object') {
-        const e = (item as any).elevation;
-        if (typeof e === 'number' && Number.isFinite(e)) out.push(e);
-      }
-    }
-  };
-
-  if (route?.elevationProfile) {
-    pushFromMaybe(route.elevationProfile.elevations);
-    pushFromMaybe(route.elevationProfile.profile);
-    pushFromMaybe(route.elevationProfile.samples);
-  }
-
-  const sections = Array.isArray(route?.sections) ? route.sections : [];
-  for (const s of sections) {
-    if (s?.elevationProfile) {
-      pushFromMaybe(s.elevationProfile.elevations);
-      pushFromMaybe(s.elevationProfile.profile);
-      pushFromMaybe(s.elevationProfile.samples);
-    }
-  }
-
-  return out;
 }
 
 function samplePointsForElevation(points: Array<{ lat: number; lng: number }>, maxPoints: number) {
@@ -251,65 +161,42 @@ function stablePoiKey(item: any) {
   return `raw:${String(title).trim()}`;
 }
 
-async function getMaxElevationFeetForPolyline(polyline: Array<{ lat: number; lng: number }>) {
-  if (!polyline.length) return null;
-  const sampled = samplePointsForElevation(polyline, 100);
-  const pointsParam = sampled.map((p) => `${p.lat},${p.lng}`).join(';');
-
-  const params = new URLSearchParams({
-    endpoint: 'elevation',
-    points: pointsParam,
-  });
-
-  const resp = await fetch(`/api/here?${params.toString()}`);
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(text || 'Elevation lookup failed');
-  }
-  const data = await resp.json();
-
-  const elevationsRaw = (data as any).elevations;
-  if (!Array.isArray(elevationsRaw) || elevationsRaw.length === 0) return null;
-
-  const valsMeters = elevationsRaw
-    .map((e: any) => (typeof e === 'number' ? e : e?.elevation))
-    .filter((v: any) => typeof v === 'number' && Number.isFinite(v)) as number[];
-
-  if (valsMeters.length === 0) return null;
-  const maxM = Math.max(...valsMeters);
-  return metersToFeet(maxM);
-}
-
-function concatPolylines(chunks: Array<Array<{ lat: number; lng: number }>>) {
-  const out: Array<{ lat: number; lng: number }> = [];
-  for (const chunk of chunks) {
-    if (!chunk.length) continue;
-    if (!out.length) {
-      out.push(...chunk);
-      continue;
-    }
-    const last = out[out.length - 1];
-    const first = chunk[0];
-    const isDup = last.lat === first.lat && last.lng === first.lng;
-    out.push(...(isDup ? chunk.slice(1) : chunk));
-  }
-  return out;
-}
-
-export default function TruckRouting({
-  defaultFrom = '',
-  defaultTo = '',
-  accentColor = '#F97316', // Orange for trucks
-  darkMode = false,
-  showBranding = true,
-  companyName,
-  companyLogo,
-  fontFamily,
-  defaultMaxElevationFt,
-  defaultVehicle,
-  vehicleConstraints,
-  onRouteCalculated,
-}: TruckRoutingProps) {
+const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function TruckRouting(
+  {
+    defaultFrom = '',
+    defaultTo = '',
+    accentColor = '#F97316', // Orange for trucks
+    darkMode = false,
+    showBranding = true,
+    companyName,
+    companyLogo,
+    fontFamily,
+    defaultMaxElevationFt,
+    defaultVehicle,
+    vehicleConstraints,
+    onRouteCalculated,
+    galleryReveal = 'full',
+    mapDisplayMode = 'live',
+    deferRouteVisualization = false,
+    hidePresetDemoButtons = false,
+    onMapReady,
+    mapTilesRaggedReveal = false,
+    animateRouteReveal = false,
+    routeRevealDurationMs = 1450,
+    galleryScriptedDemo = false,
+    lockBasemap,
+    mapViewOverride,
+    mapFlyToKey = 0,
+    mapFlyToDurationMs = 1000,
+    galleryFromDisplay,
+    galleryToDisplay,
+    galleryVehicleReady = false,
+    holdLoadingUntilRouteReveal = false,
+    onRouteRevealComplete,
+    suppressCardElevation = false,
+  },
+  ref
+) {
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
   const [fromCoords, setFromCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -331,6 +218,7 @@ export default function TruckRouting({
   const handleTruckBoundsChange = useCallback((b: { zoom: number }) => setTruckMapZoom(b.zoom), []);
   const [demoMode, setDemoMode] = useState(false);
   const [demoScenario, setDemoScenario] = useState<'durham' | 'donner' | null>(null);
+  const [routeVisualizationAllowed, setRouteVisualizationAllowed] = useState(!deferRouteVisualization);
   const [maxElevationFt, setMaxElevationFt] = useState<number | null>(
     typeof defaultMaxElevationFt === 'number' && Number.isFinite(defaultMaxElevationFt) ? defaultMaxElevationFt : null
   );
@@ -338,12 +226,34 @@ export default function TruckRouting({
   const [routeMaxElevationFt, setRouteMaxElevationFt] = useState<number | null>(null);
   const lastAutoRecalcKeyRef = useRef<string | null>(null);
   const pendingAutoRecalcKeyRef = useRef<string | null>(null);
+  const hasCalculatedRef = useRef(false);
+  const [galleryRouteRevealActive, setGalleryRouteRevealActive] = useState(false);
+  const galleryRouteRevealActiveRef = useRef(false);
+  const [mapFadedIn, setMapFadedIn] = useState(!galleryScriptedDemo);
+
+  useEffect(() => {
+    if (!galleryScriptedDemo) {
+      setMapFadedIn(true);
+      return;
+    }
+    if (mapDisplayMode === 'live') {
+      const id = requestAnimationFrame(() => setMapFadedIn(true));
+      return () => cancelAnimationFrame(id);
+    }
+    setMapFadedIn(false);
+  }, [galleryScriptedDemo, mapDisplayMode]);
 
   // Vehicle profile state
-  const [vehicle, setVehicle] = useState<VehicleProfile>({
-    ...DEFAULT_VEHICLE,
-    ...defaultVehicle,
-  });
+  const [vehicle, setVehicle] = useState<VehicleProfile>(
+    galleryScriptedDemo
+      ? { ...EMPTY_VEHICLE }
+      : { ...DEFAULT_VEHICLE, ...defaultVehicle },
+  );
+
+  useEffect(() => {
+    if (!galleryScriptedDemo || !galleryVehicleReady) return;
+    setVehicle({ ...DEFAULT_VEHICLE, ...defaultVehicle });
+  }, [galleryScriptedDemo, galleryVehicleReady, defaultVehicle]);
 
   // Merge constraints with defaults
   const constraints = {
@@ -374,293 +284,30 @@ export default function TruckRouting({
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
   const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
 
-  // Get truck directions using routing API (better truck restrictions support)
   const getHereTruckDirections = async (
     fromCoords: { lat: number; lng: number },
     toCoords: { lat: number; lng: number },
     vehicleProfile: VehicleProfile,
     departure?: 'now' | Date,
     elevationCeilingFt?: number | null,
-    via?: string[]
+    via?: string[],
   ) => {
-    // Convert dimensions to centimeters for routing API
-    const heightCm = Math.round(vehicleProfile.height * 30.48); // feet to cm
-    const widthCm = Math.round(vehicleProfile.width * 30.48);
-    const lengthCm = Math.round(vehicleProfile.length * 30.48);
-    // Convert weight to kg (short tons to kg)
-    const weightKg = Math.round(vehicleProfile.weight * 907.185);
-
-    console.log('[TruckRouting] Vehicle profile:', {
-      heightFt: vehicleProfile.height,
-      heightCm,
-      widthFt: vehicleProfile.width,
-      widthCm,
-      lengthFt: vehicleProfile.length,
-      lengthCm,
-      weightTons: vehicleProfile.weight,
-      weightKg,
-      axles: vehicleProfile.axleCount,
+    const result = await fetchHereTruckDirections(fromCoords, toCoords, vehicleProfile, {
+      departure,
+      elevationCeilingFt,
+      via,
     });
-
-    const params = new URLSearchParams({
-      endpoint: 'routes',
-      origin: `${fromCoords.lat},${fromCoords.lng}`,
-      destination: `${toCoords.lat},${toCoords.lng}`,
-      transportMode: 'truck',
-      truckHeight: heightCm.toString(),
-      truckWidth: widthCm.toString(),
-      truckLength: lengthCm.toString(),
-      truckWeight: weightKg.toString(),
-      truckAxles: vehicleProfile.axleCount.toString(),
-    });
-
-    if (via?.length) {
-      for (const v of via) params.append('via', v);
-    }
-
-    // If elevation is configured, ask for alternatives.
-    if (elevationCeilingFt != null) {
-      params.set('alternatives', '5');
-    }
-
-    // Add departure time if specified
-    if (departure && departure !== 'now') {
-      params.append('departureTime', departure.toISOString());
-    } else {
-      params.append('departureTime', new Date().toISOString());
-    }
-
-    console.log('[TruckRouting] Routing request URL:', `/api/here?${params.toString()}`);
-    const response = await fetch(`/api/here?${params.toString()}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[TruckRouting] Routing API error:', response.status, errorText);
-      throw new Error('Failed to get truck route');
-    }
-
-    const data = await response.json();
-    console.log('[TruckRouting] Routing API full response:', JSON.stringify(data, null, 2));
-    
-    // Check for notices (warnings about route)
-    if (data.notices) {
-      console.log('[TruckRouting] Routing API notices:', data.notices);
-    }
-    
-    if (!data.routes || data.routes.length === 0) {
-      // Check if there's an error message
-      if (data.error) {
-        console.error('[TruckRouting] Routing API error:', data.error);
-        throw new Error(data.error.message || 'Failed to calculate truck route');
-      }
-      throw new Error('No truck-safe route found. Try adjusting vehicle dimensions.');
-    }
-
-    const routes = Array.isArray(data.routes) ? data.routes : [];
-    const candidates = routes.map((r: any) => {
-      const sections = Array.isArray(r?.sections) ? r.sections : [];
-      const decodedSections: Array<Array<{ lat: number; lng: number }>> = [];
-      for (const s of sections) {
-        const encoded = s?.polyline;
-        if (!encoded) continue;
-        try {
-          decodedSections.push(decodeHerePolyline(encoded));
-        } catch (err) {
-          console.error('[TruckRouting] Failed to decode polyline:', err);
-        }
-      }
-      const decodedPolyline = concatPolylines(decodedSections);
-
-      // Legacy fallback if elevation ever returns in routing response
-      const samplesM = extractElevationSamplesMeters(r);
-      const maxM = samplesM.length > 0 ? Math.max(...samplesM) : null;
-
-      return { raw: r, sections, decodedPolyline, legacyMaxElevationMeters: maxM };
-    });
-
-    let chosen = candidates[0];
-    let note: string | null = null;
-
-    let chosenMaxElevationFt: number | null = null;
-
-    if (elevationCeilingFt != null) {
-      const withMax: Array<{ c: typeof candidates[number]; maxFt: number | null }> = await Promise.all(
-        candidates.map(async (c) => {
-          try {
-            if (
-              typeof c.legacyMaxElevationMeters === 'number' &&
-              Number.isFinite(c.legacyMaxElevationMeters)
-            ) {
-              return { c, maxFt: metersToFeet(c.legacyMaxElevationMeters) };
-            }
-            if (c.decodedPolyline?.length) {
-              const maxFt = await getMaxElevationFeetForPolyline(c.decodedPolyline);
-              return { c, maxFt };
-            }
-            return { c, maxFt: null };
-          } catch {
-            return { c, maxFt: null };
-          }
-        })
-      );
-
-      const withElevation = withMax.filter((x) => typeof x.maxFt === 'number' && Number.isFinite(x.maxFt));
-      if (withElevation.length === 0) {
-        // If we can't measure elevation at all, don't show a warning label.
-        // (Users still have the ceiling configured, but we avoid noisy/low-signal UI.)
-        note = null;
-      } else {
-        const ok = withElevation.find((x) => (x.maxFt as number) <= (elevationCeilingFt as number));
-        if (ok) {
-          chosen = ok.c;
-          chosenMaxElevationFt = ok.maxFt as number;
-        } else {
-          const lowest = [...withElevation].sort((a, b) => (a.maxFt as number) - (b.maxFt as number))[0];
-          chosen = lowest.c;
-          chosenMaxElevationFt = lowest.maxFt as number;
-          note = `No alternative route found under ${Math.round(elevationCeilingFt)} ft. Showing the lowest-elevation option (max ~${Math.round(chosenMaxElevationFt)} ft).`;
-        }
-      }
-    }
-
-    setElevationNote(note);
-    setRouteMaxElevationFt(chosenMaxElevationFt);
-
-    const route = chosen.raw;
-    
-    // Log route notices if any
-    if (route.notices) {
-      console.log('[TruckRouting] Route notices:', route.notices);
-    }
-    
-    const sections = chosen.sections?.length ? chosen.sections : route.sections;
-    if (!sections || sections.length === 0) {
-      throw new Error('No route sections returned from routing API');
-    }
-    const section0 = sections[0];
-    
-    // Log section notices if any (these might contain restriction warnings)
-    if (section0.notices) {
-      console.log('[TruckRouting] Section notices:', section0.notices);
-      section0.notices.forEach((notice: any) => {
-        console.log('[TruckRouting] Notice:', notice.title, '-', notice.code);
-      });
-    }
-    
-    // Log transport info for debugging
-    if (section0.transport) {
-      console.log('[TruckRouting] Transport mode:', section0.transport.mode);
-    }
-    
-    // Check if there are any truck-related attributes in the response
-    if (section0.truck) {
-      console.log('[TruckRouting] Truck info in response:', section0.truck);
-    }
-    
-    const decodedPolyline = chosen.decodedPolyline ?? [];
-    if (decodedPolyline.length > 0) {
-      console.log('[TruckRouting] Decoded polyline with', decodedPolyline.length, 'points');
-    }
-    
-    // Parse instructions
-    const allActions = sections.flatMap((s: any) => s?.actions || []);
-    const steps = allActions.map((action: any) => ({
-      narrative: action.instruction || action.action,
-      distance: (action.length || 0) / 1609.34, // meters to miles
-      time: (action.duration || 0) / 60, // seconds to minutes
-    }));
-
-    const totalLengthM = sections.reduce((sum: number, s: any) => sum + (s?.summary?.length || 0), 0);
-    const totalDurationS = sections.reduce((sum: number, s: any) => sum + (s?.summary?.duration || 0), 0);
-    const hasTolls = sections.some((s: any) => Array.isArray(s?.tolls) && s.tolls.length > 0);
-
-    return {
-      distance: totalLengthM / 1609.34, // meters to miles
-      time: totalDurationS / 60, // seconds to minutes
-      fuelUsed: section0.summary?.consumption,
-      hasTolls,
-      hasHighway: true, // Provider doesn't provide this directly
-      steps,
-      polyline: decodedPolyline, // Decoded coordinates array
-      maxElevationFt: chosenMaxElevationFt,
-    };
+    setElevationNote(result.elevationNote ?? null);
+    setRouteMaxElevationFt(result.routeMaxElevationFt ?? null);
+    return result;
   };
 
-  // Get truck directions using MapQuest Truck Routing API (fallback)
-  const getMapQuestTruckDirections = async (
+  const getMapQuestTruckDirections = (
     fromLocation: string,
     toLocation: string,
     vehicleProfile: VehicleProfile,
-    departure?: 'now' | Date
-  ) => {
-    const params = new URLSearchParams({
-      endpoint: 'directions',
-      from: fromLocation,
-      to: toLocation,
-      routeType: 'fastest',
-      type: 'truck',
-      // Truck-specific parameters (convert to metric for API)
-      // Height in meters (convert from feet)
-      vehicleHeight: (vehicleProfile.height * 0.3048).toFixed(2),
-      // Weight in metric tons (convert from short tons)
-      vehicleWeight: (vehicleProfile.weight * 0.907185).toFixed(2),
-      // Length in meters (convert from feet)
-      vehicleLength: (vehicleProfile.length * 0.3048).toFixed(2),
-      // Width in meters (convert from feet)
-      vehicleWidth: (vehicleProfile.width * 0.3048).toFixed(2),
-      // Axle count
-      vehicleAxles: vehicleProfile.axleCount.toString(),
-    });
-
-    // Add departure time if specified
-    if (departure && departure !== 'now') {
-      params.append('timeType', '1');
-      params.append('dateTime', departure.toISOString());
-    }
-
-    console.log('[TruckRouting] MapQuest request params:', params.toString());
-    const response = await fetch(`/api/mapquest?${params.toString()}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[TruckRouting] MapQuest API error:', response.status, errorText);
-      throw new Error('Failed to get truck route');
-    }
-
-    const data = await response.json();
-    console.log('[TruckRouting] MapQuest API response:', data);
-    
-    if (data.info?.statuscode !== 0) {
-      console.error('[TruckRouting] Route error:', data.info);
-      throw new Error(data.info?.messages?.[0] || 'Route calculation failed');
-    }
-
-    const routeData = data.route;
-
-    // Parse flat shapePoints array [lat, lng, lat, lng, ...] into coordinate objects
-    let polyline: { lat: number; lng: number }[] | undefined;
-    const rawShape = routeData.shape?.shapePoints;
-    if (Array.isArray(rawShape) && rawShape.length >= 2) {
-      polyline = [];
-      for (let i = 0; i < rawShape.length - 1; i += 2) {
-        polyline.push({ lat: rawShape[i], lng: rawShape[i + 1] });
-      }
-    }
-
-    return {
-      distance: routeData.distance,
-      time: routeData.time / 60, // Convert seconds to minutes
-      fuelUsed: routeData.fuelUsed,
-      hasTolls: routeData.hasTollRoad,
-      hasHighway: routeData.hasHighway,
-      steps: routeData.legs?.[0]?.maneuvers?.map((m: { narrative: string; distance: number; time: number }) => ({
-        narrative: m.narrative,
-        distance: m.distance,
-        time: m.time / 60,
-      })) || [],
-      polyline,
-    };
-  };
+    departure?: 'now' | Date,
+  ) => fetchMapQuestTruckDirections(fromLocation, toLocation, vehicleProfile, departure);
 
   const DEMO_FROM = '126 S Gregson St, Durham, NC 27701';
   const DEMO_TO = '310 S Gregson St, Durham, NC 27701';
@@ -800,9 +447,166 @@ export default function TruckRouting({
       setError(err instanceof Error ? err.message : 'Failed to calculate truck route');
       setRoute(null);
     } finally {
-      setLoading(false);
+      if (!holdLoadingUntilRouteReveal) {
+        setLoading(false);
+      }
     }
   };
+
+  const calculateRouteRef = useRef(calculateRoute);
+  calculateRouteRef.current = calculateRoute;
+
+  const handleRouteRevealComplete = useCallback(() => {
+    galleryRouteRevealActiveRef.current = false;
+    setGalleryRouteRevealActive(false);
+    onRouteRevealComplete?.();
+    if (holdLoadingUntilRouteReveal) {
+      setLoading(false);
+    }
+  }, [holdLoadingUntilRouteReveal, onRouteRevealComplete]);
+
+  const effectiveAnimateRouteReveal = animateRouteReveal || galleryRouteRevealActive;
+
+  useEffect(() => {
+    if (!holdLoadingUntilRouteReveal || !loading) return;
+    const fallbackMs = (routeRevealDurationMs ?? 1450) + 1200;
+    const t = window.setTimeout(() => {
+      galleryRouteRevealActiveRef.current = false;
+      setGalleryRouteRevealActive(false);
+      setLoading(false);
+    }, fallbackMs);
+    return () => window.clearTimeout(t);
+  }, [holdLoadingUntilRouteReveal, loading, routeRevealDurationMs]);
+
+  const startGalleryDurhamRoute = useCallback(async () => {
+    setGalleryRouteRevealActive(true);
+    setRouteVisualizationAllowed(true);
+    setDemoMode(true);
+    setDemoScenario('durham');
+    setMaxElevationFt(null);
+    setFrom(TRUCK_GALLERY_DURHAM_FROM);
+    setTo(TRUCK_GALLERY_DURHAM_TO);
+    setLoading(true);
+    setError(null);
+    setRoute(null);
+    setRoutePolyline(undefined);
+    setStepsExpanded(false);
+
+    const minLoadingMs = jitter(600, 0.3);
+
+    const routeVehicle: VehicleProfile = { ...DEFAULT_VEHICLE, ...defaultVehicle };
+
+    try {
+      const routingWork = (async () => {
+        const [fromResult, toResult] = await Promise.all([
+          geocode(TRUCK_GALLERY_DURHAM_FROM),
+          geocode(TRUCK_GALLERY_DURHAM_TO),
+        ]);
+
+        if (!fromResult?.lat || !fromResult?.lng) {
+          throw new Error('Could not find start location');
+        }
+        if (!toResult?.lat || !toResult?.lng) {
+          throw new Error('Could not find destination');
+        }
+
+        const fromLoc = { lat: fromResult.lat, lng: fromResult.lng };
+        const toLoc = { lat: toResult.lat, lng: toResult.lng };
+        setFromCoords(fromLoc);
+        setToCoords(toLoc);
+
+        let directions;
+        if (useHereRouting) {
+          try {
+            directions = await getHereTruckDirections(
+              fromLoc,
+              toLoc,
+              routeVehicle,
+              departureTime,
+              maxElevationFt,
+            );
+          } catch (hereErr) {
+            console.warn('[TruckRouting] HERE truck routing failed, falling back to MapQuest:', hereErr);
+            directions = await getMapQuestTruckDirections(
+              `${fromLoc.lat},${fromLoc.lng}`,
+              `${toLoc.lat},${toLoc.lng}`,
+              routeVehicle,
+              departureTime,
+            );
+          }
+        } else {
+          directions = await getMapQuestTruckDirections(
+            `${fromLoc.lat},${fromLoc.lng}`,
+            `${toLoc.lat},${toLoc.lng}`,
+            routeVehicle,
+            departureTime,
+          );
+        }
+
+        if (!directions) {
+          throw new Error('Could not calculate truck route');
+        }
+
+        return directions;
+      })();
+
+      const [, directions] = await Promise.all([sleep(minLoadingMs), routingWork]);
+
+      if (directions.polyline && directions.polyline.length > 0) {
+        setRoutePolyline(directions.polyline);
+      } else {
+        setRoutePolyline(undefined);
+      }
+
+      const routeInfo: RouteInfo = {
+        distance: directions.distance,
+        time: directions.time,
+        fuelUsed: directions.fuelUsed,
+        hasTolls: directions.hasTolls,
+        hasHighway: directions.hasHighway,
+        steps: directions.steps || [],
+        maxElevationFt: directions.maxElevationFt ?? routeMaxElevationFt,
+      };
+
+      setRoute(routeInfo);
+      onRouteCalculated?.(routeInfo, routeVehicle);
+      hasCalculatedRef.current = true;
+
+      if (!holdLoadingUntilRouteReveal || !galleryRouteRevealActiveRef.current) {
+        setLoading(false);
+        galleryRouteRevealActiveRef.current = false;
+        setGalleryRouteRevealActive(false);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to calculate truck route');
+      setRoute(null);
+      galleryRouteRevealActiveRef.current = false;
+      setGalleryRouteRevealActive(false);
+      setLoading(false);
+    }
+  }, [
+    departureTime,
+    maxElevationFt,
+    useHereRouting,
+    routeMaxElevationFt,
+    onRouteCalculated,
+    defaultVehicle,
+    holdLoadingUntilRouteReveal,
+  ]);
+
+  const runDurhamDemo = useCallback(() => {
+    setRouteVisualizationAllowed(true);
+    setDemoMode(true);
+    setDemoScenario('durham');
+    setMaxElevationFt(null);
+    void calculateRouteRef.current({ from: DEMO_FROM, to: DEMO_TO, applyInputs: true });
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({ runDurhamDemo, startGalleryDurhamRoute }),
+    [runDurhamDemo, startGalleryDurhamRoute],
+  );
 
   const formatTime = (minutes: number) => {
     const hrs = Math.floor(minutes / 60);
@@ -812,7 +616,41 @@ export default function TruckRouting({
 
   const formatDistance = (miles: number) => `${miles.toFixed(1)} mi`;
 
-  const mapCenter = fromCoords || toCoords || { lat: 39.8283, lng: -98.5795 };
+  const mapCenter =
+    fromCoords || toCoords || mapViewOverride || { lat: 39.8283, lng: -98.5795 };
+
+  const mapZoom =
+    fromCoords && toCoords && !galleryScriptedDemo
+      ? 10
+      : mapViewOverride?.zoom ?? (fromCoords && toCoords ? 10 : 4);
+
+  const lockRoadBasemap = lockBasemap === 'road';
+  const resolvedMapType = lockRoadBasemap
+    ? darkMode
+      ? 'dark'
+      : 'map'
+    : truckMapZoom >= 18
+      ? 'hybrid'
+      : undefined;
+
+  const displayedFrom =
+    galleryScriptedDemo && galleryFromDisplay !== undefined ? galleryFromDisplay : from;
+  const displayedTo = galleryScriptedDemo && galleryToDisplay !== undefined ? galleryToDisplay : to;
+
+  const vehicleFieldsReady = !galleryScriptedDemo || galleryVehicleReady;
+
+  const showMapSection =
+    galleryReveal === 'map' || galleryReveal === 'controls' || galleryReveal === 'full';
+  const showSidebar = galleryReveal === 'controls' || galleryReveal === 'full';
+  const showFooter = galleryReveal === 'full';
+  const showRouteOnMap =
+    routeVisualizationAllowed && !!(fromCoords && toCoords);
+
+  const revealSectionClass = (visible: boolean) =>
+    [
+      'transition-all duration-[400ms] ease-out',
+      visible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-1 scale-[0.98] max-h-0 overflow-hidden pointer-events-none',
+    ].join(' ');
   
   const markers: Array<{
     lat: number;
@@ -842,19 +680,18 @@ export default function TruckRouting({
     }
   }
 
-  // Track if we've calculated a route before
-  const hasCalculatedRef = useRef(false);
-  
   // Auto-recalculate when vehicle profile or departure time changes
   useEffect(() => {
+    if (galleryScriptedDemo) return;
     if (hasCalculatedRef.current && from.trim() && to.trim()) {
       calculateRoute();
     }
-  }, [vehicle, departureTime]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [vehicle, departureTime, galleryScriptedDemo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-recalculate when elevation ceiling changes (exactly once per distinct input state).
   // Debounced so typing doesn't spam requests.
   useEffect(() => {
+    if (galleryScriptedDemo) return;
     if (!fromCoords || !toCoords) return;
     if (!from.trim() || !to.trim()) return;
 
@@ -874,10 +711,11 @@ export default function TruckRouting({
     }, 650);
 
     return () => window.clearTimeout(t);
-  }, [maxElevationFt, fromCoords, toCoords, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [maxElevationFt, fromCoords, toCoords, loading, galleryScriptedDemo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // If a queued elevation change exists, run it once when loading finishes.
   useEffect(() => {
+    if (galleryScriptedDemo) return;
     if (loading) return;
     const pending = pendingAutoRecalcKeyRef.current;
     if (!pending) return;
@@ -987,11 +825,13 @@ export default function TruckRouting({
         <div className="flex items-center gap-2">
           <input
             type="number"
-            value={value}
+            value={vehicleFieldsReady ? value : ''}
             min={constraint?.min}
             max={constraint?.max}
             step={step}
+            readOnly={!vehicleFieldsReady}
             onChange={(e) => {
+              if (!vehicleFieldsReady) return;
               const newValue = parseFloat(e.target.value);
               if (!isNaN(newValue)) {
                 setVehicle(prev => ({ ...prev, [field]: newValue }));
@@ -1014,46 +854,86 @@ export default function TruckRouting({
 
   return (
     <div 
-      className="prism-widget w-full md:w-[1240px]"
+      className={`prism-widget w-full md:w-[1240px]${suppressCardElevation ? ' prism-widget--flat' : ''}`}
       data-theme={darkMode ? 'dark' : 'light'}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
       } as React.CSSProperties}
     >
-      <WidgetHeader
-        title="Truck Routing"
-        subtitle="Plan a truck-safe route with constraints and restrictions."
-        variant="impressive"
-        layout="inline"
-        icon={<Truck className="w-4 h-4" />}
-      />
+      <div className={revealSectionClass(true)}>
+        <WidgetHeader
+          title="Truck Routing"
+          subtitle="Plan a truck-safe route with constraints and restrictions."
+          variant="impressive"
+          layout="inline"
+          icon={<Truck className="w-4 h-4" />}
+        />
+      </div>
       {/* Wider + shorter (avoid page scroll; keep settings visible) */}
       <div className="flex flex-col md:flex-row md:h-[700px]">
         {/* Map - shown first on mobile */}
-        <div className="h-[300px] md:h-auto md:flex-1 md:order-2">
-          <MapQuestMap
-            apiKey={apiKey}
-            center={mapCenter}
-            zoom={fromCoords && toCoords ? 10 : 4}
-            darkMode={darkMode}
-            accentColor={accentColor}
-            height="100%"
-            markers={markers}
-            clusterMarkers={showTruckPois && truckPois.length > 0}
-            clusterRadiusPx={56}
-            showRoute={!!(fromCoords && toCoords)}
-            routeStart={fromCoords || undefined}
-            routeEnd={toCoords || undefined}
-            routeType="fastest"
-            routePolyline={routePolyline}
-            mapType={truckMapZoom >= 18 ? 'hybrid' : undefined}
-            onBoundsChange={handleTruckBoundsChange}
-          />
+        <div
+          className={`h-[300px] md:h-auto md:flex-1 md:order-2 ${revealSectionClass(showMapSection)}`}
+        >
+          {mapDisplayMode === 'skeleton' ? (
+            <div
+              className="h-full min-h-[300px] w-full animate-pulse"
+              style={{
+                background: darkMode
+                  ? 'linear-gradient(180deg, rgba(30,41,59,0.9) 0%, rgba(15,23,42,0.95) 100%)'
+                  : 'linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%)',
+              }}
+              aria-hidden
+            />
+          ) : (
+            <div
+              className={`h-full min-h-[300px] w-full transition-opacity duration-700 ease-out ${
+                mapFadedIn ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+            <MapQuestMap
+              apiKey={apiKey}
+              center={mapCenter}
+              zoom={mapZoom}
+              darkMode={darkMode}
+              accentColor={accentColor}
+              height="100%"
+              markers={markers}
+              clusterMarkers={showTruckPois && truckPois.length > 0}
+              clusterRadiusPx={56}
+              showRoute={showRouteOnMap}
+              routeStart={showRouteOnMap ? fromCoords || undefined : undefined}
+              routeEnd={showRouteOnMap ? toCoords || undefined : undefined}
+              routeType="fastest"
+              routePolyline={showRouteOnMap ? routePolyline : undefined}
+              mapType={resolvedMapType}
+              lockBasemap={lockRoadBasemap ? 'road' : undefined}
+              flyToView={
+                mapFlyToKey > 0 && mapViewOverride
+                  ? {
+                      lat: mapViewOverride.lat,
+                      lng: mapViewOverride.lng,
+                      zoom: mapViewOverride.zoom,
+                      durationMs: mapFlyToDurationMs,
+                      key: mapFlyToKey,
+                    }
+                  : undefined
+              }
+              suppressRouteAutoFit={galleryScriptedDemo}
+              onBoundsChange={handleTruckBoundsChange}
+              onMapReady={onMapReady}
+              tilesRaggedReveal={mapTilesRaggedReveal}
+              animateRouteReveal={effectiveAnimateRouteReveal && showRouteOnMap}
+              routeRevealDurationMs={routeRevealDurationMs}
+              onRouteRevealComplete={handleRouteRevealComplete}
+            />
+            </div>
+          )}
         </div>
         {/* Sidebar */}
-        <div 
-          className="w-full md:w-[500px] flex flex-col border-t md:border-t-0 md:border-r md:order-1"
+        <div
+          className={`w-full md:w-[500px] flex flex-col border-t md:border-t-0 md:border-r md:order-1 ${revealSectionClass(showSidebar)}`}
           style={{ borderColor: border }}
         >
           {/* Body: fixed controls + scrollable results + fixed CTA footer */}
@@ -1065,7 +945,11 @@ export default function TruckRouting({
                 <div className="px-4 py-3">
                   <CollapsibleSection
                     title="Vehicle Profile"
-                    summary={`${vehicle.height} ft H × ${vehicle.width} ft W × ${vehicle.length} ft L · ${vehicle.weight} tons · ${vehicle.axleCount} axles`}
+                    summary={
+                      vehicleFieldsReady
+                        ? `${vehicle.height} ft H × ${vehicle.width} ft W × ${vehicle.length} ft L · ${vehicle.weight} tons · ${vehicle.axleCount} axles`
+                        : 'Height, weight, dimensions…'
+                    }
                     open={showVehicleSettings}
                     defaultOpen={true}
                     onOpenChange={setShowVehicleSettings}
@@ -1174,14 +1058,10 @@ export default function TruckRouting({
                     Route
                   </div>
                   <div className="flex items-center gap-2">
+                    {!hidePresetDemoButtons ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        setDemoMode(true);
-                        setDemoScenario('durham');
-                        setMaxElevationFt(null);
-                        calculateRoute({ from: DEMO_FROM, to: DEMO_TO, applyInputs: true });
-                      }}
+                      onClick={() => void runDurhamDemo()}
                       disabled={loading}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${!loading ? 'hover:brightness-110' : ''}`}
                       style={{
@@ -1193,6 +1073,8 @@ export default function TruckRouting({
                     >
                       Durham demo
                     </button>
+                    ) : null}
+                    {!hidePresetDemoButtons ? (
                     <button
                       type="button"
                       onClick={() => {
@@ -1212,6 +1094,7 @@ export default function TruckRouting({
                     >
                       Donner Pass demo
                     </button>
+                    ) : null}
                   </div>
                 </div>
             <div className="space-y-2">
@@ -1231,8 +1114,9 @@ export default function TruckRouting({
                   A
                 </div>
                 <AddressAutocomplete
-                  value={from}
+                  value={displayedFrom}
                     onChange={(v) => {
+                      if (galleryScriptedDemo) return;
                       if (demoMode) setDemoMode(false);
                       if (demoScenario) setDemoScenario(null);
                       setFrom(v);
@@ -1254,7 +1138,7 @@ export default function TruckRouting({
                   borderColor={borderColor}
                   className="flex-1"
                   hideIcon
-                    readOnly={demoMode}
+                    readOnly={demoMode || galleryScriptedDemo}
                 />
               </div>
 
@@ -1274,8 +1158,9 @@ export default function TruckRouting({
                   B
                 </div>
                 <AddressAutocomplete
-                  value={to}
+                  value={displayedTo}
                     onChange={(v) => {
+                      if (galleryScriptedDemo) return;
                       if (demoMode) setDemoMode(false);
                       if (demoScenario) setDemoScenario(null);
                       setTo(v);
@@ -1297,7 +1182,7 @@ export default function TruckRouting({
                   borderColor={borderColor}
                   className="flex-1"
                   hideIcon
-                    readOnly={demoMode}
+                    readOnly={demoMode || galleryScriptedDemo}
                 />
               </div>
             </div>
@@ -1569,7 +1454,12 @@ export default function TruckRouting({
             >
               <button
                 onClick={() => calculateRoute()}
-                disabled={loading || !from.trim() || !to.trim()}
+                disabled={
+                  !displayedFrom.trim() ||
+                  !displayedTo.trim() ||
+                  (loading && !galleryScriptedDemo)
+                }
+                aria-busy={loading || undefined}
                 className={`prism-btn prism-btn-primary w-full ${!(loading || !from.trim() || !to.trim()) ? 'hover:brightness-110 transition-all' : ''}`}
                 style={{ 
                   background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
@@ -1602,8 +1492,8 @@ export default function TruckRouting({
       </div>
 
       {/* Footer / Branding */}
-      {showBranding && (
-        <div className="prism-footer">
+      {showBranding && showFooter && (
+        <div className={`prism-footer ${revealSectionClass(true)}`}>
           {companyLogo && (
             <img 
               src={companyLogo} 
@@ -1623,4 +1513,6 @@ export default function TruckRouting({
       )}
     </div>
   );
-}
+});
+
+export default TruckRouting;

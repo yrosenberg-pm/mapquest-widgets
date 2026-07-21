@@ -8,6 +8,7 @@ import { setApiKey } from '@/lib/mapquest';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 import { 
   StarbucksFinder,
+  CoffeeShopFinder,
   CitiBikeFinder,
   DirectionsEmbed,
   TruckRouting,
@@ -42,6 +43,7 @@ const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 const VALID_WIDGETS = [
   'nhl',
   'starbucks',
+  'coffee-shop',
   'citibike',
   'directions',
   'truck',
@@ -232,6 +234,8 @@ export default function WidgetPage() {
         return <NHLArenaExplorer {...commonProps} />;
       case 'starbucks':
         return <StarbucksFinder {...commonProps} />;
+      case 'coffee-shop':
+        return <CoffeeShopFinder {...commonProps} />;
       case 'citibike':
         return <CitiBikeFinder {...commonProps} />;
       case 'directions':

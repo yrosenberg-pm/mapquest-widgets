@@ -400,11 +400,17 @@ interface DirectionsResult {
   maneuverIndexes?: number[];
 }
 
+export interface GetDirectionsOptions {
+  /** When true, asks MapQuest to try to avoid toll roads (`avoids=Toll Road`). */
+  avoidTolls?: boolean;
+}
+
 export async function getDirections(
   from: string,
   to: string,
   routeType: 'fastest' | 'shortest' | 'pedestrian' | 'bicycle' = 'fastest',
-  departureTime?: Date | 'now'
+  departureTime?: Date | 'now',
+  options?: GetDirectionsOptions
 ): Promise<DirectionsResult | null> {
   try {
     const params = new URLSearchParams({
@@ -414,6 +420,10 @@ export async function getDirections(
       routeType,
       useTraffic: 'true', // Enable real-time traffic
     });
+
+    if (options?.avoidTolls) {
+      params.set('avoids', 'Toll Road');
+    }
     
     // Add departure time for traffic predictions
     if (departureTime && departureTime !== 'now') {
