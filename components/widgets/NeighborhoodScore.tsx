@@ -120,33 +120,6 @@ function getClosestScore(distance: number, thresholdType: ThresholdType): number
   return 0;
 }
 
-function ringArea(ring: [number, number][]): number {
-  let a = 0;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    a += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
-  }
-  return Math.abs(a / 2);
-}
-
-function geojsonToMapCoords(geometry: any): { lat: number; lng: number }[] | null {
-  if (!geometry) return null;
-  const { type, coordinates } = geometry;
-  if (type === 'Polygon' && coordinates?.[0])
-    return coordinates[0].map(([lng, lat]: [number, number]) => ({ lat, lng }));
-  if (type === 'MultiPolygon' && coordinates?.length) {
-    let best: [number, number][] = [];
-    let bestArea = 0;
-    for (const poly of coordinates) {
-      if (poly[0]) {
-        const a = ringArea(poly[0]);
-        if (a > bestArea) { bestArea = a; best = poly[0]; }
-      }
-    }
-    return best.map(([lng, lat]) => ({ lat, lng }));
-  }
-  return null;
-}
-
 function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3959;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -156,54 +129,6 @@ function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number):
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLng / 2) * Math.sin(dLng / 2);
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-/** Ray-cast: true if (lat,lng) is inside a simple polygon ring (map coords). */
-function pointInPolygon(lat: number, lng: number, polygon: { lat: number; lng: number }[]): boolean {
-  if (polygon.length < 3) return false;
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const yi = polygon[i].lat;
-    const xi = polygon[i].lng;
-    const yj = polygon[j].lat;
-    const xj = polygon[j].lng;
-    const denom = yj - yi || 1e-12;
-    const intersect =
-      (yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / denom + xi;
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-
-/**
- * Minimum disk (center + radius) that covers the axis-aligned bbox of the neighborhood.
- * Search from this center with this radius reaches every point inside the polygon's bbox,
- * then we clip to the true boundary with pointInPolygon.
- */
-function bboxSearchDisk(poly: { lat: number; lng: number }[]): { centerLat: number; centerLng: number; radiusMiles: number } {
-  let minLat = Infinity;
-  let maxLat = -Infinity;
-  let minLng = Infinity;
-  let maxLng = -Infinity;
-  for (const p of poly) {
-    if (p.lat < minLat) minLat = p.lat;
-    if (p.lat > maxLat) maxLat = p.lat;
-    if (p.lng < minLng) minLng = p.lng;
-    if (p.lng > maxLng) maxLng = p.lng;
-  }
-  const centerLat = (minLat + maxLat) / 2;
-  const centerLng = (minLng + maxLng) / 2;
-  const corners = [
-    { lat: minLat, lng: minLng },
-    { lat: minLat, lng: maxLng },
-    { lat: maxLat, lng: minLng },
-    { lat: maxLat, lng: maxLng },
-  ];
-  let radiusMiles = 0;
-  for (const c of corners) {
-    radiusMiles = Math.max(radiusMiles, haversineMiles(centerLat, centerLng, c.lat, c.lng));
-  }
-  return { centerLat, centerLng, radiusMiles: Math.min(75, radiusMiles * 1.06) };
 }
 
 const categoryConfigs: Record<string, CategoryConfig> = {
@@ -352,11 +277,6 @@ export default function NeighborhoodScore({
   const [walkabilityPolygons, setWalkabilityPolygons] = useState<Array<{ coordinates: { lat: number; lng: number }[]; color: string; label: string }>>([]);
   const [walkabilityLoading, setWalkabilityLoading] = useState(false);
 
-  // Area boundary state
-  const [boundaryPolygon, setBoundaryPolygon] = useState<{ lat: number; lng: number }[] | null>(null);
-  const [boundaryLabel, setBoundaryLabel] = useState<string>('');
-  const [boundaryHint, setBoundaryHint] = useState<string>('');
-
   // EV Score state
   const [evScore, setEvScore] = useState<number | null>(null);
   const [evBreakdown, setEvBreakdown] = useState<{
@@ -486,112 +406,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     }
   }, []);
 
-  const resolveBoundary = useCallback(async (addr: string, loc?: { lat: number; lng: number } | null): Promise<{ polygon: { lat: number; lng: number }[]; label: string } | 'too_large' | null> => {
-    if (!addr.trim()) return null;
-    const trimmed = addr.trim();
-    const parts = trimmed.split(',').map(s => s.trim());
-
-    const primaryName = parts[0];
-    const isStreetAddress = /^\d+\s/.test(primaryName);
-    const primaryIsZip = /^\d{5}$/.test(primaryName);
-    const zipMatch = trimmed.match(/\b(\d{5})\b/);
-
-    const isTooLarge = (coords: { lat: number; lng: number }[]) => {
-      let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-      for (const c of coords) {
-        if (c.lat < minLat) minLat = c.lat;
-        if (c.lat > maxLat) maxLat = c.lat;
-        if (c.lng < minLng) minLng = c.lng;
-        if (c.lng > maxLng) maxLng = c.lng;
-      }
-      return (maxLat - minLat) > 1.5 || (maxLng - minLng) > 1.5;
-    };
-
-    // ATTOM-enhanced resolution (try first for street addresses)
-    if (loc && isStreetAddress) {
-      try {
-        const commaIdx = trimmed.indexOf(',');
-        const a1 = commaIdx > 0 ? trimmed.slice(0, commaIdx).trim() : trimmed;
-        const a2 = commaIdx > 0 ? trimmed.slice(commaIdx + 1).trim() : '';
-        const params = new URLSearchParams({ type: 'attom-neighborhood', q: trimmed });
-        if (a1) { params.set('address1', a1); params.set('address2', a2); }
-        params.set('lat', String(loc.lat));
-        params.set('lng', String(loc.lng));
-
-        const res = await fetch(`/api/boundary?${params}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (!data.approximate) {
-            const coords = geojsonToMapCoords(data.geometry);
-            if (coords && coords.length >= 3 && !isTooLarge(coords)) {
-              return { polygon: coords, label: data.label || primaryName };
-            }
-          }
-        }
-      } catch { /* ATTOM boundary unavailable, fall through */ }
-    }
-
-    const attempts: { type: string; q: string }[] = [];
-
-    if (primaryIsZip) {
-      attempts.push({ type: 'zip', q: primaryName });
-    } else if (isStreetAddress) {
-      if (zipMatch) attempts.push({ type: 'zip', q: zipMatch[1] });
-      const cityPart = parts.find((p, i) =>
-        i > 0 && !/^\d/.test(p) && !/united states/i.test(p) && !/^[A-Z]{2}$/.test(p) && !/^[A-Z]{2}\s+\d{5}/.test(p)
-      );
-      if (cityPart) {
-        attempts.push({ type: 'neighborhood', q: cityPart });
-      }
-    } else {
-      if (zipMatch) attempts.push({ type: 'zip', q: zipMatch[1] });
-      attempts.push({ type: 'neighborhood', q: trimmed });
-      // Only try the bare name when the user didn't provide location context
-      if (parts.length === 1) {
-        attempts.push({ type: 'neighborhood', q: primaryName });
-      }
-    }
-
-    const seen = new Set<string>();
-    const unique = attempts.filter(a => {
-      const key = `${a.type}:${a.q}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    let rejectedAsLarge = false;
-
-    try {
-      for (const attempt of unique) {
-        const res = await fetch(`/api/boundary?type=${attempt.type}&q=${encodeURIComponent(attempt.q)}`);
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (data.approximate) continue;
-        const coords = geojsonToMapCoords(data.geometry);
-        if (coords && coords.length >= 3) {
-          if (isTooLarge(coords)) { rejectedAsLarge = true; continue; }
-          return { polygon: coords, label: data.label || primaryName };
-        }
-      }
-      for (const attempt of unique) {
-        const res = await fetch(`/api/boundary?type=${attempt.type}&q=${encodeURIComponent(attempt.q)}`);
-        if (!res.ok) continue;
-        const data = await res.json();
-        const coords = geojsonToMapCoords(data.geometry);
-        if (coords && coords.length >= 3) {
-          if (isTooLarge(coords)) { rejectedAsLarge = true; continue; }
-          return { polygon: coords, label: data.label || primaryName };
-        }
-      }
-    } catch { /* boundary unavailable */ }
-    // If all neighborhood attempts failed (e.g. user searched a city name), hint to narrow
-    if (!primaryIsZip && !isStreetAddress && !rejectedAsLarge && unique.length > 0) {
-      rejectedAsLarge = true;
-    }
-    return rejectedAsLarge ? 'too_large' : null;
-  }, []);
-
   const fetchEvScore = useCallback(async (loc: { lat: number; lng: number }) => {
     try {
       const params = new URLSearchParams({ lat: String(loc.lat), lng: String(loc.lng) });
@@ -695,25 +509,17 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     setError(null);
 
     try {
-      const boundaryResult = await resolveBoundary(address, loc);
-      const neighborhoodPoly =
-        boundaryResult && boundaryResult !== 'too_large' ? boundaryResult.polygon : null;
-      const areaDisk = neighborhoodPoly ? bboxSearchDisk(neighborhoodPoly) : null;
-
-      const poiSearchCenterLat = areaDisk?.centerLat ?? loc!.lat;
-      const poiSearchCenterLng = areaDisk?.centerLng ?? loc!.lng;
-      const poiApiRadiusMiles = areaDisk?.radiusMiles ?? null;
       const maxFallbackRadius = Math.max(
         ...categories
           .filter((c) => c.id !== 'publicTransit')
           .map((c) => (categoryConfigs[c.id] || { searchRadius: 2 }).searchRadius),
         2,
       );
-      const radiusForApiAll = poiApiRadiusMiles ?? maxFallbackRadius;
+      const radiusForApiAll = maxFallbackRadius;
 
       let ntpoisPool: Awaited<ReturnType<typeof fetchNtpoisPlacePool>> = [];
       if (categories.some((c) => c.id !== 'publicTransit')) {
-        ntpoisPool = await fetchNtpoisPlacePool(poiSearchCenterLat, poiSearchCenterLng, radiusForApiAll, 2500);
+        ntpoisPool = await fetchNtpoisPlacePool(loc.lat, loc.lng, radiusForApiAll, 2500);
       }
 
       const rawCategoryScores = await Promise.all(
@@ -722,9 +528,9 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
               const config = categoryConfigs[category.id] || { idealCount: 3, searchRadius: 2, thresholdType: 'standard' as ThresholdType };
 
               if (category.id === 'publicTransit') {
-                const transitRadiusMi = poiApiRadiusMiles ?? Math.max(config.searchRadius, 2);
+                const transitRadiusMi = Math.max(config.searchRadius, 2);
                 const fetchRadius = Math.round(Math.max(transitRadiusMi, 2) * 1609.34);
-                const inStr = `${poiSearchCenterLat},${poiSearchCenterLng};r=${fetchRadius}`;
+                const inStr = `${loc.lat},${loc.lng};r=${fetchRadius}`;
                 const res = await fetch(`/api/here?endpoint=stations&in=${encodeURIComponent(inStr)}&maxPlaces=50`);
                 if (!res.ok) throw new Error('Station search failed');
                 const data = await res.json();
@@ -751,12 +557,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                     isRail,
                   };
                 }).filter((p: StationPOI) => p.distance > 0 && p.distance <= transitRadiusMi);
-
-                if (neighborhoodPoly) {
-                  allStations = allStations.filter(
-                    p => p.lat != null && p.lng != null && pointInPolygon(p.lat, p.lng, neighborhoodPoly),
-                  );
-                }
 
                 const railStations = allStations.filter(s => s.isRail).sort((a, b) => a.distance - b.distance);
                 const busStations = allStations.filter(s => !s.isRail).sort((a, b) => a.distance - b.distance);
@@ -839,11 +639,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                   };
                 })
                 .filter(p => p.lat != null && p.lng != null)
-                .filter(p =>
-                  neighborhoodPoly
-                    ? pointInPolygon(p.lat!, p.lng!, neighborhoodPoly)
-                    : p.distance >= 0 && p.distance <= config.searchRadius,
-                )
+                .filter(p => p.distance >= 0 && p.distance <= config.searchRadius)
                 .filter(p => {
                   if (category.id === 'grocery') {
                     const nameLower = p.name.toLowerCase();
@@ -858,7 +654,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
               const score = calculateCategoryScore(pois, config);
 
               let description: string;
-              const areaPhrase = neighborhoodPoly ? 'in this area' : 'nearby';
+              const areaPhrase = 'nearby';
               if (score >= 4) description = `Excellent ${category.name.toLowerCase()} options ${areaPhrase}`;
               else if (score >= 3) description = `Good variety ${areaPhrase}`;
               else if (score >= 2) description = `Some options ${areaPhrase}`;
@@ -879,21 +675,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
             }
           })
         );
-
-      // Set boundary state
-      if (boundaryResult === 'too_large') {
-        setBoundaryPolygon(null);
-        setBoundaryLabel('');
-        setBoundaryHint('That area is too broad — try a zip code or neighborhood for a more detailed score.');
-      } else if (boundaryResult) {
-        setBoundaryPolygon(boundaryResult.polygon);
-        setBoundaryLabel(boundaryResult.label);
-        setBoundaryHint('');
-      } else {
-        setBoundaryPolygon(null);
-        setBoundaryLabel('');
-        setBoundaryHint('');
-      }
 
       const categoryScores = rawCategoryScores;
 
@@ -1061,20 +842,12 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
               return markers;
             })()}
-            polygons={[
-              ...(boundaryPolygon ? [{
-                coordinates: boundaryPolygon,
-                color: accentColor,
-                fillOpacity: 0.08,
-                strokeWidth: 2,
-              }] : []),
-              ...(showWalkability ? walkabilityPolygons.map(p => ({
-                coordinates: p.coordinates,
-                color: p.color,
-                fillOpacity: 0.12,
-                strokeWidth: 2,
-              })) : []),
-            ]}
+            polygons={showWalkability ? walkabilityPolygons.map(p => ({
+              coordinates: p.coordinates,
+              color: p.color,
+              fillOpacity: 0.12,
+              strokeWidth: 2,
+            })) : []}
             fitBounds={mapFitBounds}
             zoomToLocation={mapZoomToLocation}
             mapType={mapZoom >= 18 ? 'hybrid' : undefined}
@@ -1295,16 +1068,6 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
 
           {/* Scrollable content area */}
           <div className="flex-1 overflow-y-auto prism-scrollbar">
-
-            {boundaryHint && (
-              <div
-                className="mx-4 mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg text-xs leading-relaxed"
-                style={{ background: '#f59e0b12', border: '1px solid #f59e0b30', color: '#92400e' }}
-              >
-                <MapPin className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
-                <span>{boundaryHint}</span>
-              </div>
-            )}
 
             {/* Overall Score + Quick Tools */}
             {overallScore !== null && (
