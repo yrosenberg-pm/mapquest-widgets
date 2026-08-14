@@ -569,6 +569,184 @@ export async function optimizeRoute(locations: Location[]): Promise<OptimizeRout
   }
 }
 
+// ============ TRUCK ROUTE (v2 POST, address strings) ============
+
+export interface TruckRouteOptions {
+  routeType: 'TRUCK';
+  unit: 'm';
+  narrativeType: 'none';
+  manMaps: boolean;
+  timeType: 2;
+  useTraffic: boolean;
+  shapeFormat: 'raw';
+  fullShape: true;
+  date: string;
+  localTime: string;
+  vehicleLength: number;
+  vehicleWidth: number;
+  vehicleHeight: number;
+  vehicleWeightTotal: number;
+  vehicleAxleWeight: string;
+}
+
+export interface TruckRouteLocation {
+  street?: string;
+  adminArea5?: string;
+  adminArea3?: string;
+  adminArea1?: string;
+  postalCode?: string;
+  latLng?: { lat: number; lng: number };
+  geocodeQuality?: string;
+  geocodeQualityCode?: string;
+  sideOfStreet?: string;
+  linkId?: string;
+  unknownInput?: string;
+}
+
+export interface TruckRouteLeg {
+  /** Elapsed time for this leg in seconds (MapQuest v2). */
+  time: number;
+  distance?: number;
+  maneuvers?: { distance?: number; time?: number }[];
+}
+
+export interface TruckRouteResponse {
+  info?: { statuscode?: number; messages?: string[] };
+  route?: {
+    distance?: number;
+    /** Seconds (MapQuest v2). */
+    time?: number;
+    /** Seconds (MapQuest v2). Traffic-adjusted when useTraffic is on. */
+    realTime?: number;
+    hasUTurn?: boolean;
+    hasDifficultTurn?: boolean;
+    locationSequence?: number[];
+    legs?: TruckRouteLeg[];
+    locations?: TruckRouteLocation[];
+    shape?: { shapePoints?: number[]; legIndexes?: number[]; maneuverIndexes?: number[] };
+    boundingBox?: { ul?: { lat: number; lng: number }; lr?: { lat: number; lng: number } };
+  };
+}
+
+export interface TruckRouteCallMeta {
+  elapsedMs: number;
+  endpointPath: string;
+  method: 'POST';
+  optimized: boolean;
+  options: TruckRouteOptions;
+  locations: string[];
+}
+
+export interface TruckRouteCallResult {
+  data: TruckRouteResponse;
+  meta: TruckRouteCallMeta;
+}
+
+/** MapQuest may return 1-based or 0-based indices; validates a full permutation. */
+export function normalizeLocationSequence(seq: number[] | undefined, n: number): number[] | null {
+  const nums = (Array.isArray(seq) ? seq : [])
+    .map((x) => Number(x))
+    .filter((x) => Number.isFinite(x));
+  if (!nums.length || !Number.isFinite(n) || n <= 0 || nums.length < n) return null;
+
+  const slice = nums.slice(0, n);
+  let indices: number[];
+  if (slice.every((x) => x >= 1 && x <= n)) {
+    indices = slice.map((x) => x - 1);
+  } else if (slice.every((x) => x >= 0 && x < n)) {
+    indices = slice.slice();
+  } else {
+    return null;
+  }
+
+  const sorted = [...indices].sort((a, b) => a - b);
+  if (!sorted.every((v, i) => v === i)) return null;
+  return indices;
+}
+
+export function buildVisitOrder(locationCount: number, locationSequence?: number[]): number[] {
+  const normalized = normalizeLocationSequence(locationSequence, locationCount);
+  if (normalized) return normalized;
+  return Array.from({ length: locationCount }, (_, i) => i);
+}
+
+export function remapTruckRouteToVisitOrder(
+  route: NonNullable<TruckRouteResponse['route']>,
+  visitOrder: number[],
+): NonNullable<TruckRouteResponse['route']> {
+  const oldLocs = route.locations ?? [];
+  return {
+    ...route,
+    locations: visitOrder.map((i) => oldLocs[i]),
+    locationSequence: visitOrder.map((_, i) => i),
+  };
+}
+
+export function parseTruckShapePoints(raw?: number[]): { lat: number; lng: number }[] {
+  if (!Array.isArray(raw) || raw.length < 2) return [];
+  const out: { lat: number; lng: number }[] = [];
+  for (let i = 0; i < raw.length - 1; i += 2) {
+    out.push({ lat: raw[i], lng: raw[i + 1] });
+  }
+  return out;
+}
+
+export function truckRouteBoundingBoxToFitBounds(
+  bbox?: { ul?: { lat: number; lng: number }; lr?: { lat: number; lng: number } },
+) {
+  if (!bbox?.ul || !bbox?.lr) return undefined;
+  return {
+    north: Math.max(bbox.ul.lat, bbox.lr.lat),
+    south: Math.min(bbox.ul.lat, bbox.lr.lat),
+    west: Math.min(bbox.ul.lng, bbox.lr.lng),
+    east: Math.max(bbox.ul.lng, bbox.lr.lng),
+  };
+}
+
+export async function truckRoute(params: {
+  locations: string[];
+  options: TruckRouteOptions;
+  optimized?: boolean;
+}): Promise<TruckRouteCallResult> {
+  const optimized = params.optimized === true;
+  const endpointPath = optimized ? '/directions/v2/optimizedroute' : '/directions/v2/route';
+
+  const urlParams = new URLSearchParams({ endpoint: 'truck-route' });
+  const key = getApiKey();
+  if (key) urlParams.set('apiKey', key);
+
+  const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const res = await fetch(buildUrl(urlParams), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      optimized,
+      locations: params.locations,
+      options: params.options,
+    }),
+  });
+  const elapsedMs = Math.round(
+    (typeof performance !== 'undefined' ? performance.now() : Date.now()) - started,
+  );
+
+  const data = (await res.json()) as TruckRouteResponse & { error?: string; details?: string };
+  if (!res.ok) {
+    throw new Error(data.details || data.error || `Truck route failed (${res.status})`);
+  }
+
+  return {
+    data,
+    meta: {
+      elapsedMs,
+      endpointPath,
+      method: 'POST',
+      optimized,
+      options: params.options,
+      locations: params.locations,
+    },
+  };
+}
+
 // ============ TRAFFIC ============
 
 interface TrafficIncident {

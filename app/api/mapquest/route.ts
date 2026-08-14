@@ -479,7 +479,76 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/** Truck routing v2 — POST JSON `{ locations: string[], options }` with address strings only. */
+async function handleTruckRoutePost(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const clientKey = searchParams.get('apiKey');
+  const apiKey = clientKey || MAPQUEST_KEY;
+
+  if (!apiKey) {
+    return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
+  }
+
+  let body: { optimized?: boolean; locations?: string[]; options?: Record<string, unknown> };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const locations = Array.isArray(body.locations)
+    ? body.locations.filter((loc): loc is string => typeof loc === 'string' && loc.trim() !== '')
+    : [];
+
+  if (locations.length < 2) {
+    return NextResponse.json({ error: 'At least two location strings are required' }, { status: 400 });
+  }
+
+  const optimized = body.optimized === true;
+  const mqPath = optimized ? ENDPOINTS.optimizedroute : ENDPOINTS.directions;
+  const url = `${mqPath}?key=${apiKey}`;
+  const requestBody = {
+    locations,
+    options: body.options ?? {},
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`MapQuest truck route error: ${response.status}`, errorText);
+    return NextResponse.json(
+      { error: 'MapQuest API request failed', details: errorText },
+      { status: response.status },
+    );
+  }
+
+  const data = await response.json();
+  return NextResponse.json(data, {
+    headers: { 'Cache-Control': 'no-store' },
+  });
+}
+
 // Also support POST for widgets that need it
 export async function POST(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const endpoint = searchParams.get('endpoint');
+
+  if (endpoint === 'truck-route') {
+    try {
+      return await handleTruckRoutePost(request);
+    } catch (error) {
+      console.error('Truck route proxy error:', error);
+      return NextResponse.json(
+        { error: 'Failed to proxy truck route request', details: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 500 },
+      );
+    }
+  }
+
   return GET(request);
 }

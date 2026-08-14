@@ -18,6 +18,7 @@ export { default as NHLArenaExplorer } from './NHLArenaExplorer';
 export { default as HereIsolineWidget } from './HereIsolineWidget';
 export { default as IsolineOverlapWidget } from './IsolineOverlapWidget';
 export { default as TruckRouting } from './TruckRouting';
+export { default as TruckRoutePlanner } from './TruckRoutePlanner';
 export { default as RouteWeatherAlerts } from './RouteWeatherAlerts';
 export { default as CheckoutFlowWidget } from './CheckoutFlowWidget';
 export { default as ConstructionHeatmap } from './ConstructionHeatmap';

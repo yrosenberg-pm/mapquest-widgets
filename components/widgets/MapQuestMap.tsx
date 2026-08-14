@@ -23,6 +23,8 @@ interface MapMarker {
   color?: string;
   type?: 'home' | 'poi' | 'default';
   iconUrl?: string;
+  /** Inline SVG/HTML — sharper than rasterized data-URI images on Leaflet markers. */
+  iconHtml?: string;
   iconSize?: [number, number];
   iconAnchor?: [number, number];
   // When using `iconUrl`, MapQuestMap used to force a circular crop via border-radius.
@@ -756,6 +758,13 @@ export default function MapQuestMap({
       .modern-marker:hover img {
         filter: drop-shadow(0 5px 10px rgba(0,0,0,0.35));
       }
+      .modern-marker-crisp svg {
+        display: block;
+        filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.28));
+      }
+      .modern-marker-crisp:hover svg {
+        filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.34));
+      }
       /* Only add shadow to non-custom-icon markers */
       .modern-marker-with-shadow {
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
@@ -1221,8 +1230,13 @@ export default function MapQuestMap({
       let iconAnchor: [number, number];
       let popupAnchor: [number, number];
       
-      // Custom icon URL takes precedence
-      if (marker.iconUrl) {
+      // Inline SVG/HTML — crisp vector markers (preferred over data-URI img)
+      if (marker.iconHtml) {
+        iconSize = (marker.iconSize || [48, 48]) as [number, number];
+        iconAnchor = (marker.iconAnchor || [iconSize[0] / 2, iconSize[1] / 2]) as [number, number];
+        popupAnchor = [0, -iconAnchor[1]] as [number, number];
+        markerHtml = marker.iconHtml;
+      } else if (marker.iconUrl) {
         const size = marker.iconSize || [28, 28];
         const iconCircular = marker.iconCircular !== false;
         iconSize = size as [number, number];
@@ -1281,14 +1295,18 @@ export default function MapQuestMap({
           ? marker.zIndexOffset
           : type === 'home'
             ? 1000
-            : marker.iconUrl
+            : marker.iconUrl || marker.iconHtml
               ? 500
               : type === 'poi'
                 ? 0
                 : 500;
       
       // Custom icon markers don't get shadow, others do
-      const markerClassName = marker.iconUrl
+      const markerClassName = marker.iconHtml
+        ? marker.pulse
+          ? 'modern-marker modern-marker-crisp pulse-marker'
+          : 'modern-marker modern-marker-crisp'
+        : marker.iconUrl
         ? marker.pulse
           ? 'modern-marker pulse-marker'
           : 'modern-marker'
@@ -2053,9 +2071,10 @@ export default function MapQuestMap({
       return;
     }
 
-    // Colored route segments (e.g., congestion visualization)
-    if (showRoute && routeSegments && routeSegments.length > 0) {
+    // Colored route segments (e.g., congestion visualization) over a deep-blue base ribbon
+    if (routeSegments && routeSegments.length > 0) {
       const allLatLngs: [number, number][] = [];
+      const lineBlue = routeColor || accentColor || DEFAULT_ROUTE_BLUE;
 
       routeSegments.forEach((seg) => {
         if (!seg.coords || seg.coords.length < 2) return;
@@ -2064,22 +2083,53 @@ export default function MapQuestMap({
         });
       });
 
+      const casingLatLngs: [number, number][] =
+        routePolyline && routePolyline.length >= 2
+          ? routePolyline.map((p) => [p.lat, p.lng] as [number, number])
+          : allLatLngs;
+
+      if (casingLatLngs.length >= 2) {
+        L.polyline(casingLatLngs, {
+          color: '#000000',
+          weight: 13,
+          opacity: 0.1,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routeLayerRef.current);
+        L.polyline(casingLatLngs, {
+          color: '#ffffff',
+          weight: 11,
+          opacity: 0.98,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routeLayerRef.current);
+        L.polyline(casingLatLngs, {
+          color: lineBlue,
+          weight: 8,
+          opacity: 0.95,
+          lineCap: 'round',
+          lineJoin: 'round',
+          smoothFactor: 1.2,
+        }).addTo(routeLayerRef.current);
+      }
+
       routeSegments.forEach((seg) => {
         if (!seg.coords || seg.coords.length < 2) return;
         const latLngs = seg.coords.map((p) => [p.lat, p.lng] as [number, number]);
-        const w = seg.weight ?? 6;
+        const w = seg.weight ?? 5;
         L.polyline(latLngs, {
           color: seg.color,
           weight: w,
-          opacity: seg.opacity ?? 0.92,
+          opacity: seg.opacity ?? 0.95,
           lineCap: 'round',
           lineJoin: 'round',
           smoothFactor: 1.2,
         }).addTo(routeLayerRef.current);
       });
 
-      if (mapRef.current && allLatLngs.length > 1) {
-        const bounds = L.latLngBounds(allLatLngs);
+      const fitLatLngs = casingLatLngs.length >= 2 ? casingLatLngs : allLatLngs;
+      if (mapRef.current && fitLatLngs.length > 1 && !suppressRouteAutoFit) {
+        const bounds = L.latLngBounds(fitLatLngs);
         mapRef.current.fitBounds(bounds, { padding: [50, 50] });
       }
       return;

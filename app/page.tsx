@@ -20,6 +20,7 @@ import {
   HereIsolineWidget,
   IsolineOverlapWidget,
   TruckRouting,
+  TruckRoutePlanner,
   RouteWeatherAlerts,
   CheckoutFlowWidget,
   EVChargingPlanner,
@@ -36,6 +37,8 @@ import {
   MapillaryStreetViewShowcase,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
+import TruckRoutePlannerApiPanel from '@/components/gallery/TruckRoutePlannerApiPanel';
+import { ZONAR_BRAND, type TruckRouteTraceState } from '@/lib/truckRoutePlannerTrace';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -46,6 +49,7 @@ type WidgetId =
   | 'citibike'
   | 'directions'
   | 'truck'
+  | 'truck-route-planner'
 
   | 'neighborhood'
   | 'multistop'
@@ -70,7 +74,7 @@ type WidgetId =
   | 'streetview-showcase';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
-const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike']);
+const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner']);
 
 type MenuSection = 'routing' | 'other' | 'branded';
 
@@ -81,6 +85,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', section: 'routing', menuLucide: Route },
   { id: 'listing-tour' as WidgetId, name: 'Listing Tour Planner', description: 'Multi-day open house routing for listing agents', section: 'routing', menuLucide: House },
   { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', section: 'routing', menuLucide: Truck },
+  { id: 'truck-route-planner' as WidgetId, name: 'Zonar Route Planner', description: 'School-bus truck routing demo for Zonar × MapQuest', section: 'routing', menuLucide: Truck, menuIcon: '/brand/zonar-logo.png?v=5' },
   { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing', menuLucide: AlertTriangle },
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', section: 'routing', menuLucide: CloudSun },
   { id: 'transit' as WidgetId, name: 'Public Transit Departures', description: 'Real-time station boards & departure times', section: 'routing', menuLucide: Train },
@@ -179,6 +184,11 @@ function HomeContent() {
 
   // Custom Route: keep the latest builder config so the Customize → Embed Code tab can generate a real embed.
   const [customRouteConfig, setCustomRouteConfig] = useState<any>(null);
+  const [truckRouteTrace, setTruckRouteTrace] = useState<TruckRouteTraceState>({
+    loading: false,
+    result: null,
+    error: null,
+  });
 
   // Load preferences from localStorage on mount
   useEffect(() => {
@@ -213,6 +223,16 @@ function HomeContent() {
       setActiveWidget(urlWidget);
     }
   }, [urlWidget]);
+
+  useEffect(() => {
+    if (activeWidget !== 'truck-route-planner') return;
+    setBrandingMode('cobranded');
+    setCompanyName('');
+    setCompanyLogo(ZONAR_BRAND.companyLogo);
+    setAccentColor(ZONAR_BRAND.accentColor);
+    setCustomColor(ZONAR_BRAND.accentColor);
+    setBorderRadius(ZONAR_BRAND.borderRadius);
+  }, [activeWidget]);
 
   // Save preferences to localStorage when they change
   useEffect(() => {
@@ -249,13 +269,18 @@ function HomeContent() {
       const availableWidth = viewport.clientWidth;
       if (!naturalWidth || !availableWidth) return;
 
+      if (activeWidget === 'truck-route-planner') {
+        setWidgetScale(1);
+        setScaledHeight(Math.round(naturalHeight));
+        return;
+      }
+
       // Presentation sizing caps:
       // - Tablet/iPad: keep widgets significantly smaller for demos.
       // - Desktop: only cap the *largest* widgets so they always fit the frame, and don't grow when the menu is collapsed.
       const isTablet = window.matchMedia?.('(min-width: 768px) and (max-width: 1024px)').matches ?? false;
       const isLargeDesktop = window.matchMedia?.('(min-width: 1025px)').matches ?? true;
-      const isBigWidget = false; // All widgets now render at 1:1 scale
-      const cap = isTablet ? 0.56 : isLargeDesktop && isBigWidget ? 0.9 : 1;
+      const cap = isTablet ? 0.56 : isLargeDesktop ? 0.9 : 1;
       const nextScale = Math.min(cap, availableWidth / naturalWidth);
       setWidgetScale(nextScale);
       setScaledHeight(Math.round(naturalHeight * nextScale));
@@ -278,6 +303,15 @@ function HomeContent() {
   const handleWidgetSelect = (widgetId: WidgetId) => {
     setActiveWidget(widgetId);
     setSidebarMobileOpen(false);
+    if (widgetId === 'truck-route-planner') {
+      setBrandingMode('cobranded');
+      setCompanyName('');
+      setCompanyLogo(ZONAR_BRAND.companyLogo);
+      setAccentColor(ZONAR_BRAND.accentColor);
+      setCustomColor(ZONAR_BRAND.accentColor);
+      setBorderRadius(ZONAR_BRAND.borderRadius);
+      setTruckRouteTrace({ loading: false, result: null, error: null });
+    }
   };
 
   const toggleSidebarHidden = () => {
@@ -362,7 +396,13 @@ function HomeContent() {
     }
 
     const iframeHeight =
-      activeWidget === 'isoline-overlap' ? 740 : activeWidget === 'listing-tour' ? 840 : 640;
+      activeWidget === 'isoline-overlap'
+        ? 740
+        : activeWidget === 'listing-tour'
+          ? 840
+          : activeWidget === 'truck-route-planner'
+            ? 920
+            : 640;
     const safeSrc = url.toString();
 
     return [
@@ -421,6 +461,13 @@ function HomeContent() {
         return <DirectionsEmbed {...commonProps} />;
       case 'truck':
         return <TruckRouting {...commonProps} />;
+      case 'truck-route-planner':
+        return (
+          <TruckRoutePlanner
+            {...commonProps}
+            onRouteTrace={setTruckRouteTrace}
+          />
+        );
       case 'route-weather':
         return <RouteWeatherAlerts {...commonProps} />;
       case 'checkout':
@@ -521,6 +568,7 @@ function HomeContent() {
   };
 
   // Street View is the only widget that should use a full-width measure box; others keep fit-content (intrinsic size).
+  const isTruckRouteDemo = activeWidget === 'truck-route-planner';
   const isStreetViewPlayground = activeWidget === 'streetview-showcase';
 
   // Embed mode: show only the widget without header/menu
@@ -849,11 +897,15 @@ function HomeContent() {
             </div>
 
             {/* Widget Display (auto-scales on iPad/tablet to prevent clipping) */}
-            <div className="relative z-10 flex w-full justify-center" ref={widgetViewportRef}>
+            <div
+              className={`relative z-10 flex w-full justify-center ${isTruckRouteDemo ? 'px-2' : ''}`}
+              ref={widgetViewportRef}
+            >
               <div
-                className="relative w-full"
+                className={`relative w-full ${isTruckRouteDemo ? 'max-w-[1600px]' : ''}`}
                 style={{
-                  height: scaledHeight != null ? `${scaledHeight}px` : undefined,
+                  height: isTruckRouteDemo ? undefined : scaledHeight != null ? `${scaledHeight}px` : undefined,
+                  minHeight: !isTruckRouteDemo && scaledHeight != null ? `${scaledHeight}px` : undefined,
                   transition: 'height 180ms ease',
                 }}
               >
@@ -861,23 +913,42 @@ function HomeContent() {
                   className={
                     isStreetViewPlayground
                       ? 'w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]'
-                      : 'w-full max-w-full md:w-auto'
+                      : isTruckRouteDemo
+                        ? 'flex flex-col xl:flex-row gap-5 w-full max-w-[1600px] mx-auto items-stretch xl:items-start justify-center'
+                        : 'w-full max-w-full md:w-auto'
                   }
-                  ref={widgetMeasureRef}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: '50%',
-                    transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
-                    transformOrigin: 'top center',
-                    transition: 'transform 180ms ease',
-                    borderRadius: isStreetViewPlayground ? streetViewBorderRadius(borderRadius) : borderRadius,
-                    boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-                    width: isStreetViewPlayground ? '100%' : 'fit-content',
-                    maxWidth: isStreetViewPlayground ? undefined : '100%',
-                  }}
                 >
-                  {renderWidget()}
+                  <div
+                    ref={widgetMeasureRef}
+                    style={{
+                      position: isTruckRouteDemo ? 'relative' : 'absolute',
+                      top: isTruckRouteDemo ? undefined : 0,
+                      left: isTruckRouteDemo ? undefined : '50%',
+                      transform: isTruckRouteDemo
+                        ? undefined
+                        : widgetScale < 1
+                          ? `translateX(-50%) scale(${widgetScale})`
+                          : 'translateX(-50%)',
+                      transformOrigin: 'top center',
+                      transition: 'transform 180ms ease',
+                      borderRadius: isStreetViewPlayground ? streetViewBorderRadius(borderRadius) : borderRadius,
+                      boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                      overflow: isTruckRouteDemo ? 'hidden' : undefined,
+                      width: isStreetViewPlayground ? '100%' : 'fit-content',
+                      maxWidth: isStreetViewPlayground ? undefined : '100%',
+                      flexShrink: isTruckRouteDemo ? 0 : undefined,
+                    }}
+                  >
+                    {renderWidget()}
+                  </div>
+                  {isTruckRouteDemo && (
+                    <TruckRoutePlannerApiPanel
+                      trace={truckRouteTrace}
+                      darkMode={darkMode}
+                      borderRadius={borderRadius}
+                      className="w-full xl:w-[400px] xl:flex-shrink-0 xl:sticky xl:top-20 xl:self-start"
+                    />
+                  )}
                 </div>
               </div>
             </div>

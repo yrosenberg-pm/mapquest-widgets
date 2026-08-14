@@ -201,3 +201,131 @@ export function stopDotIconDataUri(opts: { color: string }) {
   `.trim();
   return svgDataUri(svg);
 }
+
+/** Shared modern map badge — flat circle, white ring, soft shadow (no teardrop pin). */
+function modernBadgeSvg(opts: { size: number; color: string; inner: string }) {
+  const { size, color, inner } = opts;
+  const c = size / 2;
+  const r = c - 2;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none">
+      <defs>
+        <filter id="mq-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="2" flood-color="#0f172a" flood-opacity="0.22"/>
+        </filter>
+      </defs>
+      <circle cx="${c}" cy="${c}" r="${r}" fill="${color}" stroke="white" stroke-width="2.5" filter="url(#mq-shadow)"/>
+      <g transform="translate(${c}, ${c})">${inner}</g>
+    </svg>
+  `.trim();
+  return svgDataUri(svg);
+}
+
+const ENDPOINT_MARKER_PX = 52;
+const PICKUP_MARKER_PX = 44;
+
+/** Crisp inline SVG for Leaflet divIcon (avoids blurry data-URI img rasterization). */
+function crispMarkerWrap(size: number, svgBody: string) {
+  return `<div style="width:${size}px;height:${size}px;line-height:0;">${svgBody}</div>`;
+}
+
+function endpointMarkerSvg(kind: 'start' | 'school', color: string) {
+  const icon =
+    kind === 'start'
+      ? `
+        <path d="M20 14v24" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M20 14h14l-4 6 4 6H20V14Z" fill="#fff"/>
+        <circle cx="20" cy="38" r="2.5" fill="#fff"/>
+      `
+      : `
+        <path d="M12 22 26 14 40 22 26 30 12 22Z" fill="#fff"/>
+        <path d="M18 26v8c0 3 5 5 8 5s8-2 8-5v-8" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <path d="M40 22v10" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+      `;
+
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${ENDPOINT_MARKER_PX}" height="${ENDPOINT_MARKER_PX}" viewBox="0 0 52 52" fill="none" shape-rendering="geometricPrecision">
+      <circle cx="26" cy="26" r="23" fill="${color}" stroke="#ffffff" stroke-width="3"/>
+      <g stroke-linecap="round" stroke-linejoin="round">${icon}</g>
+    </svg>
+  `.trim();
+}
+
+function pickupMarkerSvg(color: string, label: string) {
+  const text = escapeXmlText(label.slice(0, 2));
+  const fs = label.length >= 2 ? 11 : 13;
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${PICKUP_MARKER_PX}" height="${PICKUP_MARKER_PX}" viewBox="0 0 44 44" fill="none" shape-rendering="geometricPrecision">
+      <circle cx="22" cy="22" r="20" fill="#ffffff" stroke="${color}" stroke-width="3"/>
+      <path d="M22 12 14 18v12h16V18l-8-6Z" fill="${color}"/>
+      <rect x="19" y="23" width="6" height="7" rx="1" fill="#fff"/>
+      <text x="22" y="36" text-anchor="middle" dominant-baseline="middle"
+            font-family="ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif"
+            font-size="${fs}" font-weight="800" fill="${color}">${text}</text>
+    </svg>
+  `.trim();
+}
+
+/** Route start marker HTML (flag at starting point). */
+export function depotMarkerHtml(opts: { color: string }) {
+  return crispMarkerWrap(ENDPOINT_MARKER_PX, endpointMarkerSvg('start', opts.color));
+}
+
+/** School destination marker HTML. */
+export function schoolMarkerHtml(opts: { color: string }) {
+  return crispMarkerWrap(ENDPOINT_MARKER_PX, endpointMarkerSvg('school', opts.color));
+}
+
+/** Home pickup marker HTML with stop number. */
+export function homeStopMarkerHtml(opts: { color: string; label?: string }) {
+  const label = (opts.label || '').trim() || '?';
+  return crispMarkerWrap(PICKUP_MARKER_PX, pickupMarkerSvg(opts.color, label));
+}
+
+/** @deprecated Prefer depotMarkerHtml for sharper map rendering. */
+export function depotIconDataUri(opts: { color: string }) {
+  return modernBadgeSvg({
+    size: 44,
+    color: opts.color,
+    inner: `
+      <path d="M-10 6h20v-1.5L0 -8l-10 14.5V6z" fill="white"/>
+      <rect x="-8" y="6" width="16" height="8" rx="1" fill="white" opacity="0.95"/>
+      <path d="M-6 9.5h4.5M2.5 9.5h4.5" stroke="${opts.color}" stroke-width="1.8" stroke-linecap="round"/>
+      <rect x="-2.5" y="2" width="5" height="3.5" rx="0.5" fill="${opts.color}"/>
+    `,
+  });
+}
+
+/** School destination — flat badge with graduation cap icon. */
+export function schoolIconDataUri(opts: { color: string }) {
+  return modernBadgeSvg({
+    size: 44,
+    color: opts.color,
+    inner: `
+      <path d="M0 -9L-12 -3 0 3.5 12 -3 0 -9z" fill="white"/>
+      <path d="M-7 2v6.5c0 2.4 3.1 3.8 7 3.8s7-1.4 7-3.8V2" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <line x1="12" y1="-2.5" x2="12" y2="5" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    `,
+  });
+}
+
+/** Compact home badge for pickup stops (optional run-order label). */
+export function homeStopIconDataUri(opts: { color: string; label?: string }) {
+  const raw = (opts.label || '').trim();
+  const label = raw ? escapeXmlText(raw.slice(0, 2)) : '';
+  const fs = raw.length >= 2 ? 9 : 10;
+  const numberBlock = label
+    ? `<text x="0" y="11" text-anchor="middle" dominant-baseline="middle"
+            font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+            font-size="${fs}" font-weight="800" fill="white" opacity="0.95">${label}</text>`
+    : '';
+  return modernBadgeSvg({
+    size: 36,
+    color: opts.color,
+    inner: `
+      <path d="M0 -8L-6.5 -3v7.5h13V-3L0 -8z" fill="white"/>
+      <rect x="-2.5" y="1.5" width="5" height="4.5" rx="0.4" fill="${opts.color}"/>
+      ${numberBlock}
+    `,
+  });
+}

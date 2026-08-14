@@ -12,6 +12,7 @@ import {
   CitiBikeFinder,
   DirectionsEmbed,
   TruckRouting,
+  TruckRoutePlanner,
 
   NeighborhoodScore,
   MultiStopPlanner,
@@ -47,6 +48,7 @@ const VALID_WIDGETS = [
   'citibike',
   'directions',
   'truck',
+  'truck-route-planner',
   'route-weather',
   'transit',
   'neighborhood',
@@ -242,6 +244,8 @@ export default function WidgetPage() {
         return <DirectionsEmbed {...commonProps} />;
       case 'truck':
         return <TruckRouting {...commonProps} defaultMaxElevationFt={truckMaxElevationFtNum} />;
+      case 'truck-route-planner':
+        return <TruckRoutePlanner {...commonProps} />;
       case 'route-weather':
         return <RouteWeatherAlerts {...commonProps} />;
       case 'checkout':
