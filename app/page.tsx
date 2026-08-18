@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Settings, X, Check, Copy, Sun, Moon, Palette, Type, Square, Building2, Code, Link2, Loader2, Menu, ChevronDown, ChevronLeft, ChevronRight, Navigation, Route, Waypoints, Truck, AlertTriangle, CloudSun, Clock, Layers, MapPin, Package, ShoppingBag, BatteryCharging, Bike, Coffee, ShoppingCart, Train, ParkingCircle, Hammer, HardHat, BookOpen, LandPlot, DollarSign, User, House, LucideIcon } from 'lucide-react';
@@ -269,12 +269,6 @@ function HomeContent() {
       const availableWidth = viewport.clientWidth;
       if (!naturalWidth || !availableWidth) return;
 
-      if (activeWidget === 'truck-route-planner') {
-        setWidgetScale(1);
-        setScaledHeight(Math.round(naturalHeight));
-        return;
-      }
-
       // Presentation sizing caps:
       // - Tablet/iPad: keep widgets significantly smaller for demos.
       // - Desktop: only cap the *largest* widgets so they always fit the frame, and don't grow when the menu is collapsed.
@@ -319,103 +313,126 @@ function HomeContent() {
     setSidebarMobileOpen(false);
   };
 
-  const generateEmbedCode = () => {
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    // Custom Route uses /embed/route with a compact config parameter.
-    if (activeWidget === 'custom-route') {
-      const cfg = customRouteConfig || {
-        apiKey: API_KEY,
-        title: 'Custom Route',
-        description: '',
-        waypoints: [],
-        routeType: 'fastest',
-        unit: 'm',
-        theme: darkMode ? 'dark' : 'light',
-        darkMode,
-        accentColor,
-        fontFamily,
-        borderRadius,
-        showBranding: brandingMode !== 'whitelabel',
-        companyName: brandingMode === 'cobranded' ? companyName : undefined,
-        companyLogo: brandingMode === 'cobranded' ? companyLogo : undefined,
-        lineColor: '#2563EB',
-        lineWeight: 4,
-        markerStyle: 'lettered',
-        showManeuvers: true,
-        showLegBreakdown: true,
-        width: 1120,
-        height: 820,
-      };
+  const buildEmbedTarget = useCallback(
+    (forPreview = false) => {
+      if (typeof window === 'undefined') return null;
 
-      // Ensure current customization values apply even if the widget didn't emit yet.
-      cfg.theme = darkMode ? 'dark' : 'light';
-      cfg.darkMode = darkMode;
-      cfg.accentColor = accentColor;
-      cfg.fontFamily = fontFamily;
-      cfg.borderRadius = borderRadius;
-      cfg.showBranding = brandingMode !== 'whitelabel';
-      cfg.companyName = brandingMode === 'cobranded' ? companyName : undefined;
-      cfg.companyLogo = brandingMode === 'cobranded' ? companyLogo : undefined;
+      const baseUrl = window.location.origin;
+      const apiKeyParam = forPreview ? API_KEY || 'YOUR_MAPQUEST_API_KEY' : 'YOUR_MAPQUEST_API_KEY';
 
-      const url = new URL(`${baseUrl}/embed/route`);
-      url.searchParams.set('apiKey', 'YOUR_MAPQUEST_API_KEY');
-      url.searchParams.set('config', encodeEmbedConfig(cfg));
-      const safeSrc = url.toString();
-      const iframeHeight = 820;
-      return [
-        `<iframe`,
-        `  src="${safeSrc}"`,
-        `  width="100%"`,
-        `  height="${iframeHeight}"`,
-        `  style="border:0;border-radius:12px;overflow:hidden"`,
-        `  loading="lazy"`,
-        `></iframe>`,
-      ].join('\n');
-    }
+      if (activeWidget === 'custom-route') {
+        const cfg = customRouteConfig || {
+          apiKey: API_KEY,
+          title: 'Custom Route',
+          description: '',
+          waypoints: [],
+          routeType: 'fastest',
+          unit: 'm',
+          theme: darkMode ? 'dark' : 'light',
+          darkMode,
+          accentColor,
+          fontFamily,
+          borderRadius,
+          showBranding: brandingMode !== 'whitelabel',
+          companyName: brandingMode === 'cobranded' ? companyName : undefined,
+          companyLogo: brandingMode === 'cobranded' ? companyLogo : undefined,
+          lineColor: '#2563EB',
+          lineWeight: 4,
+          markerStyle: 'lettered',
+          showManeuvers: true,
+          showLegBreakdown: true,
+          width: 1120,
+          height: 820,
+        };
 
-    const url = new URL(`${baseUrl}/${activeWidget}`);
+        cfg.theme = darkMode ? 'dark' : 'light';
+        cfg.darkMode = darkMode;
+        cfg.accentColor = accentColor;
+        cfg.fontFamily = fontFamily;
+        cfg.borderRadius = borderRadius;
+        cfg.showBranding = brandingMode !== 'whitelabel';
+        cfg.companyName = brandingMode === 'cobranded' ? companyName : undefined;
+        cfg.companyLogo = brandingMode === 'cobranded' ? companyLogo : undefined;
+        if (forPreview) cfg.apiKey = API_KEY;
 
-    // Customer API key — placeholder for the embedding customer to replace
-    url.searchParams.set('apiKey', 'YOUR_MAPQUEST_API_KEY');
-
-    // Make embed self-contained via URL params
-    url.searchParams.set('darkMode', darkMode ? '1' : '0');
-    if (accentColor) url.searchParams.set('accentColor', accentColor);
-    if (fontFamily) url.searchParams.set('fontFamily', fontFamily);
-    if (borderRadius) url.searchParams.set('borderRadius', borderRadius);
-
-    if (brandingMode === 'whitelabel') {
-      url.searchParams.set('showBranding', '0');
-    } else {
-      url.searchParams.set('showBranding', '1');
-      if (brandingMode === 'cobranded') {
-        if (companyName) url.searchParams.set('companyName', companyName);
-        // Note: companyLogo can be a URL or a data URL; data URLs can be very long, so prefer a URL.
-        if (companyLogo) url.searchParams.set('companyLogo', companyLogo);
+        const url = new URL(`${baseUrl}/embed/route`);
+        url.searchParams.set('apiKey', apiKeyParam);
+        url.searchParams.set('config', encodeEmbedConfig(cfg));
+        const height = 820;
+        return { src: url.toString(), height, previewHeight: Math.min(460, Math.round(height * 0.56)) };
       }
-    }
 
-    const iframeHeight =
-      activeWidget === 'isoline-overlap'
-        ? 740
-        : activeWidget === 'listing-tour'
-          ? 840
-          : activeWidget === 'truck-route-planner'
-            ? 920
-            : 640;
-    const safeSrc = url.toString();
+      const url = new URL(`${baseUrl}/${activeWidget}`);
+      url.searchParams.set('apiKey', apiKeyParam);
+      url.searchParams.set('darkMode', darkMode ? '1' : '0');
+      if (accentColor) url.searchParams.set('accentColor', accentColor);
+      if (fontFamily) url.searchParams.set('fontFamily', fontFamily);
+      if (borderRadius) url.searchParams.set('borderRadius', borderRadius);
 
+      if (brandingMode === 'whitelabel') {
+        url.searchParams.set('showBranding', '0');
+      } else {
+        url.searchParams.set('showBranding', '1');
+        if (brandingMode === 'cobranded') {
+          if (companyName) url.searchParams.set('companyName', companyName);
+          if (companyLogo) url.searchParams.set('companyLogo', companyLogo);
+        }
+      }
+
+      const height =
+        activeWidget === 'isoline-overlap'
+          ? 740
+          : activeWidget === 'listing-tour'
+            ? 840
+            : activeWidget === 'truck-route-planner'
+              ? 920
+              : 640;
+
+      return {
+        src: url.toString(),
+        height,
+        previewHeight: Math.min(480, Math.round(height * 0.55)),
+      };
+    },
+    [
+      activeWidget,
+      customRouteConfig,
+      darkMode,
+      accentColor,
+      fontFamily,
+      borderRadius,
+      brandingMode,
+      companyName,
+      companyLogo,
+    ],
+  );
+
+  const embedTarget = useMemo(() => buildEmbedTarget(true), [buildEmbedTarget]);
+
+  const generateEmbedCode = () => {
+    const target = buildEmbedTarget(false);
+    if (!target) return '';
+    const radius = borderRadius || '12px';
     return [
       `<iframe`,
-      `  src="${safeSrc}"`,
+      `  src="${target.src}"`,
       `  width="100%"`,
-      `  height="${iframeHeight}"`,
-      `  style="border:0;border-radius:12px;overflow:hidden"`,
+      `  height="${target.height}"`,
+      `  style="border:0;border-radius:${radius};overflow:hidden;display:block"`,
       `  loading="lazy"`,
       `  allow="geolocation"`,
       `></iframe>`,
     ].join('\n');
   };
+
+  useEffect(() => {
+    if (!showSettings) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [showSettings]);
 
   const copyEmbedCode = () => {
     navigator.clipboard.writeText(generateEmbedCode());
@@ -600,6 +617,7 @@ function HomeContent() {
                 borderRadius:
                   activeWidget === 'streetview-showcase' ? streetViewBorderRadius(borderRadius) : borderRadius,
                 boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                overflow: 'hidden',
                 width: activeWidget === 'streetview-showcase' ? '100%' : 'fit-content',
                 maxWidth: activeWidget === 'streetview-showcase' ? undefined : '100%',
               }}
@@ -898,58 +916,83 @@ function HomeContent() {
 
             {/* Widget Display (auto-scales on iPad/tablet to prevent clipping) */}
             <div
-              className={`relative z-10 flex w-full justify-center ${isTruckRouteDemo ? 'px-2' : ''}`}
+              className={`relative z-10 flex w-full justify-center ${isTruckRouteDemo ? 'px-2' : ''} ${showSettings ? 'invisible pointer-events-none' : ''}`}
+              aria-hidden={showSettings}
               ref={widgetViewportRef}
             >
               <div
-                className={`relative w-full ${isTruckRouteDemo ? 'max-w-[1600px]' : ''}`}
+                className="relative w-full"
                 style={{
-                  height: isTruckRouteDemo ? undefined : scaledHeight != null ? `${scaledHeight}px` : undefined,
-                  minHeight: !isTruckRouteDemo && scaledHeight != null ? `${scaledHeight}px` : undefined,
+                  height: scaledHeight != null ? `${scaledHeight}px` : undefined,
+                  minHeight: scaledHeight != null ? `${scaledHeight}px` : undefined,
                   transition: 'height 180ms ease',
                 }}
               >
-                <div
-                  className={
-                    isStreetViewPlayground
-                      ? 'w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]'
-                      : isTruckRouteDemo
-                        ? 'flex flex-col xl:flex-row gap-5 w-full max-w-[1600px] mx-auto items-stretch xl:items-start justify-center'
-                        : 'w-full max-w-full md:w-auto'
-                  }
-                >
+                {isTruckRouteDemo ? (
                   <div
                     ref={widgetMeasureRef}
+                    className="flex flex-col xl:flex-row gap-5 items-stretch xl:items-start"
                     style={{
-                      position: isTruckRouteDemo ? 'relative' : 'absolute',
-                      top: isTruckRouteDemo ? undefined : 0,
-                      left: isTruckRouteDemo ? undefined : '50%',
-                      transform: isTruckRouteDemo
-                        ? undefined
-                        : widgetScale < 1
+                      position: 'absolute',
+                      top: 0,
+                      left: '50%',
+                      transform:
+                        widgetScale < 1
                           ? `translateX(-50%) scale(${widgetScale})`
                           : 'translateX(-50%)',
                       transformOrigin: 'top center',
                       transition: 'transform 180ms ease',
-                      borderRadius: isStreetViewPlayground ? streetViewBorderRadius(borderRadius) : borderRadius,
-                      boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-                      overflow: isTruckRouteDemo ? 'hidden' : undefined,
-                      width: isStreetViewPlayground ? '100%' : 'fit-content',
-                      maxWidth: isStreetViewPlayground ? undefined : '100%',
-                      flexShrink: isTruckRouteDemo ? 0 : undefined,
+                      width: 'fit-content',
                     }}
                   >
-                    {renderWidget()}
-                  </div>
-                  {isTruckRouteDemo && (
+                    <div
+                      className="flex-shrink-0"
+                      style={{
+                        borderRadius,
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {renderWidget()}
+                    </div>
                     <TruckRoutePlannerApiPanel
                       trace={truckRouteTrace}
                       darkMode={darkMode}
                       borderRadius={borderRadius}
                       className="w-full xl:w-[400px] xl:flex-shrink-0 xl:sticky xl:top-20 xl:self-start"
                     />
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div
+                    className={
+                      isStreetViewPlayground
+                        ? 'w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]'
+                        : 'w-full max-w-full md:w-auto'
+                    }
+                  >
+                    <div
+                      ref={widgetMeasureRef}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: '50%',
+                        transform:
+                          widgetScale < 1
+                            ? `translateX(-50%) scale(${widgetScale})`
+                            : 'translateX(-50%)',
+                        transformOrigin: 'top center',
+                        transition: 'transform 180ms ease',
+                        borderRadius: isStreetViewPlayground ? streetViewBorderRadius(borderRadius) : borderRadius,
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                        overflow: 'hidden',
+                        width: isStreetViewPlayground ? '100%' : 'fit-content',
+                        maxWidth: isStreetViewPlayground ? undefined : '100%',
+                      }}
+                    >
+                      {renderWidget()}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -958,8 +1001,10 @@ function HomeContent() {
 
       {/* Settings Modal */}
       {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
-          <div className={`w-full max-w-[min(100%,calc(64rem*0.7))] rounded-2xl shadow-2xl ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-hidden">
+          <div
+            className={`w-full max-w-5xl max-h-[min(90vh,920px)] rounded-2xl shadow-2xl overflow-hidden flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-white'}`}
+          >
             {/* Modal Header */}
             <div className={`flex items-center justify-between p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
               <h2 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -970,9 +1015,9 @@ function HomeContent() {
               </button>
             </div>
 
-            <div className="flex">
+            <div className="flex flex-1 min-h-0 overflow-hidden">
               {/* Sidebar */}
-              <div className={`w-48 p-2 border-r ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+              <div className={`w-48 flex-shrink-0 p-2 border-r overflow-y-auto ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 {[
                   { id: 'theme', icon: Sun, label: 'Theme' },
                   { id: 'colors', icon: Palette, label: 'Colors' },
@@ -997,7 +1042,7 @@ function HomeContent() {
               </div>
 
               {/* Content */}
-              <div className="flex-1 p-6">
+              <div className="flex-1 min-w-0 p-6 overflow-y-auto">
                 {settingsTab === 'theme' && (
                   <div>
                     <h3 className={`font-medium mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Appearance</h3>
@@ -1316,10 +1361,34 @@ function HomeContent() {
                 )}
 
                 {settingsTab === 'embed' && (
-                  <div>
+                  <div className="min-w-0">
                     <h3 className={`font-medium mb-4 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Embed Code</h3>
-                    <div className="relative rounded-lg overflow-hidden bg-gray-900">
-                      <pre className="p-4 text-sm text-gray-300 whitespace-pre-wrap break-words overflow-x-hidden">
+                    {embedTarget && (
+                      <div className="mb-4 min-w-0">
+                        <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Preview
+                        </p>
+                        <div
+                          className="overflow-hidden border bg-gray-100 isolate"
+                          style={{
+                            borderRadius: borderRadius || '12px',
+                            borderColor: darkMode ? '#374151' : '#e5e7eb',
+                          }}
+                        >
+                          <iframe
+                            key={embedTarget.src}
+                            src={embedTarget.src}
+                            title="Widget embed preview"
+                            className="w-full block border-0"
+                            style={{ height: embedTarget.previewHeight }}
+                            loading="lazy"
+                            allow="geolocation"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <div className="relative rounded-lg overflow-hidden bg-gray-900 min-w-0">
+                      <pre className="p-4 text-sm text-gray-300 whitespace-pre-wrap break-all overflow-x-auto max-w-full">
                         <code>{generateEmbedCode()}</code>
                       </pre>
                       <button

@@ -46,8 +46,10 @@ export default function TruckRoutePlannerEmbedPage() {
         </div>
       }
     >
-      <div className="min-h-screen flex items-start justify-center p-2 md:p-4" style={{ background: 'var(--surface-default, #f3f4f6)' }}>
-        <TruckRoutePlannerEmbedInner />
+      <div className="min-h-screen flex items-start justify-center p-2 md:p-4 overflow-x-hidden" style={{ background: 'var(--surface-default, #f3f4f6)' }}>
+        <div className="w-full max-w-full overflow-hidden">
+          <TruckRoutePlannerEmbedInner />
+        </div>
       </div>
     </Suspense>
   );
