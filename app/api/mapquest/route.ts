@@ -550,5 +550,53 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (endpoint === 'routematrix') {
+    try {
+      const apiKey = searchParams.get('apiKey') || MAPQUEST_KEY;
+      if (!apiKey) {
+        return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
+      }
+      const body = await request.json();
+      const url = `${ENDPOINTS.routematrix}?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      return NextResponse.json(data, { status: response.status, headers: { 'Cache-Control': 'no-store' } });
+    } catch (error) {
+      console.error('Route matrix proxy error:', error);
+      return NextResponse.json(
+        { error: 'Failed to proxy route matrix request', details: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (endpoint === 'fleet-optimized-route') {
+    try {
+      const apiKey = searchParams.get('apiKey') || MAPQUEST_KEY;
+      if (!apiKey) {
+        return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
+      }
+      const body = await request.json();
+      const url = `${ENDPOINTS.optimizedroute}?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      return NextResponse.json(data, { status: response.status, headers: { 'Cache-Control': 'no-store' } });
+    } catch (error) {
+      console.error('Fleet optimized route proxy error:', error);
+      return NextResponse.json(
+        { error: 'Failed to proxy fleet optimized route request', details: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 500 },
+      );
+    }
+  }
+
   return GET(request);
 }

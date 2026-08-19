@@ -747,6 +747,71 @@ export async function truckRoute(params: {
   };
 }
 
+// ============ FLEET ROUTE MATRIX & OPTIMIZATION ============
+
+export async function postRouteMatrixAllToAll(
+  locations: Location[],
+): Promise<unknown> {
+  const urlParams = new URLSearchParams({ endpoint: 'routematrix' });
+  const key = getApiKey();
+  if (key) urlParams.set('apiKey', key);
+
+  const res = await fetch(buildUrl(urlParams), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      locations: locations.map((l) => ({ latLng: { lat: l.lat, lng: l.lng } })),
+      options: { allToAll: true, doReverseGeocode: false, routeType: 'fastest', unit: 'm' },
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error || `Route matrix failed (${res.status})`);
+  }
+  return data;
+}
+
+export interface FleetOptimizedRouteResponse {
+  info?: { statuscode?: number; messages?: string[] };
+  route?: {
+    distance?: number;
+    time?: number;
+    realTime?: number;
+    locationSequence?: number[];
+    shape?: { shapePoints?: number[] };
+  };
+}
+
+export async function fleetOptimizedRoute(body: {
+  locations: (
+    | string
+    | { latLng: { lat: number; lng: number }; constraints?: { visitDurationInSeconds: number } }
+  )[];
+  options?: Record<string, unknown>;
+}): Promise<FleetOptimizedRouteResponse> {
+  const urlParams = new URLSearchParams({ endpoint: 'fleet-optimized-route' });
+  const key = getApiKey();
+  if (key) urlParams.set('apiKey', key);
+
+  const res = await fetch(buildUrl(urlParams), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = (await res.json()) as FleetOptimizedRouteResponse & { error?: string; details?: string };
+  if (!res.ok) {
+    throw new Error(data.details || data.error || `Fleet optimized route failed (${res.status})`);
+  }
+  const status = data.info?.statuscode;
+  if (status !== undefined && status !== 0) {
+    const msg = data.info?.messages?.join(' ') || 'Optimized route failed';
+    throw new Error(msg);
+  }
+  return data;
+}
+
 // ============ TRAFFIC ============
 
 interface TrafficIncident {

@@ -35,6 +35,7 @@ import {
   homeStopMarkerHtml,
   schoolMarkerHtml,
 } from '@/lib/mapMarkerIcons';
+import TruckRouteFleetView from './TruckRouteFleetView';
 
 /** Deep blue route ribbon (Zonar brand) — traffic colors overlay this base. */
 const ROUTE_LINE_BLUE = '#0054A6';
@@ -57,6 +58,7 @@ export interface TruckRoutePlannerProps {
 
 type StopKind = 'start' | 'pickup' | 'end';
 type SidebarView = 'vehicle' | 'stops' | 'options';
+type PlannerMode = 'single' | 'fleet';
 
 interface RouteStop {
   id: string;
@@ -247,6 +249,7 @@ export default function TruckRoutePlanner({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [routeResult, setRouteResult] = useState<TruckRouteCallResult | null>(null);
+  const [plannerMode, setPlannerMode] = useState<PlannerMode>('single');
 
   const [draggedPickupId, setDraggedPickupId] = useState<string | null>(null);
   const [dragOverPickupId, setDragOverPickupId] = useState<string | null>(null);
@@ -678,8 +681,35 @@ export default function TruckRoutePlanner({
             School Bus Route Planner
           </h2>
         </div>
+        <div className="flex p-0.5 rounded-md gap-0.5 flex-shrink-0" style={{ background: 'var(--bg-input)' }}>
+          {(
+            [
+              ['single', 'Single route'],
+              ['fleet', 'Multi-bus'],
+            ] as const
+          ).map(([mode, label]) => {
+            const active = plannerMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setPlannerMode(mode)}
+                className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap"
+                style={{
+                  background: active ? accentColor : 'transparent',
+                  color: active ? '#ffffff' : '#374151',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
+      {plannerMode === 'fleet' ? (
+        <TruckRouteFleetView apiKey={apiKey} accentColor={accentColor} darkMode={darkMode} departure={departure} />
+      ) : (
       <div className="flex flex-col md:flex-row md:h-[720px]">
         <div
           className="w-full md:w-[400px] flex flex-col flex-shrink-0 border-t md:border-t-0 md:border-r md:order-1 min-h-[360px] md:min-h-0"
@@ -1028,8 +1058,9 @@ export default function TruckRoutePlanner({
           />
         </div>
       </div>
+      )}
 
-      {route && schedule.length > 0 && (
+      {plannerMode === 'single' && route && schedule.length > 0 && (
         <div className="border-t px-4 py-4" style={{ borderColor: 'var(--border-subtle)' }}>
           <div
             className="overflow-x-auto overflow-y-auto max-h-[280px] rounded-md border"
