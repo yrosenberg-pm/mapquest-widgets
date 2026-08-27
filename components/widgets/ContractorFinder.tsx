@@ -25,6 +25,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { reverseGeocode } from '@/lib/mapquest';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 /* ─── Types ─── */
 
@@ -265,7 +266,7 @@ async function searchContractorsForZip(
 
 /* ─── Widget Props ─── */
 
-interface ContractorFinderProps {
+interface ContractorFinderProps extends DemoMapProps {
   apiKey: string;
   darkMode?: boolean;
   accentColor?: string;
@@ -274,6 +275,8 @@ interface ContractorFinderProps {
   showBranding?: boolean;
   companyName?: string;
   companyLogo?: string;
+  defaultLocationInput?: string;
+  defaultSearchCenter?: { lat: number; lng: number } | null;
 }
 
 /* ─── Main Component ─── */
@@ -287,6 +290,9 @@ export default function ContractorFinder({
   showBranding,
   companyName,
   companyLogo,
+  defaultLocationInput = '',
+  defaultSearchCenter = null,
+  defaultMapCenter,
 }: ContractorFinderProps) {
   const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
@@ -294,8 +300,8 @@ export default function ContractorFinder({
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
   const bgPanel = 'var(--bg-panel)';
 
-  const [locationInput, setLocationInput] = useState('');
-  const [searchCenter, setSearchCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationInput, setLocationInput] = useState(defaultLocationInput);
+  const [searchCenter, setSearchCenter] = useState<{ lat: number; lng: number } | null>(defaultSearchCenter);
   const [specialty, setSpecialty] = useState('');
   const [propertyType, setPropertyType] = useState('both');
   const [radius, setRadius] = useState<number>(25);
@@ -386,8 +392,8 @@ export default function ContractorFinder({
   }, [contractors, sortBy]);
 
   const mapCenter = useMemo(
-    () => searchCenter || { lat: 39.8283, lng: -98.5795 },
-    [searchCenter],
+    () => resolveMapCenter(searchCenter, defaultMapCenter),
+    [searchCenter, defaultMapCenter],
   );
 
   const [liveMapZoom, setLiveMapZoom] = useState(4);

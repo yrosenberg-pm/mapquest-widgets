@@ -24,8 +24,9 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import { geocode, searchPlaces } from '@/lib/mapquest';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
-interface ParkingFinderProps {
+interface ParkingFinderProps extends DemoMapProps {
   accentColor?: string;
   darkMode?: boolean;
   showBranding?: boolean;
@@ -33,6 +34,7 @@ interface ParkingFinderProps {
   companyLogo?: string;
   fontFamily?: string;
   borderRadius?: string;
+  defaultDestination?: string;
 }
 
 type FacilityType = 'garage' | 'lot' | 'other';
@@ -123,8 +125,10 @@ export default function ParkingFinder({
   companyName,
   companyLogo,
   fontFamily,
+  defaultDestination = '',
+  defaultMapCenter,
 }: ParkingFinderProps) {
-  const [destination, setDestination] = useState('');
+  const [destination, setDestination] = useState(defaultDestination);
   const [destCoords, setDestCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
 
@@ -263,7 +267,7 @@ export default function ParkingFinder({
 
   const mapCenter = selectedSpot
     ? { lat: selectedSpot.lat, lng: selectedSpot.lng }
-    : destCoords || { lat: 40.7128, lng: -74.006 };
+    : resolveMapCenter(destCoords, defaultMapCenter);
 
   const markers = [
     ...(destCoords ? [{

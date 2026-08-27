@@ -481,6 +481,79 @@ export async function getDirections(
   }
 }
 
+function parseRouteShapePoints(route: { shape?: { shapePoints?: unknown } }): { lat: number; lng: number }[] | undefined {
+  const rawShape = route.shape?.shapePoints;
+  if (!Array.isArray(rawShape) || rawShape.length < 2) return undefined;
+  const shapePoints: { lat: number; lng: number }[] = [];
+  for (let i = 0; i < rawShape.length - 1; i += 2) {
+    shapePoints.push({ lat: rawShape[i] as number, lng: rawShape[i + 1] as number });
+  }
+  return shapePoints;
+}
+
+/** Single directions request for an ordered list of stops (replaces N−1 pairwise calls). */
+export async function getMultiStopDirections(
+  locations: Location[],
+  routeType: 'fastest' | 'shortest' = 'fastest',
+  departureTime?: Date | 'now',
+  options?: GetDirectionsOptions,
+): Promise<DirectionsResult | null> {
+  if (locations.length < 2) return null;
+  try {
+    const params = new URLSearchParams({
+      endpoint: 'directions',
+      from: `${locations[0].lat},${locations[0].lng}`,
+      routeType,
+      useTraffic: 'true',
+    });
+    for (let i = 1; i < locations.length; i++) {
+      params.append('to', `${locations[i].lat},${locations[i].lng}`);
+    }
+    if (options?.avoidTolls) {
+      params.set('avoids', 'Toll Road');
+    }
+    if (departureTime && departureTime !== 'now') {
+      params.set('timeType', '1');
+      const dt = departureTime;
+      const dateStr = `${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getDate().toString().padStart(2, '0')}/${dt.getFullYear()} ${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}:00`;
+      params.set('dateTime', dateStr);
+    }
+
+    const res = await fetch(buildUrl(params));
+    if (!res.ok) {
+      console.error('Multi-stop directions API error:', res.status);
+      return null;
+    }
+
+    const data = await res.json();
+    const route = data.route;
+    if (!route || (route as { routeError?: unknown }).routeError) {
+      console.error('Multi-stop route error:', (route as { routeError?: { message?: string } })?.routeError?.message || 'Could not calculate route');
+      return null;
+    }
+
+    const maneuverIndexesRaw = route.shape?.maneuverIndexes;
+    const maneuverIndexes = Array.isArray(maneuverIndexesRaw)
+      ? maneuverIndexesRaw.map((n: unknown) => Number(n)).filter((n) => Number.isFinite(n))
+      : undefined;
+
+    return {
+      distance: route.distance,
+      time: route.time / 60,
+      fuelUsed: route.fuelUsed,
+      hasTolls: route.hasTollRoad,
+      hasHighway: route.hasHighway,
+      legs: route.legs || [],
+      steps: route.legs?.[0]?.maneuvers || [],
+      shapePoints: parseRouteShapePoints(route),
+      maneuverIndexes: maneuverIndexes && maneuverIndexes.length > 0 ? maneuverIndexes : undefined,
+    };
+  } catch (err) {
+    console.error('getMultiStopDirections failed:', err);
+    return null;
+  }
+}
+
 // ============ ROUTE MATRIX ============
 
 interface RouteMatrixOptions {
@@ -521,10 +594,12 @@ export async function getRouteMatrix(
 
 // ============ ROUTE OPTIMIZATION ============
 
-interface OptimizeRouteResult {
+export interface OptimizeRouteResult {
   locationSequence: number[];
   distance: number;
   time: number;
+  legs?: { distance?: number; time?: number }[];
+  shapePoints?: { lat: number; lng: number }[];
 }
 
 export async function optimizeRoute(locations: Location[]): Promise<OptimizeRouteResult | null> {
@@ -561,7 +636,9 @@ export async function optimizeRoute(locations: Location[]): Promise<OptimizeRout
     return {
       locationSequence: route.locationSequence || [],
       distance: route.distance || 0,
-      time: route.time || 0,
+      time: (route.time || 0) / 60,
+      legs: route.legs || [],
+      shapePoints: parseRouteShapePoints(route),
     };
   } catch (err) {
     console.error('[optimizeRoute] Exception:', err);

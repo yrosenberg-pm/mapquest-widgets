@@ -209,6 +209,8 @@ export interface RouteWidgetProps {
   mode?: 'builder' | 'viewer';
   // For Customize → Embed Code: parent can capture the current builder config.
   onBuilderConfigChange?: (config: RouteEmbedConfig) => void;
+  defaultMapCenter?: { lat: number; lng: number };
+  defaultMapZoom?: number;
 }
 
 type DirectionsRoute = {
@@ -454,7 +456,10 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
     markerStyle = 'lettered',
     mode = 'viewer',
     onBuilderConfigChange,
+    defaultMapCenter,
   } = props;
+
+  const emptyMapCenter = defaultMapCenter ?? { lat: 34.0522, lng: -118.2437 };
 
   const resolvedTheme = (darkMode ? 'dark' : theme) as 'light' | 'dark';
   const isDark = resolvedTheme === 'dark';
@@ -908,7 +913,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
         <div className="rounded-xl overflow-hidden border h-[320px] md:h-[380px]" style={{ borderColor: 'var(--border-subtle)' }}>
           <MapQuestMap
             apiKey={apiKey}
-            center={withLabels[0] ? { lat: withLabels[0].lat, lng: withLabels[0].lng } : { lat: 34.0522, lng: -118.2437 }}
+            center={withLabels[0] ? { lat: withLabels[0].lat, lng: withLabels[0].lng } : emptyMapCenter}
             zoom={12}
             darkMode={isDark}
             height="100%"
@@ -1124,7 +1129,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
           <div className="w-full h-full">
             <MapQuestMap
               apiKey={apiKey}
-              center={withLabels[0] ? { lat: withLabels[0].lat, lng: withLabels[0].lng } : { lat: 34.0522, lng: -118.2437 }}
+              center={withLabels[0] ? { lat: withLabels[0].lat, lng: withLabels[0].lng } : emptyMapCenter}
               zoom={12}
               darkMode={isDark}
               height="100%"

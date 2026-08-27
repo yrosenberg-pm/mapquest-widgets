@@ -1,7 +1,7 @@
 'use client';
 
 import { easeInOutCubic, jitter } from '@/lib/gallery/jitter';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 function escapeHtml(text: string): string {
   return text
@@ -510,6 +510,17 @@ export default function MapQuestMap({
   onMapDropRef.current = onMapDrop;
   const [mapReady, setMapReady] = useState(false);
   const [viewRevision, setViewRevision] = useState(0);
+
+  const routeLocationKey = useMemo(() => {
+    if (!routeStart || !routeEnd) return '';
+    return [
+      routeStart.lat,
+      routeStart.lng,
+      routeEnd.lat,
+      routeEnd.lng,
+      ...(waypoints ?? []).flatMap((w) => [w.lat, w.lng]),
+    ].join('|');
+  }, [routeStart, routeEnd, waypoints]);
 
   function svgDataUri(svg: string) {
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
@@ -1990,7 +2001,7 @@ export default function MapQuestMap({
     fetchRoute();
 
     return () => { abortController.abort(); };
-  }, [showRoute, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady, transitSegments, highlightedSegment]);
+  }, [showRoute, routeLocationKey, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady, transitSegments, highlightedSegment]);
 
   // Draw pre-calculated route polyline (e.g., from HERE transit API)
   useEffect(() => {

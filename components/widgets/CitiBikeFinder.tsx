@@ -8,6 +8,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 interface BikeStation {
   id: string;
@@ -30,11 +31,12 @@ interface BikeStation {
   isReturning?: boolean;
 }
 
-interface CitiBikeFinderProps {
+interface CitiBikeFinderProps extends DemoMapProps {
   darkMode?: boolean;
   showBranding?: boolean;
   fontFamily?: string;
   defaultLocation?: { lat: number; lng: number };
+  autoDetectLocation?: boolean;
   onStationSelect?: (station: BikeStation) => void;
 }
 
@@ -144,10 +146,14 @@ export default function CitiBikeFinder({
   showBranding = true,
   fontFamily,
   defaultLocation = { lat: 40.7580, lng: -73.9855 }, // Midtown Manhattan
+  autoDetectLocation = true,
+  defaultMapCenter,
   onStationSelect,
 }: CitiBikeFinderProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
+    autoDetectLocation ? null : defaultLocation,
+  );
   const [allStations, setAllStations] = useState<BikeStation[]>([]); // All stations from API
   const [stations, setStations] = useState<BikeStation[]>([]); // Filtered/sorted stations
   const [selectedStation, setSelectedStation] = useState<BikeStation | null>(null);
@@ -208,6 +214,15 @@ export default function CitiBikeFinder({
       const fetchedStations = await loadAllStations();
       
       if (fetchedStations.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      if (!autoDetectLocation) {
+        if (!hasSearchedRef.current) {
+          setUserLocation(defaultLocation);
+          filterStationsByLocation(defaultLocation, fetchedStations);
+        }
         setLoading(false);
         return;
       }
@@ -312,7 +327,7 @@ export default function CitiBikeFinder({
 
   const mapCenter = selectedStation 
     ? { lat: selectedStation.lat, lng: selectedStation.lng }
-    : userLocation || defaultLocation;
+    : resolveMapCenter(userLocation ?? defaultLocation, defaultMapCenter ?? defaultLocation);
 
   const markers = [
     ...(userLocation ? [{

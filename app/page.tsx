@@ -40,7 +40,15 @@ import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 import TruckRoutePlannerApiPanel from '@/components/gallery/TruckRoutePlannerApiPanel';
 import { ZONAR_BRAND, type TruckRouteTraceState } from '@/lib/truckRoutePlannerTrace';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
+import { DEMO_REGIONS, DEFAULT_DEMO_REGION_ID, getDemoRegion, REGION_LOCKED_WIDGETS } from '@/lib/demo/demoRegions';
+import { getWidgetLocationProps } from '@/lib/demo/widgetLocationProps';
+import type { DemoMapProps } from '@/lib/demo/mapDefaults';
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
+
+/** Zonar co-branding is scoped to the truck route planner widget only. */
+function isZonarCompanyLogo(logo: string): boolean {
+  return logo.includes('zonar-logo');
+}
 
 type WidgetId =
   | 'nhl'
@@ -107,7 +115,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'comp-sales' as WidgetId, name: 'Comparable Sales', description: 'Recent sales near a property, color-coded on a map', section: 'other', menuLucide: DollarSign },
   // — Branded / partner demos ————————————————————————————————
   { id: 'nhl' as WidgetId, name: 'NHL Arena Explorer', description: 'Explore all 32 NHL arenas with nearby amenities', section: 'branded', isCustom: true, menuIcon: '/brand/nhl-shield.svg' },
-  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuIcon: 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d3/Starbucks_Corporation_Logo_2011.svg/1200px-Starbucks_Corporation_Logo_2011.svg.png' },
+  { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuLucide: Coffee },
   { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', section: 'branded', menuIcon: '/brand/instacart-carrot.svg' },
   { id: 'citibike' as WidgetId, name: 'Citi Bike Finder', description: 'Find available bikes and docking stations', section: 'branded', menuIcon: '/brand/citibike-logo.svg' },
 ];
@@ -144,6 +152,54 @@ const RADIUS_OPTIONS = [
   { name: 'Prism', value: '16px' },
 ];
 
+type WidgetMenuEntry = (typeof WIDGETS)[number];
+
+function WidgetMenuIcon({
+  widget,
+  isActive,
+  accentColor,
+  isBranded,
+  variant = 'list',
+}: {
+  widget: Pick<WidgetMenuEntry, 'menuIcon' | 'menuLucide'>;
+  isActive: boolean;
+  accentColor: string;
+  isBranded: boolean;
+  variant?: 'list' | 'rail';
+}) {
+  const lucideClass = variant === 'rail' ? 'w-3.5 h-3.5' : 'w-4 h-4';
+  const imgClass = variant === 'rail' ? 'w-4 h-4' : 'w-5 h-5';
+  const lucideColor = isActive ? accentColor : variant === 'rail' ? '#6b7280' : '#9ca3af';
+
+  if (widget.menuIcon && widget.menuLucide) {
+    const Lucide = widget.menuLucide;
+    return (
+      <span className={`flex items-center flex-shrink-0 ${variant === 'rail' ? 'gap-0.5' : 'gap-1.5'}`}>
+        <Lucide className={`${lucideClass} flex-shrink-0`} style={{ color: lucideColor }} />
+        <img src={widget.menuIcon} alt="" className={`${imgClass} object-contain flex-shrink-0`} />
+      </span>
+    );
+  }
+  if (widget.menuIcon) {
+    return <img src={widget.menuIcon} alt="" className={`${imgClass} flex-shrink-0 object-contain`} />;
+  }
+  if (widget.menuLucide) {
+    const Lucide = widget.menuLucide;
+    return (
+      <Lucide
+        className={`${variant === 'rail' ? 'w-[18px] h-[18px]' : lucideClass} flex-shrink-0`}
+        style={{ color: lucideColor }}
+      />
+    );
+  }
+  return (
+    <div
+      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+      style={{ backgroundColor: isActive ? (isBranded ? '#f97316' : accentColor) : '#d1d5db' }}
+    />
+  );
+}
+
 function HomeContent() {
   const searchParams = useSearchParams();
   
@@ -178,6 +234,7 @@ function HomeContent() {
   const [brandingMode, setBrandingMode] = useState<'mapquest' | 'cobranded' | 'whitelabel'>('mapquest');
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
+  const [demoRegionId, setDemoRegionId] = useState(DEFAULT_DEMO_REGION_ID);
   const [showInternal, setShowInternal] = useState(false);
   const [internalPassInput, setInternalPassInput] = useState('');
   const [internalPassError, setInternalPassError] = useState(false);
@@ -197,14 +254,26 @@ function HomeContent() {
       if (savedPrefs) {
         const prefs = JSON.parse(savedPrefs);
         if (prefs.darkMode !== undefined) setDarkMode(prefs.darkMode);
-        if (prefs.accentColor) setAccentColor(prefs.accentColor);
-        if (prefs.customColor) setCustomColor(prefs.customColor);
         if (prefs.fontFamily) setFontFamily(prefs.fontFamily);
         if (prefs.borderRadius) setBorderRadius(prefs.borderRadius);
-        if (prefs.brandingMode) setBrandingMode(prefs.brandingMode);
+        if (prefs.brandingMode) {
+          const logo = typeof prefs.companyLogo === 'string' ? prefs.companyLogo : '';
+          setBrandingMode(isZonarCompanyLogo(logo) ? 'mapquest' : prefs.brandingMode);
+        }
         if (prefs.companyName) setCompanyName(prefs.companyName);
-        if (prefs.companyLogo) setCompanyLogo(prefs.companyLogo);
+        if (prefs.companyLogo && !isZonarCompanyLogo(prefs.companyLogo)) {
+          setCompanyLogo(prefs.companyLogo);
+        }
+        if (prefs.accentColor && prefs.accentColor !== ZONAR_BRAND.accentColor) {
+          setAccentColor(prefs.accentColor);
+        }
+        if (prefs.customColor && prefs.customColor !== ZONAR_BRAND.accentColor) {
+          setCustomColor(prefs.customColor);
+        }
         if (prefs.sidebarHidden !== undefined) setSidebarHidden(!!prefs.sidebarHidden);
+        if (prefs.demoRegionId && DEMO_REGIONS.some((r) => r.id === prefs.demoRegionId)) {
+          setDemoRegionId(prefs.demoRegionId);
+        }
         // Only use saved widget if no URL parameter
         if (!urlWidget && prefs.activeWidget) setActiveWidget(prefs.activeWidget);
       }
@@ -224,29 +293,25 @@ function HomeContent() {
     }
   }, [urlWidget]);
 
-  useEffect(() => {
-    if (activeWidget !== 'truck-route-planner') return;
-    setBrandingMode('cobranded');
-    setCompanyName('');
-    setCompanyLogo(ZONAR_BRAND.companyLogo);
-    setAccentColor(ZONAR_BRAND.accentColor);
-    setCustomColor(ZONAR_BRAND.accentColor);
-    setBorderRadius(ZONAR_BRAND.borderRadius);
-  }, [activeWidget]);
-
   // Save preferences to localStorage when they change
   useEffect(() => {
     if (!prefsLoaded) return; // Don't save until initial load is complete
     try {
+      const zonarScopedToTruckRoute =
+        activeWidget === 'truck-route-planner' &&
+        (isZonarCompanyLogo(companyLogo) ||
+          accentColor === ZONAR_BRAND.accentColor ||
+          borderRadius === ZONAR_BRAND.borderRadius);
       const prefs = {
         darkMode,
-        accentColor,
-        customColor,
+        accentColor: zonarScopedToTruckRoute && accentColor === ZONAR_BRAND.accentColor ? '#2563eb' : accentColor,
+        customColor: zonarScopedToTruckRoute && customColor === ZONAR_BRAND.accentColor ? '#2563eb' : customColor,
         fontFamily,
-        borderRadius,
-        brandingMode,
-        companyName,
-        companyLogo,
+        borderRadius: zonarScopedToTruckRoute && borderRadius === ZONAR_BRAND.borderRadius ? '16px' : borderRadius,
+        brandingMode: zonarScopedToTruckRoute && isZonarCompanyLogo(companyLogo) ? 'mapquest' : brandingMode,
+        companyName: zonarScopedToTruckRoute ? '' : companyName,
+        companyLogo: zonarScopedToTruckRoute && isZonarCompanyLogo(companyLogo) ? '' : companyLogo,
+        demoRegionId,
         activeWidget,
         sidebarHidden,
       };
@@ -254,7 +319,7 @@ function HomeContent() {
     } catch (e) {
       console.error('Failed to save preferences:', e);
     }
-  }, [prefsLoaded, darkMode, accentColor, customColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo, activeWidget, sidebarHidden]);
+  }, [prefsLoaded, darkMode, accentColor, customColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo, demoRegionId, activeWidget, sidebarHidden]);
 
   // Recompute widget scale to fit the available width (especially useful on iPad/tablet).
   useEffect(() => {
@@ -295,15 +360,19 @@ function HomeContent() {
   }, [activeWidget, sidebarHidden, darkMode, accentColor, fontFamily, borderRadius, brandingMode, companyName, companyLogo]);
 
   const handleWidgetSelect = (widgetId: WidgetId) => {
+    if (activeWidget === 'truck-route-planner' && widgetId !== 'truck-route-planner') {
+      setBrandingMode('mapquest');
+      setCompanyName('');
+      if (isZonarCompanyLogo(companyLogo)) setCompanyLogo('');
+      if (accentColor === ZONAR_BRAND.accentColor) {
+        setAccentColor('#2563eb');
+        setCustomColor('#2563eb');
+      }
+      if (borderRadius === ZONAR_BRAND.borderRadius) setBorderRadius('16px');
+    }
     setActiveWidget(widgetId);
     setSidebarMobileOpen(false);
     if (widgetId === 'truck-route-planner') {
-      setBrandingMode('cobranded');
-      setCompanyName('');
-      setCompanyLogo(ZONAR_BRAND.companyLogo);
-      setAccentColor(ZONAR_BRAND.accentColor);
-      setCustomColor(ZONAR_BRAND.accentColor);
-      setBorderRadius(ZONAR_BRAND.borderRadius);
       setTruckRouteTrace({ loading: false, result: null, error: null });
     }
   };
@@ -335,7 +404,10 @@ function HomeContent() {
           borderRadius,
           showBranding: brandingMode !== 'whitelabel',
           companyName: brandingMode === 'cobranded' ? companyName : undefined,
-          companyLogo: brandingMode === 'cobranded' ? companyLogo : undefined,
+          companyLogo:
+            brandingMode === 'cobranded' && companyLogo && !isZonarCompanyLogo(companyLogo)
+              ? companyLogo
+              : undefined,
           lineColor: '#2563EB',
           lineWeight: 4,
           markerStyle: 'lettered',
@@ -352,7 +424,10 @@ function HomeContent() {
         cfg.borderRadius = borderRadius;
         cfg.showBranding = brandingMode !== 'whitelabel';
         cfg.companyName = brandingMode === 'cobranded' ? companyName : undefined;
-        cfg.companyLogo = brandingMode === 'cobranded' ? companyLogo : undefined;
+        cfg.companyLogo =
+          brandingMode === 'cobranded' && companyLogo && !isZonarCompanyLogo(companyLogo)
+            ? companyLogo
+            : undefined;
         if (forPreview) cfg.apiKey = API_KEY;
 
         const url = new URL(`${baseUrl}/embed/route`);
@@ -368,14 +443,22 @@ function HomeContent() {
       if (accentColor) url.searchParams.set('accentColor', accentColor);
       if (fontFamily) url.searchParams.set('fontFamily', fontFamily);
       if (borderRadius) url.searchParams.set('borderRadius', borderRadius);
+      url.searchParams.set('demoRegion', demoRegionId);
 
-      if (brandingMode === 'whitelabel') {
+      if (activeWidget === 'truck-route-planner') {
+        url.searchParams.set('showBranding', '1');
+        url.searchParams.set('companyLogo', ZONAR_BRAND.companyLogo);
+        url.searchParams.set('accentColor', ZONAR_BRAND.accentColor);
+        url.searchParams.set('borderRadius', ZONAR_BRAND.borderRadius);
+      } else if (brandingMode === 'whitelabel') {
         url.searchParams.set('showBranding', '0');
       } else {
         url.searchParams.set('showBranding', '1');
         if (brandingMode === 'cobranded') {
           if (companyName) url.searchParams.set('companyName', companyName);
-          if (companyLogo) url.searchParams.set('companyLogo', companyLogo);
+          if (companyLogo && !isZonarCompanyLogo(companyLogo)) {
+            url.searchParams.set('companyLogo', companyLogo);
+          }
         }
       }
 
@@ -404,6 +487,7 @@ function HomeContent() {
       brandingMode,
       companyName,
       companyLogo,
+      demoRegionId,
     ],
   );
 
@@ -451,7 +535,38 @@ function HomeContent() {
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const widgetCommonProps = {
+  const sharedCompanyLogo =
+    brandingMode === 'cobranded' && companyLogo && !isZonarCompanyLogo(companyLogo)
+      ? companyLogo
+      : undefined;
+
+  const demoRegion = useMemo(() => getDemoRegion(demoRegionId), [demoRegionId]);
+  const locationProps = useMemo(
+    () => getWidgetLocationProps(activeWidget, demoRegionId),
+    [activeWidget, demoRegionId],
+  );
+  const regionLockedNote = REGION_LOCKED_WIDGETS[activeWidget];
+
+  const regionsByCountry = useMemo(() => {
+    const map = new Map<string, typeof DEMO_REGIONS>();
+    for (const region of DEMO_REGIONS) {
+      const list = map.get(region.country) ?? [];
+      list.push(region);
+      map.set(region.country, list);
+    }
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  }, []);
+
+  const widgetCommonProps: DemoMapProps & {
+    apiKey: string;
+    darkMode: boolean;
+    accentColor: string;
+    fontFamily: string;
+    borderRadius: string;
+    showBranding: boolean;
+    companyName: string | undefined;
+    companyLogo: string | undefined;
+  } = {
     apiKey: API_KEY,
     darkMode,
     accentColor,
@@ -459,51 +574,62 @@ function HomeContent() {
     borderRadius,
     showBranding: brandingMode !== 'whitelabel',
     companyName: brandingMode === 'cobranded' ? companyName : undefined,
-    companyLogo: brandingMode === 'cobranded' ? companyLogo : undefined,
+    companyLogo: sharedCompanyLogo,
+    defaultMapCenter: demoRegion.center,
+    defaultMapZoom: demoRegion.zoom,
   };
 
   const renderWidget = () => {
     const commonProps = widgetCommonProps;
+    const loc = locationProps;
+    const widgetKey = `${activeWidget}-${demoRegionId}`;
 
     switch (activeWidget) {
       case 'nhl':
-        return <NHLArenaExplorer {...commonProps} />;
+        return <NHLArenaExplorer key={widgetKey} {...commonProps} />;
       case 'starbucks':
-        return <StarbucksFinder {...commonProps} />;
+        return <StarbucksFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'coffee-shop':
-        return <CoffeeShopFinder {...commonProps} />;
+        return <CoffeeShopFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'citibike':
-        return <CitiBikeFinder {...commonProps} />;
+        return <CitiBikeFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'directions':
-        return <DirectionsEmbed {...commonProps} />;
+        return <DirectionsEmbed key={widgetKey} {...commonProps} {...loc} />;
       case 'truck':
-        return <TruckRouting {...commonProps} />;
+        return <TruckRouting key={widgetKey} {...commonProps} {...loc} />;
       case 'truck-route-planner':
         return (
           <TruckRoutePlanner
+            key={widgetKey}
             {...commonProps}
+            accentColor={ZONAR_BRAND.accentColor}
+            borderRadius={ZONAR_BRAND.borderRadius}
+            showBranding
+            companyName={undefined}
+            companyLogo={ZONAR_BRAND.companyLogo}
             onRouteTrace={setTruckRouteTrace}
           />
         );
       case 'route-weather':
-        return <RouteWeatherAlerts {...commonProps} />;
+        return <RouteWeatherAlerts key={widgetKey} {...commonProps} {...loc} />;
       case 'checkout':
-        return <CheckoutFlowWidget {...commonProps} />;
+        return <CheckoutFlowWidget key={widgetKey} {...commonProps} />;
       case 'ev-charging':
-        return <EVChargingPlanner {...commonProps} />;
+        return <EVChargingPlanner key={widgetKey} {...commonProps} {...loc} />;
 
       case 'traffic':
         return (
           <LiveTrafficWidget
+            key={widgetKey}
             apiKey={API_KEY}
-            center={{ lat: 34.0522, lng: -118.2437 }}
-            title="Downtown Los Angeles"
+            center={(loc.center as { lat: number; lng: number }) ?? demoRegion.center}
+            title={(loc.title as string) ?? demoRegion.trafficTitle}
             theme={darkMode ? 'dark' : 'light'}
             accentColor={accentColor}
             fontFamily={fontFamily}
             borderRadius={borderRadius}
             refreshInterval={120}
-            zoom={14}
+            zoom={(loc.zoom as number) ?? demoRegion.zoom}
             height={860}
             width={1120}
           />
@@ -520,7 +646,7 @@ function HomeContent() {
             borderRadius={borderRadius}
             showBranding={brandingMode !== 'whitelabel'}
             companyName={brandingMode === 'cobranded' ? companyName : undefined}
-            companyLogo={brandingMode === 'cobranded' ? companyLogo : undefined}
+            companyLogo={sharedCompanyLogo}
             onBuilderConfigChange={setCustomRouteConfig}
             width={1120}
             height={920}
@@ -534,13 +660,16 @@ function HomeContent() {
             showLegBreakdown={true}
             lineColor="#2563EB"
             lineWeight={4}
+            defaultMapCenter={demoRegion.center}
+            defaultMapZoom={demoRegion.zoom}
           />
         );
       case 'neighborhood':
-        return <NeighborhoodScore {...commonProps} />;
+        return <NeighborhoodScore key={widgetKey} {...commonProps} {...loc} />;
       case 'streetview-showcase':
         return (
           <MapillaryStreetViewShowcase
+            key={widgetKey}
             mapquestApiKey={API_KEY}
             darkMode={darkMode}
             accentColor={accentColor}
@@ -548,37 +677,38 @@ function HomeContent() {
             borderRadius={borderRadius}
             showBranding={brandingMode !== 'whitelabel'}
             companyName={brandingMode === 'cobranded' ? companyName : undefined}
-            companyLogo={brandingMode === 'cobranded' ? companyLogo : undefined}
+            companyLogo={sharedCompanyLogo}
+            {...loc}
           />
         );
       case 'multistop':
-        return <MultiStopPlanner {...commonProps} />;
+        return <MultiStopPlanner key={widgetKey} {...commonProps} maxStops={50} />;
       case 'listing-tour':
-        return <ListingTourPlanner {...commonProps} />;
+        return <ListingTourPlanner key={widgetKey} {...commonProps} />;
       case 'delivery':
-        return <DeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
+        return <DeliveryETA key={widgetKey} {...commonProps} {...loc} destinationAddress={demoRegion.deliveryDestination} />;
       case 'instacart':
-        return <InstacartDeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
+        return <InstacartDeliveryETA key={widgetKey} {...commonProps} {...loc} destinationAddress={demoRegion.deliveryDestination} />;
       case 'isoline':
-        return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
+        return <HereIsolineWidget key={widgetKey} {...commonProps} defaultTimeMinutes={15} {...loc} />;
       case 'isoline-overlap':
-        return <IsolineOverlapWidget {...commonProps} />;
+        return <IsolineOverlapWidget key={widgetKey} {...commonProps} />;
       case 'transit':
-        return <PublicTransitDepartures {...commonProps} />;
+        return <PublicTransitDepartures key={widgetKey} {...commonProps} {...loc} />;
       case 'parking':
-        return <ParkingFinder {...commonProps} />;
+        return <ParkingFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'construction':
-        return <ConstructionHeatmap {...commonProps} />;
+        return <ConstructionHeatmap key={widgetKey} {...commonProps} {...loc} />;
       case 'contractor-finder':
-        return <ContractorFinder {...commonProps} />;
+        return <ContractorFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'zone-coverage':
-        return <MultiZoneCoverage {...commonProps} />;
+        return <MultiZoneCoverage key={widgetKey} {...commonProps} />;
       case 'property-intel':
-        return <PropertyIntelligence {...commonProps} />;
+        return <PropertyIntelligence key={widgetKey} {...commonProps} {...loc} />;
       case 'neighborhood-profile':
-        return <NeighborhoodProfile {...commonProps} />;
+        return <NeighborhoodProfile key={widgetKey} {...commonProps} {...loc} />;
       case 'comp-sales':
-        return <ComparableSalesMap {...commonProps} />;
+        return <ComparableSalesMap key={widgetKey} {...commonProps} {...loc} />;
       default:
         return null;
     }
@@ -692,19 +822,7 @@ function HomeContent() {
                       isActive ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-100',
                     ].join(' ')}
                   >
-                    {w.menuIcon ? (
-                      <img src={w.menuIcon} alt="" className="w-5 h-5 object-contain" />
-                    ) : w.menuLucide ? (
-                      <w.menuLucide
-                        className="w-[18px] h-[18px]"
-                        style={{ color: isActive ? accentColor : '#6b7280' }}
-                      />
-                    ) : (
-                      <div
-                        className="w-2.5 h-2.5 rounded-full"
-                        style={{ backgroundColor: isActive ? (isBranded ? '#f97316' : accentColor) : '#d1d5db' }}
-                      />
-                    )}
+                    <WidgetMenuIcon widget={w} isActive={isActive} accentColor={accentColor} isBranded={isBranded} variant="rail" />
                     {isActive && (
                       <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{ backgroundColor: accentColor }} />
                     )}
@@ -748,19 +866,7 @@ function HomeContent() {
                           isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
                         ].join(' ')}
                       >
-                        {w.menuIcon ? (
-                          <img src={w.menuIcon} alt="" className="w-5 h-5 flex-shrink-0 object-contain" />
-                        ) : w.menuLucide ? (
-                          <w.menuLucide
-                            className="w-4 h-4 flex-shrink-0"
-                            style={{ color: isActive ? accentColor : '#9ca3af' }}
-                          />
-                        ) : (
-                          <div
-                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: isActive ? (isBranded ? '#f97316' : accentColor) : '#d1d5db' }}
-                          />
-                        )}
+                        <WidgetMenuIcon widget={w} isActive={isActive} accentColor={accentColor} isBranded={isBranded} />
                         <div className="min-w-0 flex-1">
                           <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
                             {w.name}
@@ -838,19 +944,7 @@ function HomeContent() {
                         isActive ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent',
                       ].join(' ')}
                     >
-                      {w.menuIcon ? (
-                        <img src={w.menuIcon} alt="" className="w-5 h-5 flex-shrink-0 object-contain" />
-                      ) : w.menuLucide ? (
-                        <w.menuLucide
-                          className="w-4 h-4 flex-shrink-0"
-                          style={{ color: isActive ? accentColor : '#9ca3af' }}
-                        />
-                      ) : (
-                        <div
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: isActive ? (isBranded ? '#f97316' : accentColor) : '#d1d5db' }}
-                        />
-                      )}
+                      <WidgetMenuIcon widget={w} isActive={isActive} accentColor={accentColor} isBranded={isBranded} />
                       <div className="min-w-0 flex-1">
                         <div className={`text-sm font-medium truncate ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>{w.name}</div>
                         <div className="text-xs text-gray-500 truncate">{w.description}</div>
@@ -1003,7 +1097,7 @@ function HomeContent() {
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4 overflow-hidden">
           <div
-            className={`w-full max-w-5xl max-h-[min(90vh,920px)] rounded-2xl shadow-2xl overflow-hidden flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-white'}`}
+            className={`w-full max-w-[800px] max-h-[min(90vh,920px)] rounded-2xl shadow-2xl overflow-hidden flex flex-col ${darkMode ? 'bg-gray-900' : 'bg-white'}`}
           >
             {/* Modal Header */}
             <div className={`flex items-center justify-between p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
@@ -1020,6 +1114,7 @@ function HomeContent() {
               <div className={`w-48 flex-shrink-0 p-2 border-r overflow-y-auto ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 {[
                   { id: 'theme', icon: Sun, label: 'Theme' },
+                  { id: 'location', icon: MapPin, label: 'Location' },
                   { id: 'colors', icon: Palette, label: 'Colors' },
                   { id: 'typography', icon: Type, label: 'Typography' },
                   { id: 'shape', icon: Square, label: 'Shape' },
@@ -1118,6 +1213,53 @@ function HomeContent() {
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {settingsTab === 'location' && (
+                  <div>
+                    <h3 className={`font-medium mb-2 ${darkMode ? 'text-white' : 'text-gray-900'}`}>Demo Location</h3>
+                    <p className={`text-sm mb-5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      Choose a city to localize sample addresses, map centers, and routes for your demo.
+                    </p>
+                    {regionLockedNote && (
+                      <div
+                        className={`mb-5 rounded-xl border px-4 py-3 text-sm ${
+                          darkMode ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'
+                        }`}
+                      >
+                        {regionLockedNote}
+                      </div>
+                    )}
+                    <label
+                      htmlFor="demo-region-select"
+                      className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                    >
+                      City
+                    </label>
+                    <select
+                      id="demo-region-select"
+                      value={demoRegionId}
+                      onChange={(e) => setDemoRegionId(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border text-sm transition-colors appearance-none bg-no-repeat bg-[length:1rem] bg-[right_0.75rem_center] ${
+                        darkMode
+                          ? 'border-gray-700 bg-gray-800 text-white bg-[url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2716%27 height=%2716%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%239ca3af%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E")]'
+                          : 'border-gray-200 bg-white text-gray-900 bg-[url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2716%27 height=%2716%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%236b7280%27 stroke-width=%272%27%3E%3Cpath d=%27m6 9 6 6 6-6%27/%3E%3C/svg%3E")]'
+                      }`}
+                    >
+                      {regionsByCountry.map(([country, regions]) => (
+                        <optgroup key={country} label={country}>
+                          {regions.map((region) => (
+                            <option key={region.id} value={region.id}>
+                              {region.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {demoRegion.sampleAddress}
+                    </p>
                   </div>
                 )}
 

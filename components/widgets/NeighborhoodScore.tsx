@@ -15,6 +15,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 interface Category {
   id: string;
@@ -50,7 +51,7 @@ interface CategoryScore {
   error?: boolean;
 }
 
-interface NeighborhoodScoreProps {
+interface NeighborhoodScoreProps extends DemoMapProps {
   address?: string;
   lat?: number;
   lng?: number;
@@ -254,6 +255,7 @@ export default function NeighborhoodScore({
   companyLogo,
   fontFamily,
   onScoreCalculated,
+  defaultMapCenter,
 }: NeighborhoodScoreProps) {
   const [address, setAddress] = useState(initialAddress);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
@@ -750,7 +752,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
     return groups;
   }, {} as Record<string, Category[]>);
 
-  const mapCenter = location || { lat: 39.8283, lng: -98.5795 };
+  const mapCenter = resolveMapCenter(location, defaultMapCenter);
 
   return (
     <div 

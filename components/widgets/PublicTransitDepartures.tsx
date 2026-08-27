@@ -23,8 +23,9 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import { geocode } from '@/lib/mapquest';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
-interface PublicTransitDeparturesProps {
+interface PublicTransitDeparturesProps extends DemoMapProps {
   accentColor?: string;
   darkMode?: boolean;
   showBranding?: boolean;
@@ -32,6 +33,9 @@ interface PublicTransitDeparturesProps {
   companyLogo?: string;
   fontFamily?: string;
   borderRadius?: string;
+  defaultLocation?: { lat: number; lng: number };
+  defaultAddress?: string;
+  autoDetectLocation?: boolean;
 }
 
 type TransitMode = 'bus' | 'rail' | 'subway' | 'tram' | 'ferry' | 'other';
@@ -181,9 +185,13 @@ export default function PublicTransitDepartures({
   companyName,
   companyLogo,
   fontFamily,
+  defaultLocation,
+  defaultAddress = '',
+  autoDetectLocation = true,
+  defaultMapCenter,
 }: PublicTransitDeparturesProps) {
-  const [address, setAddress] = useState('');
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [address, setAddress] = useState(defaultAddress);
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(defaultLocation ?? null);
   const [locating, setLocating] = useState(false);
 
   const [stations, setStations] = useState<TransitStation[]>([]);
@@ -226,8 +234,9 @@ export default function PublicTransitDepartures({
   }, []);
 
   useEffect(() => {
+    if (!autoDetectLocation) return;
     detectLocation();
-  }, [detectLocation]);
+  }, [autoDetectLocation, detectLocation]);
 
   const searchStations = useCallback(async (lat: number, lng: number) => {
     setLoadingStations(true);
@@ -414,7 +423,7 @@ export default function PublicTransitDepartures({
 
   const mapCenter = selectedStation
     ? { lat: selectedStation.lat, lng: selectedStation.lng }
-    : location || { lat: 40.7128, lng: -74.006 };
+    : resolveMapCenter(location, defaultMapCenter);
 
   const markers = [
     ...(location ? [{ lat: location.lat, lng: location.lng, label: 'Your Location', color: '#16A34A', type: 'home' as const }] : []),

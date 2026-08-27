@@ -6,6 +6,7 @@ import { ShoppingBag, Car, MapPin, CheckCircle2, Loader2, RefreshCw, Clock, User
 import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 type DeliveryStatus = 'shopping' | 'checkout' | 'on_the_way' | 'arriving' | 'delivered';
 
@@ -29,7 +30,7 @@ interface DeliveryState {
   totalItems?: number;
 }
 
-interface InstacartDeliveryETAProps {
+interface InstacartDeliveryETAProps extends DemoMapProps {
   orderId?: string;
   destinationAddress: string;
   shopperLocation?: { lat: number; lng: number };
@@ -89,6 +90,7 @@ export default function InstacartDeliveryETA({
   showBranding = true,
   fontFamily,
   simulateMovement = true,
+  defaultMapCenter,
 }: InstacartDeliveryETAProps) {
   const [status, setStatus] = useState<DeliveryState>({
     status: initialStatus,
@@ -232,7 +234,10 @@ export default function InstacartDeliveryETA({
     });
   }
 
-  const mapCenter = status.currentLocation || status.destinationLocation || { lat: 39.7392, lng: -104.9903 };
+  const mapCenter = resolveMapCenter(
+    status.currentLocation || status.destinationLocation,
+    defaultMapCenter,
+  );
 
   // Format ETA time
   const getETATime = () => {

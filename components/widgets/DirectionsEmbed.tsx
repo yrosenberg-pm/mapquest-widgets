@@ -8,6 +8,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 interface RouteStep {
   narrative: string;
@@ -49,7 +50,7 @@ interface TransitSummary {
 
 type RouteType = 'fastest' | 'shortest' | 'pedestrian' | 'bicycle' | 'transit';
 
-interface DirectionsEmbedProps {
+interface DirectionsEmbedProps extends DemoMapProps {
   defaultFrom?: string;
   defaultTo?: string;
   accentColor?: string;
@@ -264,6 +265,8 @@ export default function DirectionsEmbed({
   companyLogo,
   fontFamily,
   onRouteCalculated,
+  defaultMapCenter,
+  defaultMapZoom,
 }: DirectionsEmbedProps) {
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
@@ -689,7 +692,7 @@ export default function DirectionsEmbed({
 
   const formatDistance = (miles: number) => `${miles.toFixed(1)} mi`;
 
-  const mapCenter = fromCoords || toCoords || { lat: 39.8283, lng: -98.5795 };
+  const mapCenter = resolveMapCenter(fromCoords || toCoords, defaultMapCenter);
 
   // Per-segment colored polylines — visually distinct per transit mode,
   // and road-snapped shape for pedestrian mode
@@ -877,7 +880,7 @@ export default function DirectionsEmbed({
           <MapQuestMap
             apiKey={apiKey}
             center={mapCenter}
-            zoom={4}
+            zoom={fromCoords || toCoords ? 4 : (defaultMapZoom ?? 13)}
             darkMode={darkMode}
             accentColor={accentColor}
             height="100%"

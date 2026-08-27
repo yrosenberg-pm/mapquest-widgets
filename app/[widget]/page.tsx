@@ -6,6 +6,9 @@ import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { setApiKey } from '@/lib/mapquest';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
+import { DEFAULT_DEMO_REGION_ID, DEMO_REGIONS, getDemoRegion } from '@/lib/demo/demoRegions';
+import { getWidgetLocationProps } from '@/lib/demo/widgetLocationProps';
+import type { DemoMapProps } from '@/lib/demo/mapDefaults';
 import { 
   StarbucksFinder,
   CoffeeShopFinder,
@@ -86,6 +89,7 @@ export default function WidgetPage() {
   const [showBranding, setShowBranding] = useState(true);
   const [companyName, setCompanyName] = useState('');
   const [companyLogo, setCompanyLogo] = useState('');
+  const [demoRegionId, setDemoRegionId] = useState(DEFAULT_DEMO_REGION_ID);
   const [effectiveApiKey, setEffectiveApiKey] = useState(ENV_API_KEY);
   const [mounted, setMounted] = useState(false);
 
@@ -113,6 +117,7 @@ export default function WidgetPage() {
       const pShowBranding = searchParams.get('showBranding');
       const pCompanyName = searchParams.get('companyName');
       const pCompanyLogo = searchParams.get('companyLogo');
+      const pDemoRegion = searchParams.get('demoRegion');
 
       if (pDark != null) setDarkMode(pDark === '1' || pDark === 'true');
       if (pAccent) setAccentColor(pAccent);
@@ -121,6 +126,7 @@ export default function WidgetPage() {
       if (pShowBranding != null) setShowBranding(!(pShowBranding === '0' || pShowBranding === 'false'));
       if (pCompanyName) setCompanyName(pCompanyName);
       if (pCompanyLogo) setCompanyLogo(pCompanyLogo);
+      if (pDemoRegion && DEMO_REGIONS.some((r) => r.id === pDemoRegion)) setDemoRegionId(pDemoRegion);
     } catch (e) {
       console.error('Failed to load embed URL params:', e);
     }
@@ -137,6 +143,9 @@ export default function WidgetPage() {
         if (searchParams.get('showBranding') == null && prefs.brandingMode) setShowBranding(prefs.brandingMode !== 'whitelabel');
         if (searchParams.get('companyName') == null && prefs.companyName) setCompanyName(prefs.companyName);
         if (searchParams.get('companyLogo') == null && prefs.companyLogo) setCompanyLogo(prefs.companyLogo);
+        if (searchParams.get('demoRegion') == null && prefs.demoRegionId && DEMO_REGIONS.some((r) => r.id === prefs.demoRegionId)) {
+          setDemoRegionId(prefs.demoRegionId);
+        }
       }
     } catch (e) {
       console.error('Failed to load preferences:', e);
@@ -213,7 +222,19 @@ export default function WidgetPage() {
     );
   }
 
-  const commonProps = {
+  const demoRegion = getDemoRegion(demoRegionId);
+  const locationProps = getWidgetLocationProps(widgetId, demoRegionId);
+
+  const commonProps: DemoMapProps & {
+    apiKey: string;
+    darkMode: boolean;
+    accentColor: string;
+    fontFamily: string;
+    borderRadius: string;
+    showBranding: boolean;
+    companyName: string | undefined;
+    companyLogo: string | undefined;
+  } = {
     apiKey: effectiveApiKey,
     darkMode,
     accentColor,
@@ -222,6 +243,8 @@ export default function WidgetPage() {
     showBranding,
     companyName: showBranding ? companyName : undefined,
     companyLogo: showBranding ? companyLogo : undefined,
+    defaultMapCenter: demoRegion.center,
+    defaultMapZoom: demoRegion.zoom,
   };
 
   const renderWidget = () => {
@@ -230,41 +253,44 @@ export default function WidgetPage() {
       pTruckMaxElevationFt != null && pTruckMaxElevationFt !== '' && Number.isFinite(Number(pTruckMaxElevationFt))
         ? Number(pTruckMaxElevationFt)
         : undefined;
+    const loc = locationProps;
+    const widgetKey = `${widgetId}-${demoRegionId}`;
 
     switch (widgetId) {
       case 'nhl':
-        return <NHLArenaExplorer {...commonProps} />;
+        return <NHLArenaExplorer key={widgetKey} {...commonProps} />;
       case 'starbucks':
-        return <StarbucksFinder {...commonProps} />;
+        return <StarbucksFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'coffee-shop':
-        return <CoffeeShopFinder {...commonProps} />;
+        return <CoffeeShopFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'citibike':
-        return <CitiBikeFinder {...commonProps} />;
+        return <CitiBikeFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'directions':
-        return <DirectionsEmbed {...commonProps} />;
+        return <DirectionsEmbed key={widgetKey} {...commonProps} {...loc} />;
       case 'truck':
-        return <TruckRouting {...commonProps} defaultMaxElevationFt={truckMaxElevationFtNum} />;
+        return <TruckRouting key={widgetKey} {...commonProps} {...loc} defaultMaxElevationFt={truckMaxElevationFtNum} />;
       case 'truck-route-planner':
-        return <TruckRoutePlanner {...commonProps} />;
+        return <TruckRoutePlanner key={widgetKey} {...commonProps} />;
       case 'route-weather':
-        return <RouteWeatherAlerts {...commonProps} />;
+        return <RouteWeatherAlerts key={widgetKey} {...commonProps} {...loc} />;
       case 'checkout':
-        return <CheckoutFlowWidget {...commonProps} />;
+        return <CheckoutFlowWidget key={widgetKey} {...commonProps} />;
       case 'ev-charging':
-        return <EVChargingPlanner {...commonProps} />;
+        return <EVChargingPlanner key={widgetKey} {...commonProps} {...loc} />;
 
       case 'traffic':
         return (
           <LiveTrafficWidget
+            key={widgetKey}
             apiKey={effectiveApiKey}
-            center={{ lat: 34.0522, lng: -118.2437 }}
-            title="Downtown Los Angeles"
+            center={(loc.center as { lat: number; lng: number }) ?? demoRegion.center}
+            title={(loc.title as string) ?? demoRegion.trafficTitle}
             theme={darkMode ? 'dark' : 'light'}
             accentColor={accentColor}
             fontFamily={fontFamily}
             borderRadius={borderRadius}
             refreshInterval={120}
-            zoom={14}
+            zoom={(loc.zoom as number) ?? demoRegion.zoom}
             height={860}
             width={1120}
           />
@@ -294,41 +320,44 @@ export default function WidgetPage() {
             showLegBreakdown={true}
             lineColor="#2563EB"
             lineWeight={4}
+            defaultMapCenter={demoRegion.center}
+            defaultMapZoom={demoRegion.zoom}
           />
         );
       case 'neighborhood':
-        return <NeighborhoodScore {...commonProps} />;
+        return <NeighborhoodScore key={widgetKey} {...commonProps} {...loc} />;
       case 'multistop':
-        return <MultiStopPlanner {...commonProps} />;
+        return <MultiStopPlanner key={widgetKey} {...commonProps} maxStops={50} />;
       case 'listing-tour':
-        return <ListingTourPlanner {...commonProps} />;
+        return <ListingTourPlanner key={widgetKey} {...commonProps} />;
       case 'delivery':
-        return <DeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
+        return <DeliveryETA key={widgetKey} {...commonProps} {...loc} destinationAddress={demoRegion.deliveryDestination} />;
       case 'instacart':
-        return <InstacartDeliveryETA {...commonProps} destinationAddress="123 Main St, Seattle, WA 98101" />;
+        return <InstacartDeliveryETA key={widgetKey} {...commonProps} {...loc} destinationAddress={demoRegion.deliveryDestination} />;
       case 'isoline':
-        return <HereIsolineWidget {...commonProps} defaultTimeMinutes={15} />;
+        return <HereIsolineWidget key={widgetKey} {...commonProps} defaultTimeMinutes={15} {...loc} />;
       case 'isoline-overlap':
-        return <IsolineOverlapWidget {...commonProps} />;
+        return <IsolineOverlapWidget key={widgetKey} {...commonProps} />;
       case 'transit':
-        return <PublicTransitDepartures {...commonProps} />;
+        return <PublicTransitDepartures key={widgetKey} {...commonProps} {...loc} />;
       case 'parking':
-        return <ParkingFinder {...commonProps} />;
+        return <ParkingFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'construction':
-        return <ConstructionHeatmap {...commonProps} />;
+        return <ConstructionHeatmap key={widgetKey} {...commonProps} {...loc} />;
       case 'contractor-finder':
-        return <ContractorFinder {...commonProps} />;
+        return <ContractorFinder key={widgetKey} {...commonProps} {...loc} />;
       case 'zone-coverage':
-        return <MultiZoneCoverage {...commonProps} />;
+        return <MultiZoneCoverage key={widgetKey} {...commonProps} />;
       case 'property-intel':
-        return <PropertyIntelligence {...commonProps} />;
+        return <PropertyIntelligence key={widgetKey} {...commonProps} {...loc} />;
       case 'neighborhood-profile':
-        return <NeighborhoodProfile {...commonProps} />;
+        return <NeighborhoodProfile key={widgetKey} {...commonProps} {...loc} />;
       case 'comp-sales':
-        return <ComparableSalesMap {...commonProps} />;
+        return <ComparableSalesMap key={widgetKey} {...commonProps} {...loc} />;
       case 'streetview-showcase':
         return (
           <MapillaryStreetViewShowcase
+            key={widgetKey}
             mapquestApiKey={effectiveApiKey}
             darkMode={darkMode}
             accentColor={accentColor}
@@ -337,6 +366,7 @@ export default function WidgetPage() {
             showBranding={showBranding}
             companyName={companyName || undefined}
             companyLogo={companyLogo || undefined}
+            {...loc}
           />
         );
       default:

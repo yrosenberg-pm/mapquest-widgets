@@ -6,6 +6,8 @@ import { Utensils, ParkingCircle, Cloud, Sun, CloudRain, Snowflake, Navigation, 
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 const NHL_STADIUMS = [
   { id: 1, abbrev: 'ANA', team: 'Anaheim Ducks', arena: 'Honda Center', city: 'Anaheim', state: 'CA', lat: 33.8078, lng: -117.8765, capacity: 17174, color: '#F47A38', year: 1993, conference: 'Western', division: 'Pacific' },
@@ -49,7 +51,7 @@ const NHLShield = ({ className = "w-8 h-8" }: { className?: string }) => (
   <img src="/brand/nhl-shield.svg" alt="NHL" className={`${className} object-contain`} />
 );
 
-interface NHLArenaExplorerProps {
+interface NHLArenaExplorerProps extends DemoMapProps {
   apiKey: string;
   accentColor?: string;
   darkMode?: boolean;
@@ -71,6 +73,7 @@ export default function NHLArenaExplorer({
   fontFamily,
   borderRadius,
   searchRadius = 5,
+  defaultMapCenter,
 }: NHLArenaExplorerProps) {
   const [selectedStadium, setSelectedStadium] = useState<typeof NHL_STADIUMS[0] | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -495,7 +498,7 @@ export default function NHLArenaExplorer({
 
   const mapCenter = selectedStadium 
     ? { lat: selectedStadium.lat, lng: selectedStadium.lng }
-    : { lat: 39.8283, lng: -98.5795 };
+    : resolveMapCenter(null, defaultMapCenter);
 
   const mapMarkers = (() => {
     const markers: Array<{ lat: number; lng: number; label: string; color?: string; type?: 'home' | 'poi' }> = [];

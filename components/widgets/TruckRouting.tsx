@@ -16,6 +16,7 @@ import {
   fetchMapQuestTruckDirections,
   type VehicleProfile,
 } from '@/lib/truckRouting/directions';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -49,7 +50,7 @@ export interface TruckRoutingHandle {
 
 export { TRUCK_GALLERY_DURHAM_FROM, TRUCK_GALLERY_DURHAM_TO, TRUCK_GALLERY_DURHAM_MAP_VIEW };
 
-interface TruckRoutingProps {
+interface TruckRoutingProps extends DemoMapProps {
   defaultFrom?: string;
   defaultTo?: string;
   accentColor?: string;
@@ -194,6 +195,8 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
     holdLoadingUntilRouteReveal = false,
     onRouteRevealComplete,
     suppressCardElevation = false,
+    defaultMapCenter,
+    defaultMapZoom,
   },
   ref
 ) {
@@ -617,7 +620,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
   const formatDistance = (miles: number) => `${miles.toFixed(1)} mi`;
 
   const mapCenter =
-    fromCoords || toCoords || mapViewOverride || { lat: 39.8283, lng: -98.5795 };
+    resolveMapCenter(fromCoords || toCoords || mapViewOverride, defaultMapCenter);
 
   const mapZoom =
     fromCoords && toCoords && !galleryScriptedDemo

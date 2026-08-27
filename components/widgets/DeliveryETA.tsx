@@ -7,6 +7,7 @@ import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 type DeliveryStatus = 'preparing' | 'in_transit' | 'nearby' | 'delivered';
 
@@ -20,7 +21,7 @@ interface DeliveryState {
   driverName?: string;
 }
 
-interface DeliveryETAProps {
+interface DeliveryETAProps extends DemoMapProps {
   orderId?: string;
   destinationAddress: string;
   driverLocation?: { lat: number; lng: number };
@@ -49,6 +50,7 @@ export default function DeliveryETA({
   companyLogo,
   fontFamily,
   simulateMovement = true,
+  defaultMapCenter,
 }: DeliveryETAProps) {
   const [status, setStatus] = useState<DeliveryState>({
     status: initialStatus,
@@ -158,7 +160,10 @@ export default function DeliveryETA({
     });
   }
 
-  const mapCenter = status.currentLocation || status.destinationLocation || { lat: 39.7392, lng: -104.9903 };
+  const mapCenter = resolveMapCenter(
+    status.currentLocation || status.destinationLocation,
+    defaultMapCenter,
+  );
 
   return (
     <div 

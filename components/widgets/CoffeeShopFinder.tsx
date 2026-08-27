@@ -7,6 +7,8 @@ import { geocode, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 interface CoffeeShopLocation {
   id: string;
@@ -21,7 +23,7 @@ interface CoffeeShopLocation {
   duration?: number;
 }
 
-interface CoffeeShopFinderProps {
+interface CoffeeShopFinderProps extends DemoMapProps {
   accentColor?: string;
   darkMode?: boolean;
   showBranding?: boolean;
@@ -30,6 +32,7 @@ interface CoffeeShopFinderProps {
   maxResults?: number;
   searchRadius?: number;
   defaultLocation?: { lat: number; lng: number };
+  autoDetectLocation?: boolean;
   onStoreSelect?: (store: CoffeeShopLocation) => void;
 }
 
@@ -53,10 +56,14 @@ export default function CoffeeShopFinder({
   maxResults = 50,
   searchRadius = 25,
   defaultLocation = { lat: 47.6062, lng: -122.3321 },
+  autoDetectLocation = true,
+  defaultMapCenter,
   onStoreSelect,
 }: CoffeeShopFinderProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
+    autoDetectLocation ? null : defaultLocation,
+  );
   const [stores, setStores] = useState<CoffeeShopLocation[]>([]);
   const [selectedStore, setSelectedStore] = useState<CoffeeShopLocation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,6 +146,12 @@ export default function CoffeeShopFinder({
   const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
+    if (!autoDetectLocation) {
+      setUserLocation(defaultLocation);
+      setLoading(false);
+      setInitialLoadDone(true);
+      return;
+    }
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -251,7 +264,7 @@ export default function CoffeeShopFinder({
 
   const mapCenter = selectedStore
     ? { lat: selectedStore.lat, lng: selectedStore.lng }
-    : pendingLocation || userLocation || { lat: 39.8283, lng: -98.5795 };
+    : resolveMapCenter(pendingLocation || userLocation, defaultMapCenter ?? defaultLocation);
 
   const mapZoom = stores.length > 0 || pendingLocation || loading ? 13 : 4;
 

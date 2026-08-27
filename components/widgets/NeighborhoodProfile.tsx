@@ -27,6 +27,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { geocode } from '@/lib/mapquest';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,7 +81,7 @@ interface POI {
 
 type POICategory = 'school' | 'food' | 'shopping' | 'bank' | 'park';
 
-interface Props {
+interface Props extends DemoMapProps {
   apiKey?: string;
   darkMode?: boolean;
   accentColor?: string;
@@ -89,6 +90,7 @@ interface Props {
   showBranding?: boolean;
   companyName?: string;
   companyLogo?: string;
+  defaultQuery?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,8 +437,11 @@ export default function NeighborhoodProfile({
   showBranding = true,
   companyName,
   companyLogo,
+  defaultQuery = '',
+  defaultMapCenter,
+  defaultMapZoom,
 }: Props) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(defaultQuery);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [community, setCommunity] = useState<CommunityData | null>(null);
@@ -820,7 +825,7 @@ export default function NeighborhoodProfile({
         <div className="h-[360px] md:h-auto md:order-2 relative" style={{ flex: '0 0 60%', maxWidth: '60%' }}>
           <MapQuestMap
             apiKey={apiKey}
-            center={center || { lat: 39.8283, lng: -98.5795 }}
+            center={resolveMapCenter(center, defaultMapCenter)}
             zoom={center ? 14 : 4}
             darkMode={darkMode}
             accentColor={accentColor}

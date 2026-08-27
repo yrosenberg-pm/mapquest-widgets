@@ -10,6 +10,7 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import { reverseGeocode } from '@/lib/mapquest';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 type TravelTimePreset = 15 | 30 | 45 | 60;
 type ModeOption = 'drive' | 'walk' | 'bike';
@@ -128,6 +129,7 @@ export default function IsolineOverlapWidget({
   companyName,
   companyLogo,
   fontFamily,
+  defaultMapCenter,
 }: {
   accentColor?: string;
   darkMode?: boolean;
@@ -135,7 +137,7 @@ export default function IsolineOverlapWidget({
   companyName?: string;
   companyLogo?: string;
   fontFamily?: string;
-}) {
+} & DemoMapProps) {
   const [locations, setLocations] = useState<LocationItem[]>(() => ([
     { id: uid('loc'), label: 'Home', color: COLORS[0], address: '', timeMinutes: 30, mode: 'drive' },
     { id: uid('loc'), label: 'Work', color: COLORS[1], address: '', timeMinutes: 30, mode: 'drive' },
@@ -507,8 +509,8 @@ export default function IsolineOverlapWidget({
 
   const mapCenter = useMemo(() => {
     const first = locations.find((l) => typeof l.lat === 'number' && typeof l.lng === 'number');
-    return first ? { lat: first.lat!, lng: first.lng! } : { lat: 39.8283, lng: -98.5795 };
-  }, [locations]);
+    return first ? { lat: first.lat!, lng: first.lng! } : resolveMapCenter(null, defaultMapCenter);
+  }, [locations, defaultMapCenter]);
 
   // Intentionally do not show an explicit "no overlap" callout; overlap can be visually inspected on the map.
 

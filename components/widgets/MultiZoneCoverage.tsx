@@ -11,8 +11,9 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
-interface MultiZoneCoverageProps {
+interface MultiZoneCoverageProps extends DemoMapProps {
   accentColor?: string;
   darkMode?: boolean;
   showBranding?: boolean;
@@ -156,6 +157,7 @@ export default function MultiZoneCoverage({
   companyName,
   companyLogo,
   fontFamily,
+  defaultMapCenter,
 }: MultiZoneCoverageProps) {
   // ── zone config state ──
   const [zones, setZones] = useState<Zone[]>([]);
@@ -335,8 +337,8 @@ export default function MultiZoneCoverage({
     }
     const visible = zones.filter(z => z.visible);
     if (visible.length > 0) return boundsCenter(visible.flatMap(z => z.coordinates));
-    return US_CENTER;
-  }, [zones, focusedZone]);
+    return resolveMapCenter(null, defaultMapCenter);
+  }, [zones, focusedZone, defaultMapCenter]);
 
   const configBounds = useMemo(() => {
     const target = focusedZone ? zones.find(z => z.id === focusedZone) : null;
@@ -377,8 +379,8 @@ export default function MultiZoneCoverage({
     if (custResult?.checked && custResult.lat && custResult.lng) return { lat: custResult.lat, lng: custResult.lng };
     const visible = zones.filter(z => z.visible);
     if (visible.length > 0) return boundsCenter(visible.flatMap(z => z.coordinates));
-    return US_CENTER;
-  }, [zones, custResult]);
+    return resolveMapCenter(null, defaultMapCenter);
+  }, [zones, custResult, defaultMapCenter]);
 
   const handleBlur = useCallback(() => { setTimeout(() => setShowSuggestions(false), 200); }, []);
 

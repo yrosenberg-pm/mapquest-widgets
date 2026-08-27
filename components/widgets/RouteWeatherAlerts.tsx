@@ -30,6 +30,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
 import { geocode as mqGeocode, searchAhead } from '@/lib/mapquest';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 type Severity = 'warning' | 'watch' | 'advisory';
 
@@ -759,6 +760,10 @@ export default function RouteWeatherAlerts({
   companyName,
   companyLogo,
   fontFamily,
+  defaultPlace = '',
+  defaultDestination = '',
+  defaultMapCenter,
+  defaultMapZoom,
 }: {
   accentColor?: string;
   darkMode?: boolean;
@@ -766,10 +771,12 @@ export default function RouteWeatherAlerts({
   companyName?: string;
   companyLogo?: string;
   fontFamily?: string;
-}) {
-  const [placeText, setPlaceText] = useState('');
+  defaultPlace?: string;
+  defaultDestination?: string;
+} & DemoMapProps) {
+  const [placeText, setPlaceText] = useState(defaultPlace);
   const [place, setPlace] = useState<PlaceSelection | null>(null);
-  const [destText, setDestText] = useState('');
+  const [destText, setDestText] = useState(defaultDestination);
   const [dest, setDest] = useState<PlaceSelection | null>(null);
 
   const [loadingWeather, setLoadingWeather] = useState(false);
@@ -865,8 +872,8 @@ export default function RouteWeatherAlerts({
     }
     const pt = place || dest;
     if (pt) return { lat: pt.lat, lng: pt.lng };
-    return { lat: 39.8283, lng: -98.5795 };
-  }, [place, dest]);
+    return resolveMapCenter(null, defaultMapCenter);
+  }, [place, dest, defaultMapCenter]);
 
   const markers = useMemo(() => {
     const m: any[] = [];

@@ -13,6 +13,7 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 import {
   Plus,
   Trash2,
@@ -98,7 +99,7 @@ interface RouteResult {
 
 type SidebarView = 'overview' | 'stops' | 'route';
 
-interface ListingTourPlannerProps {
+interface ListingTourPlannerProps extends DemoMapProps {
   accentColor?: string;
   darkMode?: boolean;
   showBranding?: boolean;
@@ -287,6 +288,7 @@ export default function ListingTourPlanner({
   fontFamily,
   borderRadius,
   maxStops = 12,
+  defaultMapCenter,
 }: ListingTourPlannerProps) {
   const [days, setDays] = useState<TourDay[]>(() => defaultTourDays());
   const [activeDayIndex, setActiveDayIndex] = useState(0);
@@ -1618,7 +1620,7 @@ export default function ListingTourPlanner({
           lat: mapGeoStops.reduce((sum, s) => sum + s.lat!, 0) / mapGeoStops.length,
           lng: mapGeoStops.reduce((sum, s) => sum + s.lng!, 0) / mapGeoStops.length,
         }
-      : { lat: 39.8283, lng: -98.5795 };
+      : resolveMapCenter(null, defaultMapCenter);
 
   const markers = useMemo(() => {
     if (overviewMapMode) {

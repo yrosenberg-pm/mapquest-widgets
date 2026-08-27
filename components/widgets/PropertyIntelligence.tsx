@@ -28,6 +28,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { geocode } from '@/lib/mapquest';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,7 +87,7 @@ interface NearbyProperty {
   avmValue: number | null;
 }
 
-interface Props {
+interface Props extends DemoMapProps {
   apiKey?: string;
   darkMode?: boolean;
   accentColor?: string;
@@ -95,6 +96,7 @@ interface Props {
   showBranding?: boolean;
   companyName?: string;
   companyLogo?: string;
+  defaultQuery?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -508,8 +510,11 @@ export default function PropertyIntelligence({
   showBranding = true,
   companyName,
   companyLogo,
+  defaultQuery = '',
+  defaultMapCenter,
+  defaultMapZoom,
 }: Props) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(defaultQuery);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [property, setProperty] = useState<PropertyDetail | null>(null);
@@ -800,10 +805,10 @@ export default function PropertyIntelligence({
   const mapCenter = useMemo(() => {
     if (property) return { lat: property.lat, lng: property.lng };
     if (areaCenter) return areaCenter;
-    return { lat: 39.8283, lng: -98.5795 };
-  }, [property, areaCenter]);
+    return resolveMapCenter(null, defaultMapCenter);
+  }, [property, areaCenter, defaultMapCenter]);
 
-  const mapZoom = property ? 15 : areaCenter ? 13 : 4;
+  const mapZoom = property ? 15 : areaCenter ? 13 : (defaultMapZoom ?? 13);
 
   const subtitle = property
     ? `${property.address} · ${property.city}, ${property.state}`

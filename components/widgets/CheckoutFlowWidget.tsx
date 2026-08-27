@@ -8,6 +8,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import { geocode } from '@/lib/mapquest';
 import { useAddressAutocomplete } from '@/hooks/useAddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 type ValidationState = 'idle' | 'verifying' | 'verified' | 'suggestion' | 'invalid';
 
@@ -274,6 +275,7 @@ export default function CheckoutFlowWidget({
   companyName,
   companyLogo,
   fontFamily,
+  defaultMapCenter,
 }: {
   accentColor?: string;
   darkMode?: boolean;
@@ -281,7 +283,7 @@ export default function CheckoutFlowWidget({
   companyName?: string;
   companyLogo?: string;
   fontFamily?: string;
-}) {
+} & DemoMapProps) {
   const [fields, setFields] = useState<AddressFields>({
     name: 'John Smith',
     line1: '',
@@ -306,7 +308,10 @@ export default function CheckoutFlowWidget({
     return fields.line1.trim().length >= 3 && fields.city.trim().length >= 2 && fields.state.trim().length >= 2 && fields.zip.trim().length >= 5;
   }, [fields]);
 
-  const mapCenter = useMemo(() => validation.coords || { lat: 39.8283, lng: -98.5795 }, [validation.coords]);
+  const mapCenter = useMemo(
+    () => resolveMapCenter(validation.coords, defaultMapCenter),
+    [validation.coords, defaultMapCenter],
+  );
   const markers = useMemo(() => {
     if (!validation.coords) return [];
     return [

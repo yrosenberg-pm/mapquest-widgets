@@ -181,6 +181,7 @@ export default function EVChargingPlanner({
   companyName,
   companyLogo,
   fontFamily,
+  defaultCenter,
 }: {
   apiKey: string;
   darkMode?: boolean;
@@ -189,6 +190,7 @@ export default function EVChargingPlanner({
   companyName?: string;
   companyLogo?: string;
   fontFamily?: string;
+  defaultCenter?: { lat: number; lng: number };
 }) {
   const bgPanel = 'var(--bg-panel)';
   const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
@@ -1039,8 +1041,8 @@ export default function EVChargingPlanner({
   const mapCenter = useMemo(() => {
     if (dest) return dest;
     if (origin) return origin;
-    return { lat: 34.0522, lng: -118.2437 };
-  }, [origin, dest]);
+    return defaultCenter ?? { lat: 34.0522, lng: -118.2437 };
+  }, [origin, dest, defaultCenter]);
 
   // Initial load: show a healthy set of chargers near the default center (or selected origin/destination).
   useEffect(() => {

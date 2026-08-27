@@ -1,7 +1,7 @@
 // components/widgets/MultiStopPlanner.tsx
 'use client';
 
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { 
   Plus, Trash2, GripVertical, Loader2, RotateCcw, Route, 
   Sparkles, Clock, Check, AlertTriangle, XCircle,
@@ -9,12 +9,46 @@ import {
   MapPin, Timer, TrendingDown, List, ArrowRight,
   Edit3, CornerDownRight, Waypoints, Calendar
 } from 'lucide-react';
-import { geocode, getDirections, reverseGeocode, searchPlaces } from '@/lib/mapquest';
+import { geocode, getMultiStopDirections, reverseGeocode, searchPlaces, optimizeRoute, postRouteMatrixAllToAll } from '@/lib/mapquest';
 import { markerPinColorForIndex, numberedPinIconDataUri } from '@/lib/mapMarkerIcons';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { buildFiftyStopDemo, LA_MULTI_STOP_LANDMARKS, type MultiStopDemoSeed } from '@/lib/demo/multiStopDemoStops';
+
+/** Use MapQuest Optimized Route API instead of local matrix search. */
+const OPTIMIZE_API_THRESHOLD = 10;
+const ROUTE_MATRIX_NODE_CAP = 25;
+
+function parseAllToAllTimeMatrix(data: unknown, n: number): number[][] | null {
+  const time = (data as { time?: unknown })?.time;
+  if (Array.isArray(time) && time.length > 0 && Array.isArray(time[0])) {
+    return time as number[][];
+  }
+  if (Array.isArray(time) && time.length === n * n) {
+    const matrix: number[][] = [];
+    for (let i = 0; i < n; i++) matrix.push((time as number[]).slice(i * n, (i + 1) * n));
+    return matrix;
+  }
+  return null;
+}
+
+function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3959;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Rough drive-time estimate when matrix API is unavailable (30 mph average). */
+function haversineDriveMinutes(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  return (haversineMiles(lat1, lng1, lat2, lng2) / 30) * 60;
+}
 
 interface Stop {
   id: string;
@@ -52,10 +86,59 @@ interface RouteResult {
   totalDistance: number;
   totalTime: number;
   legs: LegInfo[];
+  shapePoints?: { lat: number; lng: number }[];
+}
+
+function buildLegInfos(validStops: Stop[], apiLegs: { distance?: number; time?: number }[]): LegInfo[] {
+  const legs: LegInfo[] = [];
+  for (let i = 0; i < validStops.length - 1; i++) {
+    const leg = apiLegs[i];
+    const distance = leg?.distance ?? 0;
+    const timeMin = (leg?.time ?? 0) / 60;
+    const expectedTime = distance * 2;
+    let trafficCondition: 'light' | 'moderate' | 'heavy' = 'light';
+    if (timeMin > expectedTime * 1.3) trafficCondition = 'heavy';
+    else if (timeMin > expectedTime * 1.1) trafficCondition = 'moderate';
+    legs.push({
+      from: validStops[i].address,
+      to: validStops[i + 1].address,
+      distance,
+      time: timeMin,
+      trafficCondition,
+    });
+  }
+  return legs;
+}
+
+async function fetchRouteForStops(
+  validStops: Stop[],
+  routeType: 'fastest' | 'shortest',
+  departureTime: Date,
+): Promise<RouteResult | null> {
+  const locations = validStops.map((s) => ({ lat: s.lat!, lng: s.lng! }));
+  const directions = await getMultiStopDirections(locations, routeType, departureTime);
+  if (!directions) return null;
+
+  let legs = buildLegInfos(validStops, directions.legs || []);
+  if (legs.length === 0 && validStops.length >= 2) {
+    legs = [{
+      from: validStops[0].address,
+      to: validStops[validStops.length - 1].address,
+      distance: directions.distance,
+      time: directions.time,
+    }];
+  }
+
+  return {
+    totalDistance: directions.distance,
+    totalTime: directions.time,
+    legs,
+    shapePoints: directions.shapePoints,
+  };
 }
 
 
-interface MultiStopPlannerProps {
+interface MultiStopPlannerProps extends DemoMapProps {
   accentColor?: string;
   darkMode?: boolean;
   showBranding?: boolean;
@@ -82,6 +165,8 @@ export default function MultiStopPlanner({
   companyLogo,
   fontFamily,
   maxStops = 25,
+  defaultMapCenter,
+  defaultMapZoom,
 }: MultiStopPlannerProps) {
   const [stops, setStops] = useState<Stop[]>([
     { id: '1', address: '', duration: 0 },
@@ -440,27 +525,11 @@ export default function MultiStopPlanner({
       const validStops = geocodedStops.filter(s => s.lat && s.lng);
       if (validStops.length < 2) throw new Error('Need at least 2 valid addresses');
 
-      let totalDistance = 0, totalTime = 0;
-      const legs: LegInfo[] = [];
+      const result = await fetchRouteForStops(validStops, routeType, departureTime);
+      if (!result) throw new Error('Could not calculate route');
 
-      for (let i = 0; i < validStops.length - 1; i++) {
-        const from = `${validStops[i].lat},${validStops[i].lng}`;
-        const to = `${validStops[i + 1].lat},${validStops[i + 1].lng}`;
-        const directions = await getDirections(from, to, routeType, departureTime);
-        if (directions) {
-          totalDistance += directions.distance;
-          totalTime += directions.time;
-          const expectedTime = directions.distance * 2;
-          let trafficCondition: 'light' | 'moderate' | 'heavy' = 'light';
-          if (directions.time > expectedTime * 1.3) trafficCondition = 'heavy';
-          else if (directions.time > expectedTime * 1.1) trafficCondition = 'moderate';
-          legs.push({ from: validStops[i].address, to: validStops[i + 1].address, distance: directions.distance, time: directions.time, trafficCondition });
-        }
-      }
-
-      const result = { totalDistance, totalTime, legs };
       setRouteResult(result);
-      if (!originalRoute) setOriginalRoute({ distance: totalDistance, time: totalTime });
+      if (!originalRoute) setOriginalRoute({ distance: result.totalDistance, time: result.totalTime });
       calculateETAs(geocodedStops, result);
       // Don't auto-switch tabs - let user control their view
     } catch (err) {
@@ -472,42 +541,51 @@ export default function MultiStopPlanner({
 
   const calculateRoute = () => calculateRouteForStops(stops, selectedRouteType === 'balanced' ? 'fastest' : selectedRouteType);
 
-  // Build a distance matrix using real route calculations
+  // Build a travel-time matrix (single routematrix call for small sets; estimates for large sets).
   const buildDistanceMatrix = async (stopsForMatrix: Stop[]): Promise<number[][]> => {
     const n = stopsForMatrix.length;
-    const matrix: number[][] = Array(n).fill(null).map(() => Array(n).fill(0));
-    
-    console.log(`📊 Building ${n}x${n} distance matrix with real routes...`);
-    
-    // Fetch all pairwise distances
-    const promises: Promise<void>[] = [];
-    for (let i = 0; i < n; i++) {
-      for (let j = 0; j < n; j++) {
-        if (i !== j) {
-          promises.push((async () => {
-            const from = `${stopsForMatrix[i].lat},${stopsForMatrix[i].lng}`;
-            const to = `${stopsForMatrix[j].lat},${stopsForMatrix[j].lng}`;
-            try {
-              const result = await getDirections(from, to, 'fastest');
-              matrix[i][j] = result?.time || Infinity; // Use time as the metric (accounts for traffic/roads)
-            } catch {
-              matrix[i][j] = Infinity;
-            }
-          })());
-        }
+    const locations = stopsForMatrix.map((s) => ({ lat: s.lat!, lng: s.lng! }));
+
+    if (n <= ROUTE_MATRIX_NODE_CAP) {
+      try {
+        const data = await postRouteMatrixAllToAll(locations);
+        const parsed = parseAllToAllTimeMatrix(data, n);
+        if (parsed) return parsed;
+      } catch (err) {
+        console.warn('[MultiStopPlanner] Route matrix failed, using distance estimates.', err);
       }
     }
-    
-    await Promise.all(promises);
-    console.log('✅ Distance matrix complete');
+
+    const matrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i === j) continue;
+        matrix[i][j] = haversineDriveMinutes(
+          locations[i].lat,
+          locations[i].lng,
+          locations[j].lat,
+          locations[j].lng,
+        );
+      }
+    }
     return matrix;
   };
 
-  // Optimize route using real road distances
+  // Optimize route using MapQuest API (large) or local search (small).
   const optimizeStopOrder = async (stopsToOptimize: Stop[]): Promise<Stop[]> => {
     if (stopsToOptimize.length <= 2) return stopsToOptimize;
-    
-    // Build distance matrix using actual route calculations
+
+    if (stopsToOptimize.length >= OPTIMIZE_API_THRESHOLD) {
+      const locations = stopsToOptimize.map((s) => ({ lat: s.lat!, lng: s.lng! }));
+      const optimized = await optimizeRoute(locations);
+      const seq = optimized?.locationSequence;
+      if (seq && seq.length === stopsToOptimize.length) {
+        return seq.map((i) => stopsToOptimize[i]);
+      }
+      throw new Error('MapQuest could not optimize this route. Try fewer stops or click Get Route first.');
+    }
+
+    // Build distance matrix using routematrix (not thousands of direction calls).
     const distanceMatrix = await buildDistanceMatrix(stopsToOptimize);
     
     const scoreOrder = (indices: number[]) => {
@@ -669,21 +747,35 @@ export default function MultiStopPlanner({
       if (!originalRoute && routeResult) {
         setOriginalRoute({ distance: routeResult.totalDistance, time: routeResult.totalTime });
       } else if (!originalRoute) {
-        // Calculate original if we don't have it
-        let originalDistance = 0, originalTime = 0;
-        for (let i = 0; i < currentValidStops.length - 1; i++) {
-          const from = `${currentValidStops[i].lat},${currentValidStops[i].lng}`;
-          const to = `${currentValidStops[i + 1].lat},${currentValidStops[i + 1].lng}`;
-          const d = await getDirections(from, to, 'fastest');
-          if (d) { originalDistance += d.distance; originalTime += d.time; }
+        const original = await fetchRouteForStops(currentValidStops, 'fastest', departureTime);
+        if (original) {
+          setOriginalRoute({ distance: original.totalDistance, time: original.totalTime });
+          console.log(`📊 Original route: ${original.totalDistance.toFixed(1)} mi, ${Math.round(original.totalTime)} min`);
         }
-        setOriginalRoute({ distance: originalDistance, time: originalTime });
-        console.log(`📊 Original route: ${originalDistance.toFixed(1)} mi, ${Math.round(originalTime)} min`);
       }
 
-      // Optimize stop ORDER using real route calculations
-      console.log('🔄 Optimizing stop order using real routes...');
-      const optimizedStops = await optimizeStopOrder(currentValidStops);
+      let optimizedStops: Stop[];
+      let optimizedRoute: RouteResult | null = null;
+
+      if (currentValidStops.length >= OPTIMIZE_API_THRESHOLD) {
+        console.log('🔄 Optimizing stop order via MapQuest Optimized Route API...');
+        const locations = currentValidStops.map((s) => ({ lat: s.lat!, lng: s.lng! }));
+        const optimized = await optimizeRoute(locations);
+        const seq = optimized?.locationSequence;
+        if (!seq || seq.length !== currentValidStops.length) {
+          throw new Error('MapQuest could not optimize this route. Try fewer stops or click Get Route first.');
+        }
+        optimizedStops = seq.map((i) => currentValidStops[i]);
+        optimizedRoute = {
+          totalDistance: optimized!.distance,
+          totalTime: optimized!.time,
+          legs: buildLegInfos(optimizedStops, optimized!.legs || []),
+          shapePoints: optimized!.shapePoints,
+        };
+      } else {
+        console.log('🔄 Optimizing stop order using local search...');
+        optimizedStops = await optimizeStopOrder(currentValidStops);
+      }
       
       // Check if order actually changed
       const orderChanged = optimizedStops.some((stop, i) => stop.id !== currentValidStops[i].id);
@@ -713,43 +805,19 @@ export default function MultiStopPlanner({
       
       // Update stops state with new order
       setStops(reorderedStops);
-      
-      // Small delay to ensure state updates propagate
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Calculate the new route with optimized order - directly compute without geocoding
-      setLoading(true);
-      let totalDistance = 0, totalTime = 0;
-      const legs: LegInfo[] = [];
 
-      for (let i = 0; i < reorderedStops.length - 1; i++) {
-        const from = `${reorderedStops[i].lat},${reorderedStops[i].lng}`;
-        const to = `${reorderedStops[i + 1].lat},${reorderedStops[i + 1].lng}`;
-        const directions = await getDirections(from, to, 'fastest', departureTime);
-        if (directions) {
-          totalDistance += directions.distance;
-          totalTime += directions.time;
-          const expectedTime = directions.distance * 2;
-          let trafficCondition: 'light' | 'moderate' | 'heavy' = 'light';
-          if (directions.time > expectedTime * 1.3) trafficCondition = 'heavy';
-          else if (directions.time > expectedTime * 1.1) trafficCondition = 'moderate';
-          legs.push({ 
-            from: reorderedStops[i].address, 
-            to: reorderedStops[i + 1].address, 
-            distance: directions.distance, 
-            time: directions.time, 
-            trafficCondition 
-          });
-        }
+      let result = optimizedRoute;
+      if (!result) {
+        setLoading(true);
+        result = await fetchRouteForStops(reorderedStops, 'fastest', departureTime);
+        setLoading(false);
+        if (!result) throw new Error('Could not calculate optimized route');
       }
 
-      const result = { totalDistance, totalTime, legs };
       setRouteResult(result);
       calculateETAs(reorderedStops, result);
-      setLoading(false);
-      // Don't auto-switch tabs - user can see the new order in their current view
       
-      console.log(`✅ Optimized route: ${totalDistance.toFixed(1)} mi, ${Math.round(totalTime)} min`);
+      console.log(`✅ Optimized route: ${result.totalDistance.toFixed(1)} mi, ${Math.round(result.totalTime)} min`);
       console.log('═══════════════════════════════════════════');
 
     } catch (err) {
@@ -761,54 +829,60 @@ export default function MultiStopPlanner({
   };
 
 
+  const applyDemoStops = (seeds: MultiStopDemoSeed[]) => {
+    const nextEight = new Date();
+    nextEight.setHours(8, 0, 0, 0);
+    if (nextEight.getTime() < Date.now()) {
+      nextEight.setDate(nextEight.getDate() + 1);
+    }
+    setDepartureTime(nextEight);
+
+    const demoStops: Stop[] = seeds.map((seed, idx) => ({
+      id: `demo-${Date.now()}-${idx}`,
+      address: seed.address,
+      lat: seed.lat,
+      lng: seed.lng,
+      geocoded: true,
+      duration: idx === 0 ? 0 : (seed.duration ?? 15),
+      windowEnabled: false,
+      windowStart: '',
+      windowEnd: '',
+    }));
+
+    setStops(demoStops);
+    setRouteResult(null);
+    setOriginalRoute(null);
+    setHighlightedSegment(null);
+    setOpenWindowStopId(null);
+    setSegmentSettings({});
+    setError(null);
+    setSidebarView('stops');
+  };
+
   const addRandomStops = async () => {
     setLoading(true);
     setShowMoreMenu(false);
     try {
-      // Predefined LA landmarks for reliable demo stops
-      const laStops: Stop[] = [
-        { id: `demo-${Date.now()}-0`, address: 'Santa Monica Pier, Santa Monica, CA', lat: 34.0094, lng: -118.4973, geocoded: true, duration: 0 },
-        { id: `demo-${Date.now()}-1`, address: 'Griffith Observatory, Los Angeles, CA', lat: 34.1184, lng: -118.3004, geocoded: true, duration: 0 },
-        { id: `demo-${Date.now()}-2`, address: 'Hollywood Sign, Los Angeles, CA', lat: 34.1341, lng: -118.3215, geocoded: true, duration: 0 },
-        { id: `demo-${Date.now()}-3`, address: 'The Getty Center, Los Angeles, CA', lat: 34.0780, lng: -118.4741, geocoded: true, duration: 0 },
-        { id: `demo-${Date.now()}-4`, address: 'Venice Beach, Venice, CA', lat: 33.9850, lng: -118.4695, geocoded: true, duration: 0 },
-        { id: `demo-${Date.now()}-5`, address: 'Universal Studios Hollywood, Universal City, CA', lat: 34.1381, lng: -118.3534, geocoded: true, duration: 0 },
-      ];
-      
-      // Shuffle and pick 5 stops
-      const shuffled = laStops.sort(() => Math.random() - 0.5);
-      const selectedStops = shuffled.slice(0, 5);
+      const shuffled = [...LA_MULTI_STOP_LANDMARKS].sort(() => Math.random() - 0.5);
+      applyDemoStops(shuffled.slice(0, 5));
+    } catch {
+      setError('Failed to add demo stops');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // Set departure time to the next 8:00 AM so windows/presets make sense in the demo.
-      const nextEight = new Date();
-      nextEight.setHours(8, 0, 0, 0);
-      if (nextEight.getTime() < Date.now()) {
-        nextEight.setDate(nextEight.getDate() + 1);
-      }
-      setDepartureTime(nextEight);
-
-      // Prefill durations only (no delivery windows in demo stops).
-      const demoStops: Stop[] = selectedStops.map((s, idx) => {
-        const durations = [0, 15, 20, 10, 25];
-        return {
-          ...s,
-          duration: durations[idx] ?? 0,
-          windowEnabled: false,
-          windowStart: '',
-          windowEnd: '',
-        };
-      });
-      
-      setStops(demoStops);
-      setRouteResult(null);
-      setOriginalRoute(null);
-      setHighlightedSegment(null);
-      setOpenWindowStopId(null);
-      // Reset per-segment settings (delivery windows/durations live only on Stops now)
-      setSegmentSettings({});
-      // Map will auto-center on LA based on the new stops
-    } catch { setError('Failed to add demo stops'); }
-    finally { setLoading(false); }
+  const addFiftyStopDemo = async () => {
+    setLoading(true);
+    setShowMoreMenu(false);
+    try {
+      const center = defaultMapCenter ?? { lat: 34.0522, lng: -118.2437 };
+      applyDemoStops(buildFiftyStopDemo(center));
+    } catch {
+      setError('Failed to add 50-stop demo');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const generateShareUrl = async () => {
@@ -871,6 +945,7 @@ export default function MultiStopPlanner({
   };
 
   const validStops = stops.filter(s => s.lat && s.lng);
+  const stopCoordKey = validStops.map((s) => `${s.lat},${s.lng}`).join('|');
   const routeTotals = (() => {
     const driveTime = routeResult?.totalTime ?? 0;
     const stopTime = validStops.reduce((sum, s) => sum + (s.duration || 0), 0);
@@ -881,7 +956,7 @@ export default function MultiStopPlanner({
   })();
   const mapCenter = validStops.length > 0
     ? { lat: validStops.reduce((sum, s) => sum + s.lat!, 0) / validStops.length, lng: validStops.reduce((sum, s) => sum + s.lng!, 0) / validStops.length }
-    : { lat: 39.8283, lng: -98.5795 };
+    : resolveMapCenter(null, defaultMapCenter);
 
   const markers = stops
     .map((stop, index) => ({ stop, index }))
@@ -904,6 +979,26 @@ export default function MultiStopPlanner({
   const routeWaypoints = validStops.length > 2 
     ? validStops.slice(1, -1).map(s => ({ lat: s.lat!, lng: s.lng! }))
     : undefined;
+
+  const routePolyline = routeResult?.shapePoints;
+  const usePolylineRoute = !!(routePolyline && routePolyline.length >= 2);
+
+  const mapRouteStart = useMemo(
+    () => (!usePolylineRoute && routeResult && validStops.length >= 2
+      ? { lat: validStops[0].lat!, lng: validStops[0].lng! }
+      : undefined),
+    [usePolylineRoute, routeResult, stopCoordKey, validStops.length],
+  );
+  const mapRouteEnd = useMemo(
+    () => (!usePolylineRoute && routeResult && validStops.length >= 2
+      ? { lat: validStops[validStops.length - 1].lat!, lng: validStops[validStops.length - 1].lng! }
+      : undefined),
+    [usePolylineRoute, routeResult, stopCoordKey, validStops.length],
+  );
+  const mapWaypoints = useMemo(
+    () => (!usePolylineRoute && routeResult ? routeWaypoints : undefined),
+    [usePolylineRoute, routeResult, stopCoordKey],
+  );
 
   return (
     <div 
@@ -933,9 +1028,10 @@ export default function MultiStopPlanner({
             height="100%"
             markers={markers}
             showRoute={!!routeResult && validStops.length >= 2}
-            routeStart={routeResult && validStops.length >= 2 ? { lat: validStops[0].lat!, lng: validStops[0].lng! } : undefined}
-            routeEnd={routeResult && validStops.length >= 2 ? { lat: validStops[validStops.length - 1].lat!, lng: validStops[validStops.length - 1].lng! } : undefined}
-            waypoints={routeResult ? routeWaypoints : []}
+            routePolyline={routePolyline}
+            routeStart={mapRouteStart}
+            routeEnd={mapRouteEnd}
+            waypoints={mapWaypoints}
             highlightedSegment={highlightedSegment}
             stops={validStops.map(s => ({ lat: s.lat!, lng: s.lng! }))}
             onRightClick={handleMapRightClick}
@@ -1090,11 +1186,14 @@ export default function MultiStopPlanner({
               
               {showMoreMenu && (
                 <div 
-                  className="absolute right-0 top-full mt-1 w-48 py-1 rounded-xl shadow-xl z-50"
+                  className="absolute right-0 top-full mt-1 w-56 py-1 rounded-xl shadow-xl z-50"
                   style={{ background: bgWidget, border: `1px solid ${border}` }}
                 >
                   <button onClick={addRandomStops} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: textMain }}>
-                    <Shuffle className="w-4 h-4" /> Add Demo Stops
+                    <Shuffle className="w-4 h-4 flex-shrink-0" /> Add Demo Stops (5)
+                  </button>
+                  <button onClick={addFiftyStopDemo} className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-black/5" style={{ color: textMain }}>
+                    <Waypoints className="w-4 h-4 flex-shrink-0" /> Add 50-Stop Demo
                   </button>
                   {routeResult && (
                     <>

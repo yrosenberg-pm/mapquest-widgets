@@ -7,6 +7,8 @@ import { geocode, getDirections, searchPlaces } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
+import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 interface StarbucksLocation {
   id: string;
@@ -21,7 +23,7 @@ interface StarbucksLocation {
   duration?: number;
 }
 
-interface StarbucksFinderProps {
+interface StarbucksFinderProps extends DemoMapProps {
   darkMode?: boolean;
   showBranding?: boolean;
   fontFamily?: string;
@@ -30,6 +32,7 @@ interface StarbucksFinderProps {
   searchRadius?: number;
   logoUrl?: string;
   defaultLocation?: { lat: number; lng: number };
+  autoDetectLocation?: boolean;
   onStoreSelect?: (store: StarbucksLocation) => void;
 }
 
@@ -47,10 +50,14 @@ export default function StarbucksFinder({
   searchRadius = 25,
   logoUrl,
   defaultLocation = { lat: 47.6062, lng: -122.3321 }, // Seattle (Starbucks HQ)
+  autoDetectLocation = true,
+  defaultMapCenter,
   onStoreSelect,
 }: StarbucksFinderProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(
+    autoDetectLocation ? null : defaultLocation,
+  );
   const [stores, setStores] = useState<StarbucksLocation[]>([]);
   const [selectedStore, setSelectedStore] = useState<StarbucksLocation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -157,6 +164,12 @@ export default function StarbucksFinder({
 
   // Load initial Starbucks on mount - just set user location, actual search happens on bounds change
   useEffect(() => {
+    if (!autoDetectLocation) {
+      setUserLocation(defaultLocation);
+      setLoading(false);
+      setInitialLoadDone(true);
+      return;
+    }
     // Try to get user's current location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -282,7 +295,7 @@ export default function StarbucksFinder({
   // Use pending location for smooth transition to new search area
   const mapCenter = selectedStore 
     ? { lat: selectedStore.lat, lng: selectedStore.lng }
-    : pendingLocation || userLocation || { lat: 39.8283, lng: -98.5795 };
+    : resolveMapCenter(pendingLocation || userLocation, defaultMapCenter ?? defaultLocation);
 
   // Don't zoom out while loading or if we're transitioning to a new location
   const mapZoom = (stores.length > 0 || pendingLocation || loading) ? 13 : 4;

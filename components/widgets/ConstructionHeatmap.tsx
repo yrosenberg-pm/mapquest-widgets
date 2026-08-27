@@ -18,6 +18,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { reverseGeocode } from '@/lib/mapquest';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 interface ShovelsPermit {
   id: string;
@@ -249,6 +250,9 @@ export default function ConstructionHeatmap({
   companyName,
   companyLogo,
   fontFamily,
+  defaultLocation = '',
+  defaultCoords = null,
+  defaultMapCenter,
 }: {
   apiKey: string;
   darkMode?: boolean;
@@ -257,9 +261,11 @@ export default function ConstructionHeatmap({
   companyName?: string;
   companyLogo?: string;
   fontFamily?: string;
-}) {
-  const [location, setLocation] = useState('');
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  defaultLocation?: string;
+  defaultCoords?: { lat: number; lng: number } | null;
+} & DemoMapProps) {
+  const [location, setLocation] = useState(defaultLocation);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(defaultCoords);
   const [heatMapZoom, setHeatMapZoom] = useState(13);
   const handleHeatBoundsChange = useCallback((b: { zoom: number }) => setHeatMapZoom(b.zoom), []);
 
@@ -393,7 +399,7 @@ export default function ConstructionHeatmap({
     }));
   }, [zipBuckets]);
 
-  const mapCenter = coords || { lat: 37.7749, lng: -122.4194 };
+  const mapCenter = resolveMapCenter(coords, defaultMapCenter);
 
   const totalPermits = allPermits.length;
   const totalJobValue = allPermits.reduce((s, p) => s + (p.job_value || 0), 0);

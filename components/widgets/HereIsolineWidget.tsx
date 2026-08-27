@@ -9,6 +9,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 type TransportMode = 'car' | 'pedestrian' | 'bicycle';
 
@@ -18,7 +19,7 @@ interface IsolinePolygon {
   coordinates: { lat: number; lng: number }[];
 }
 
-interface HereIsolineWidgetProps {
+interface HereIsolineWidgetProps extends DemoMapProps {
   address?: string;
   lat?: number;
   lng?: number;
@@ -59,6 +60,8 @@ export default function HereIsolineWidget({
   companyLogo,
   fontFamily,
   onIsolineCalculated,
+  defaultMapCenter,
+  defaultMapZoom,
 }: HereIsolineWidgetProps) {
   const [address, setAddress] = useState(initialAddress);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
@@ -223,7 +226,7 @@ export default function HereIsolineWidget({
     setCustomTime('');
   };
 
-  const mapCenter = location || { lat: 39.8283, lng: -98.5795 };
+  const mapCenter = resolveMapCenter(location, defaultMapCenter);
   const mapMarkers = location
     ? [{ lat: location.lat, lng: location.lng, label: 'Start', color: accentColor }]
     : [];
@@ -257,7 +260,7 @@ export default function HereIsolineWidget({
           <MapQuestMap
             apiKey={mapQuestApiKey}
             center={mapCenter}
-            zoom={location ? 11 : 4}
+            zoom={location ? 11 : (defaultMapZoom ?? 13)}
             darkMode={darkMode}
             accentColor={accentColor}
             height="100%"

@@ -25,6 +25,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { geocode } from '@/lib/mapquest';
+import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,7 +71,7 @@ interface Filters {
 type SortKey = 'date' | 'price' | 'distance';
 type SortDir = 'asc' | 'desc';
 
-interface Props {
+interface Props extends DemoMapProps {
   apiKey?: string;
   darkMode?: boolean;
   accentColor?: string;
@@ -78,6 +79,7 @@ interface Props {
   showBranding?: boolean;
   companyName?: string;
   companyLogo?: string;
+  defaultQuery?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -504,8 +506,11 @@ export default function ComparableSalesMap({
   showBranding = true,
   companyName,
   companyLogo,
+  defaultQuery = '',
+  defaultMapCenter,
+  defaultMapZoom,
 }: Props) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(defaultQuery);
   const [loading, setLoading] = useState(false);
   const [compsLoading, setCompsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1367,9 +1372,9 @@ export default function ComparableSalesMap({
               center={
                 subject
                   ? { lat: subject.lat, lng: subject.lng }
-                  : { lat: 34.0522, lng: -118.2437 }
+                  : resolveMapCenter(null, defaultMapCenter)
               }
-              zoom={subject ? 14 : 10}
+              zoom={subject ? 14 : (defaultMapZoom ?? 13)}
               markers={markers}
               polygons={allPolygons}
               skipPolygonFitBounds
