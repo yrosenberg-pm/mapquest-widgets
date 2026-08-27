@@ -2735,8 +2735,8 @@ export const FIFTY_STOP_DEMOS_BY_REGION: Record<string, MultiStopDemoSeed[]> = {
     },
     {
       "address": "Merlion Park, Singapore",
-      "lat": 1.28706,
-      "lng": 103.85332,
+      "lat": 1.2865,
+      "lng": 103.8545,
       "duration": 10
     },
     {

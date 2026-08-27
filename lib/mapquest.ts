@@ -1,5 +1,4 @@
-// lib/mapquest.ts
-// MapQuest API client - all calls go through /api/mapquest proxy
+import { getMultiStopDirectionsViaHere } from './hereMultiStopDirections';
 
 const API_BASE = '/api/mapquest';
 
@@ -591,15 +590,35 @@ export async function getMultiStopDirections(
 
     const res = await fetch(buildUrl(params));
     if (!res.ok) {
-      console.error('Multi-stop directions API error:', res.status);
-      return null;
+      console.warn('Multi-stop directions API error:', res.status, '— trying HERE');
+      const hereResult = await getMultiStopDirectionsViaHere(locations, departureTime);
+      if (!hereResult) return null;
+      return {
+        distance: hereResult.distance,
+        time: hereResult.time,
+        legs: hereResult.legs,
+        steps: [],
+        shapePoints: hereResult.shapePoints,
+      };
     }
 
     const data = await res.json();
     const route = data.route;
     if (!route || (route as { routeError?: unknown }).routeError) {
-      console.error('Multi-stop route error:', (route as { routeError?: { message?: string } })?.routeError?.message || 'Could not calculate route');
-      return null;
+      const mqError = (route as { routeError?: { errorCode?: number; message?: string } })?.routeError;
+      console.warn(
+        'Multi-stop MapQuest route failed, trying HERE:',
+        mqError?.message || mqError?.errorCode || 'Could not calculate route',
+      );
+      const hereResult = await getMultiStopDirectionsViaHere(locations, departureTime);
+      if (!hereResult) return null;
+      return {
+        distance: hereResult.distance,
+        time: hereResult.time,
+        legs: hereResult.legs,
+        steps: [],
+        shapePoints: hereResult.shapePoints,
+      };
     }
 
     const maneuverIndexesRaw = route.shape?.maneuverIndexes;
@@ -619,7 +638,21 @@ export async function getMultiStopDirections(
       maneuverIndexes: maneuverIndexes && maneuverIndexes.length > 0 ? maneuverIndexes : undefined,
     };
   } catch (err) {
-    console.error('getMultiStopDirections failed:', err);
+    console.warn('getMultiStopDirections failed, trying HERE:', err);
+    try {
+      const hereResult = await getMultiStopDirectionsViaHere(locations, departureTime);
+      if (hereResult) {
+        return {
+          distance: hereResult.distance,
+          time: hereResult.time,
+          legs: hereResult.legs,
+          steps: [],
+          shapePoints: hereResult.shapePoints,
+        };
+      }
+    } catch {
+      /* ignore */
+    }
     return null;
   }
 }

@@ -278,7 +278,7 @@ const SEEDS = {
     depot: 'Gardens by the Bay, 18 Marina Gardens Dr, Singapore',
     deliveries: [
       'Marina Bay Sands, Singapore',
-      'Merlion Park, Singapore',
+      'Merlion Park, 1 Fullerton Road, Singapore',
       'ION Orchard, Singapore',
       'VivoCity, Singapore',
       'Jewel Changi Airport, Singapore',
