@@ -198,15 +198,22 @@ export async function GET(request: NextRequest) {
       case 'geocoding': {
         const location = searchParams.get('location');
         const maxResults = searchParams.get('maxResults') || '5';
-        const usBounds = '24.396308,-124.848974,49.384358,-66.885444';
-        url = `${ENDPOINTS.geocoding}?key=${apiKey}&location=${encodeURIComponent(location || '')}&maxResults=${maxResults}&boundingBox=${usBounds}`;
+        const boundingBox = searchParams.get('boundingBox');
+        url = `${ENDPOINTS.geocoding}?key=${apiKey}&location=${encodeURIComponent(location || '')}&maxResults=${maxResults}`;
+        if (boundingBox) {
+          url += `&boundingBox=${encodeURIComponent(boundingBox)}`;
+        }
         break;
       }
 
       case 'searchahead': {
         const q = searchParams.get('q');
         const limit = searchParams.get('limit') || '6';
-        url = `${ENDPOINTS.searchahead}?key=${apiKey}&q=${encodeURIComponent(q || '')}&limit=${limit}&collection=address,adminArea,poi&countryCode=US`;
+        const countryCode = searchParams.get('countryCode');
+        url = `${ENDPOINTS.searchahead}?key=${apiKey}&q=${encodeURIComponent(q || '')}&limit=${limit}&collection=address,adminArea,poi`;
+        if (countryCode) {
+          url += `&countryCode=${encodeURIComponent(countryCode)}`;
+        }
         break;
       }
 

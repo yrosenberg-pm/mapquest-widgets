@@ -43,6 +43,7 @@ import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 import { DEMO_REGIONS, DEFAULT_DEMO_REGION_ID, getDemoRegion, REGION_LOCKED_WIDGETS } from '@/lib/demo/demoRegions';
 import { getWidgetLocationProps } from '@/lib/demo/widgetLocationProps';
 import type { DemoMapProps } from '@/lib/demo/mapDefaults';
+import { setSearchContext } from '@/lib/mapquest';
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
 /** Zonar co-branding is scoped to the truck route planner widget only. */
@@ -541,6 +542,14 @@ function HomeContent() {
       : undefined;
 
   const demoRegion = useMemo(() => getDemoRegion(demoRegionId), [demoRegionId]);
+
+  useEffect(() => {
+    setSearchContext({
+      countryCode: demoRegion.countryCode,
+      near: demoRegion.center,
+    });
+  }, [demoRegion.countryCode, demoRegion.center]);
+
   const locationProps = useMemo(
     () => getWidgetLocationProps(activeWidget, demoRegionId),
     [activeWidget, demoRegionId],
@@ -682,7 +691,7 @@ function HomeContent() {
           />
         );
       case 'multistop':
-        return <MultiStopPlanner key={widgetKey} {...commonProps} maxStops={50} />;
+        return <MultiStopPlanner key={widgetKey} {...commonProps} {...loc} maxStops={50} />;
       case 'listing-tour':
         return <ListingTourPlanner key={widgetKey} {...commonProps} />;
       case 'delivery':

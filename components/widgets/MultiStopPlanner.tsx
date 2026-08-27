@@ -16,7 +16,8 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
-import { buildFiftyStopDemo, LA_MULTI_STOP_LANDMARKS, type MultiStopDemoSeed } from '@/lib/demo/multiStopDemoStops';
+import { getFiftyStopDemo, getFiveStopDemo, type MultiStopDemoSeed } from '@/lib/demo/multiStopDemoStops';
+import { DEFAULT_DEMO_REGION_ID } from '@/lib/demo/demoRegions';
 
 /** Use MapQuest Optimized Route API instead of local matrix search. */
 const OPTIMIZE_API_THRESHOLD = 10;
@@ -167,6 +168,7 @@ export default function MultiStopPlanner({
   maxStops = 25,
   defaultMapCenter,
   defaultMapZoom,
+  demoRegionId = DEFAULT_DEMO_REGION_ID,
 }: MultiStopPlannerProps) {
   const [stops, setStops] = useState<Stop[]>([
     { id: '1', address: '', duration: 0 },
@@ -862,10 +864,15 @@ export default function MultiStopPlanner({
   const addRandomStops = async () => {
     setLoading(true);
     setShowMoreMenu(false);
+    setError(null);
     try {
-      const shuffled = [...LA_MULTI_STOP_LANDMARKS].sort(() => Math.random() - 0.5);
-      applyDemoStops(shuffled.slice(0, 5));
-    } catch {
+      const seeds = getFiveStopDemo(demoRegionId);
+      if (seeds.length < 2) {
+        throw new Error(`No demo stops configured for region "${demoRegionId}"`);
+      }
+      applyDemoStops(seeds);
+    } catch (err) {
+      console.error('Failed to add 5-stop demo:', err);
       setError('Failed to add demo stops');
     } finally {
       setLoading(false);
@@ -876,8 +883,7 @@ export default function MultiStopPlanner({
     setLoading(true);
     setShowMoreMenu(false);
     try {
-      const center = defaultMapCenter ?? { lat: 34.0522, lng: -118.2437 };
-      applyDemoStops(buildFiftyStopDemo(center));
+      applyDemoStops(getFiftyStopDemo(demoRegionId));
     } catch {
       setError('Failed to add 50-stop demo');
     } finally {

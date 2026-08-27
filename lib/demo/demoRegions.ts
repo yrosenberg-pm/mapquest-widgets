@@ -2,6 +2,8 @@ export type DemoRegion = {
   id: string;
   name: string;
   country: string;
+  /** ISO 3166-1 alpha-2 — biases geocode/autocomplete to this country. */
+  countryCode: string;
   center: { lat: number; lng: number };
   zoom: number;
   /** Street address for single-point search widgets */
@@ -21,6 +23,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'seattle',
     name: 'Seattle',
     country: 'United States',
+    countryCode: 'US',
     center: { lat: 47.6062, lng: -122.3321 },
     zoom: 13,
     sampleAddress: '400 Broad St, Seattle, WA 98109',
@@ -34,6 +37,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'los-angeles',
     name: 'Los Angeles',
     country: 'United States',
+    countryCode: 'US',
     center: { lat: 34.0522, lng: -118.2437 },
     zoom: 13,
     sampleAddress: '200 N Spring St, Los Angeles, CA 90012',
@@ -47,6 +51,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'new-york',
     name: 'New York',
     country: 'United States',
+    countryCode: 'US',
     center: { lat: 40.758, lng: -73.9855 },
     zoom: 14,
     sampleAddress: '350 5th Ave, New York, NY 10118',
@@ -60,6 +65,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'london',
     name: 'London',
     country: 'United Kingdom',
+    countryCode: 'GB',
     center: { lat: 51.5074, lng: -0.1278 },
     zoom: 13,
     sampleAddress: 'Westminster, London SW1A 0AA, UK',
@@ -73,6 +79,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'paris',
     name: 'Paris',
     country: 'France',
+    countryCode: 'FR',
     center: { lat: 48.8566, lng: 2.3522 },
     zoom: 13,
     sampleAddress: '5 Av. Anatole France, 75007 Paris, France',
@@ -86,6 +93,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'berlin',
     name: 'Berlin',
     country: 'Germany',
+    countryCode: 'DE',
     center: { lat: 52.52, lng: 13.405 },
     zoom: 13,
     sampleAddress: 'Pariser Platz, 10117 Berlin, Germany',
@@ -99,6 +107,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'tokyo',
     name: 'Tokyo',
     country: 'Japan',
+    countryCode: 'JP',
     center: { lat: 35.6762, lng: 139.6503 },
     zoom: 13,
     sampleAddress: '1-1 Marunouchi, Chiyoda City, Tokyo 100-0005, Japan',
@@ -112,6 +121,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'sydney',
     name: 'Sydney',
     country: 'Australia',
+    countryCode: 'AU',
     center: { lat: -33.8688, lng: 151.2093 },
     zoom: 13,
     sampleAddress: 'Bennelong Point, Sydney NSW 2000, Australia',
@@ -125,6 +135,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'toronto',
     name: 'Toronto',
     country: 'Canada',
+    countryCode: 'CA',
     center: { lat: 43.6532, lng: -79.3832 },
     zoom: 13,
     sampleAddress: '301 Front St W, Toronto, ON M5V 2T6, Canada',
@@ -138,6 +149,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'singapore',
     name: 'Singapore',
     country: 'Singapore',
+    countryCode: 'SG',
     center: { lat: 1.3521, lng: 103.8198 },
     zoom: 13,
     sampleAddress: '18 Marina Gardens Dr, Singapore 018953',
@@ -151,6 +163,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'dubai',
     name: 'Dubai',
     country: 'United Arab Emirates',
+    countryCode: 'AE',
     center: { lat: 25.2048, lng: 55.2708 },
     zoom: 13,
     sampleAddress: '1 Sheikh Mohammed bin Rashid Blvd, Dubai, UAE',
@@ -164,6 +177,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'mumbai',
     name: 'Mumbai',
     country: 'India',
+    countryCode: 'IN',
     center: { lat: 19.076, lng: 72.8777 },
     zoom: 13,
     sampleAddress: 'Apollo Bandar, Colaba, Mumbai, Maharashtra 400001, India',
@@ -177,6 +191,7 @@ export const DEMO_REGIONS: DemoRegion[] = [
     id: 'sao-paulo',
     name: 'São Paulo',
     country: 'Brazil',
+    countryCode: 'BR',
     center: { lat: -23.5505, lng: -46.6333 },
     zoom: 13,
     sampleAddress: 'Av. Paulista, 1578 - Bela Vista, São Paulo, Brazil',

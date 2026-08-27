@@ -70,7 +70,10 @@ export function useAddressAutocomplete(
     // If displayString already looks like a full address, keep it.
     const looksFull =
       base.includes(',') &&
-      (/\b[A-Z]{2}\b/.test(base) || /\d{5}(-\d{4})?/.test(base) || base.toLowerCase().includes('usa'));
+      (/\b[A-Z]{2}\b/.test(base) ||
+        /\d{5}(-\d{4})?/.test(base) ||
+        /\b(usa|uk|france|germany|japan|australia|canada|singapore|india|brazil|uae)\b/i.test(base) ||
+        /\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i.test(base));
     if (looksFull) return base;
 
     // Otherwise build from parts (best-effort)

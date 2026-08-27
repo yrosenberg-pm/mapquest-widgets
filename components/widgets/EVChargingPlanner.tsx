@@ -456,7 +456,11 @@ export default function EVChargingPlanner({
       const max = clamp(opts?.max ?? 100, 1, 100);
       const radiusMeters = Math.round(distanceMiles * 1609.34);
       const q = networkFilter === 'Tesla' ? 'tesla supercharger' : 'ev charging station';
-      const res = await fetch(`/api/here?endpoint=evchargers&at=${center.lat},${center.lng}&radiusMeters=${radiusMeters}&limit=${max}&q=${encodeURIComponent(q)}`);
+      const { getSearchContext } = await import('@/lib/mapquest');
+      const ctx = getSearchContext();
+      let url = `/api/here?endpoint=evchargers&at=${center.lat},${center.lng}&radiusMeters=${radiusMeters}&limit=${max}&q=${encodeURIComponent(q)}`;
+      if (ctx.countryCode) url += `&countryCode=${encodeURIComponent(ctx.countryCode)}`;
+      const res = await fetch(url);
       const json = await res.json();
 
       if (!res.ok) {

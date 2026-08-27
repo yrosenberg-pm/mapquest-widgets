@@ -104,10 +104,9 @@ async function fetchBoundary(type: string, query: string): Promise<{ label: stri
 async function fetchSuggestions(query: string): Promise<{ name: string; displayString: string }[]> {
   if (!query || query.length < 2) return [];
   try {
-    const res = await fetch(`/api/mapquest?endpoint=searchahead&q=${encodeURIComponent(query)}&limit=6`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.results || []).map((r: any) => ({
+    const { searchAhead } = await import('@/lib/mapquest');
+    const results = await searchAhead(query, 6);
+    return results.map((r) => ({
       name: r.name || r.displayString || '',
       displayString: r.displayString || r.name || '',
     }));

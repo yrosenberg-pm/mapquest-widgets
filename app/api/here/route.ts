@@ -1,8 +1,14 @@
 // app/api/here/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
+import { toHereCountryCode } from '@/lib/demo/countryCodes';
 
 const HERE_API_KEY = process.env.HERE_API_KEY;
+
+function appendHereCountryFilter(u: URL, countryCode: string | null) {
+  if (!countryCode) return;
+  u.searchParams.append('in', `countryCode:${toHereCountryCode(countryCode)}`);
+}
 
 const ENDPOINTS: Record<string, string> = {
   isoline: 'https://isoline.router.hereapi.com/v8/isolines',
@@ -89,10 +95,15 @@ export async function GET(request: NextRequest) {
 
       case 'geocode': {
         const q = searchParams.get('q');
+        const countryCode = searchParams.get('countryCode');
         if (!q) {
           return NextResponse.json({ error: 'Query is required' }, { status: 400 });
         }
-        url = `${ENDPOINTS.geocode}?apiKey=${HERE_API_KEY}&q=${encodeURIComponent(q)}&limit=5&in=countryCode:USA`;
+        const u = new URL(`${ENDPOINTS.geocode}?apiKey=${HERE_API_KEY!}`);
+        u.searchParams.set('q', q);
+        u.searchParams.set('limit', '5');
+        appendHereCountryFilter(u, countryCode);
+        url = u.toString();
         break;
       }
 
@@ -107,15 +118,25 @@ export async function GET(request: NextRequest) {
 
       case 'autosuggest': {
         const q = searchParams.get('q');
-        // HERE autosuggest prefers a context point: lat,lng
-        const at = searchParams.get('at') || '39.8283,-98.5795';
+        const at = searchParams.get('at');
         const limit = searchParams.get('limit') || '6';
+        const countryCode = searchParams.get('countryCode');
 
         if (!q) {
           return NextResponse.json({ error: 'Query is required' }, { status: 400 });
         }
+        if (!at) {
+          return NextResponse.json({ error: 'Context point (at) is required' }, { status: 400 });
+        }
 
-        url = `${ENDPOINTS.autosuggest}?apiKey=${HERE_API_KEY}&q=${encodeURIComponent(q)}&at=${encodeURIComponent(at)}&limit=${limit}&resultTypes=address,place&lang=en-US&in=countryCode:USA`;
+        const u = new URL(`${ENDPOINTS.autosuggest}?apiKey=${HERE_API_KEY!}`);
+        u.searchParams.set('q', q);
+        u.searchParams.set('at', at);
+        u.searchParams.set('limit', limit);
+        u.searchParams.set('resultTypes', 'address,place');
+        u.searchParams.set('lang', searchParams.get('lang') || 'en-US');
+        appendHereCountryFilter(u, countryCode);
+        url = u.toString();
         break;
       }
 
@@ -196,7 +217,7 @@ export async function GET(request: NextRequest) {
           const u = new URL(ENDPOINTS.discover);
           u.searchParams.set('apiKey', HERE_API_KEY!);
           u.searchParams.set('in', `circle:${lat},${lng};r=${rMeters}`);
-          u.searchParams.append('in', 'countryCode:USA');
+          appendHereCountryFilter(u, searchParams.get('countryCode'));
           u.searchParams.set('q', q);
           u.searchParams.set('limit', limit);
           u.searchParams.set('lang', 'en-US');
@@ -337,6 +358,8 @@ export async function GET(request: NextRequest) {
         const limit = String(limitNum);
         const lang = searchParams.get('lang') || 'en-US';
 
+        const countryCode = searchParams.get('countryCode');
+
         if (!q) {
           return NextResponse.json({ error: 'Query (q) is required' }, { status: 400 });
         }
@@ -353,11 +376,10 @@ export async function GET(request: NextRequest) {
 
         if (inParam) {
           u.searchParams.set('in', inParam);
-          u.searchParams.append('in', 'countryCode:USA');
         } else if (at) {
           u.searchParams.set('at', at);
-          u.searchParams.set('in', 'countryCode:USA');
         }
+        appendHereCountryFilter(u, countryCode);
 
         url = u.toString();
         break;
@@ -369,6 +391,7 @@ export async function GET(request: NextRequest) {
         const categories = searchParams.get('categories');
         const limitRaw = searchParams.get('limit') || '50';
         const limitNum = Math.max(1, Math.min(100, Math.round(Number(limitRaw) || 50)));
+        const countryCode = searchParams.get('countryCode');
 
         if (!at && !inParam) {
           return NextResponse.json({ error: 'Either at or in is required' }, { status: 400 });
@@ -380,11 +403,10 @@ export async function GET(request: NextRequest) {
         if (categories) u.searchParams.set('categories', categories);
         if (inParam) {
           u.searchParams.set('in', inParam);
-          u.searchParams.append('in', 'countryCode:USA');
         } else if (at) {
           u.searchParams.set('at', at);
-          u.searchParams.set('in', 'countryCode:USA');
         }
+        appendHereCountryFilter(u, countryCode);
 
         url = u.toString();
         break;

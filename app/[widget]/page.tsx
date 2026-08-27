@@ -4,7 +4,7 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
-import { setApiKey } from '@/lib/mapquest';
+import { setApiKey, setSearchContext } from '@/lib/mapquest';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 import { DEFAULT_DEMO_REGION_ID, DEMO_REGIONS, getDemoRegion } from '@/lib/demo/demoRegions';
 import { getWidgetLocationProps } from '@/lib/demo/widgetLocationProps';
@@ -152,6 +152,14 @@ export default function WidgetPage() {
     }
     setMounted(true);
   }, [searchParams]);
+
+  useEffect(() => {
+    const region = getDemoRegion(demoRegionId);
+    setSearchContext({
+      countryCode: region.countryCode,
+      near: region.center,
+    });
+  }, [demoRegionId]);
 
   useEffect(() => {
     const recompute = () => {
@@ -327,7 +335,7 @@ export default function WidgetPage() {
       case 'neighborhood':
         return <NeighborhoodScore key={widgetKey} {...commonProps} {...loc} />;
       case 'multistop':
-        return <MultiStopPlanner key={widgetKey} {...commonProps} maxStops={50} />;
+        return <MultiStopPlanner key={widgetKey} {...commonProps} {...loc} maxStops={50} />;
       case 'listing-tour':
         return <ListingTourPlanner key={widgetKey} {...commonProps} />;
       case 'delivery':

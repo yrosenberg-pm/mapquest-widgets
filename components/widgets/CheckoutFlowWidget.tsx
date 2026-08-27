@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, Loader2, ShoppingBag, Lock, MapPin } from 'lucide-react';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
-import { geocode } from '@/lib/mapquest';
+import { geocodeLocations } from '@/lib/mapquest';
 import { useAddressAutocomplete } from '@/hooks/useAddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
@@ -143,12 +143,7 @@ function deliveryEstimateLabel(state: string) {
 }
 
 async function geocodeRooftopFirst(query: string) {
-  // Prefer rooftop/point-level accuracy for map pin placement.
-  // We intentionally do this here (widget-level) without changing API proxy logic.
-  const res = await fetch(`/api/mapquest?endpoint=geocoding&location=${encodeURIComponent(query)}&maxResults=5`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  const locations: any[] = data?.results?.[0]?.locations || [];
+  const locations = await geocodeLocations(query, 5);
   if (!Array.isArray(locations) || locations.length === 0) return null;
 
   const rank = (loc: any) => {

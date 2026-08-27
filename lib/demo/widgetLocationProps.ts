@@ -114,6 +114,11 @@ export function getWidgetLocationProps(
         defaultMapZoom: region.zoom,
       };
     case 'multistop':
+      return {
+        defaultMapCenter: region.center,
+        defaultMapZoom: region.zoom,
+        demoRegionId: region.id,
+      };
     case 'listing-tour':
     case 'isoline-overlap':
     case 'checkout':

@@ -16,6 +16,37 @@ function buildUrl(query: string | URLSearchParams): string {
   return _customerApiKey ? `${base}&apiKey=${encodeURIComponent(_customerApiKey)}` : base;
 }
 
+/** Optional bias for geocode/autocomplete (set from demo region in gallery). */
+export type SearchContext = {
+  countryCode?: string;
+  near?: { lat: number; lng: number };
+};
+
+let _searchContext: SearchContext = {};
+
+export function setSearchContext(ctx: SearchContext | null) {
+  _searchContext = ctx ?? {};
+}
+
+export function getSearchContext(): SearchContext {
+  return _searchContext;
+}
+
+function applySearchContext(params: URLSearchParams, overrides?: SearchContext) {
+  const ctx = { ..._searchContext, ...overrides };
+  if (ctx.countryCode) {
+    params.set('countryCode', ctx.countryCode.toUpperCase());
+  }
+  if (ctx.near) {
+    const pad = 0.35;
+    const south = ctx.near.lat - pad;
+    const north = ctx.near.lat + pad;
+    const west = ctx.near.lng - pad;
+    const east = ctx.near.lng + pad;
+    params.set('boundingBox', `${south},${west},${north},${east}`);
+  }
+}
+
 interface Location {
   lat: number;
   lng: number;
@@ -35,27 +66,56 @@ interface GeocodedLocation {
 
 // ============ GEOCODING ============
 
-export async function geocode(query: string, maxResults: number = 5): Promise<GeocodedLocation | null> {
+export async function geocode(
+  query: string,
+  maxResults: number = 5,
+  context?: SearchContext,
+): Promise<GeocodedLocation | null> {
+  const locations = await geocodeLocations(query, maxResults, context);
+  const loc = locations[0];
+  if (!loc) return null;
+  return {
+    ...loc,
+    lat: loc.latLng?.lat || loc.displayLatLng?.lat,
+    lng: loc.latLng?.lng || loc.displayLatLng?.lng,
+  };
+}
+
+export async function geocodeLocations(
+  query: string,
+  maxResults: number = 5,
+  context?: SearchContext,
+): Promise<any[]> {
   try {
-    const res = await fetch(buildUrl(`endpoint=geocoding&location=${encodeURIComponent(query)}&maxResults=${maxResults}`));
-    if (!res.ok) return null;
+    const params = new URLSearchParams({
+      endpoint: 'geocoding',
+      location: query,
+      maxResults: String(maxResults),
+    });
+    applySearchContext(params, context);
+    const res = await fetch(buildUrl(params));
+    if (!res.ok) return [];
     const data = await res.json();
-    const loc = data.results?.[0]?.locations?.[0];
-    if (!loc) return null;
-    return {
-      ...loc,
-      lat: loc.latLng?.lat || loc.displayLatLng?.lat,
-      lng: loc.latLng?.lng || loc.displayLatLng?.lng,
-    };
+    return data.results?.[0]?.locations || [];
   } catch (err) {
     console.error('Geocoding failed:', err);
-    return null;
+    return [];
   }
 }
 
-export async function reverseGeocode(lat: number, lng: number): Promise<GeocodedLocation | null> {
+export async function reverseGeocode(
+  lat: number,
+  lng: number,
+  context?: SearchContext,
+): Promise<GeocodedLocation | null> {
   try {
-    const res = await fetch(buildUrl(`endpoint=geocoding&location=${lat},${lng}&maxResults=1`));
+    const params = new URLSearchParams({
+      endpoint: 'geocoding',
+      location: `${lat},${lng}`,
+      maxResults: '1',
+    });
+    applySearchContext(params, context);
+    const res = await fetch(buildUrl(params));
     if (!res.ok) return null;
     const data = await res.json();
     const loc = data.results?.[0]?.locations?.[0];
@@ -156,9 +216,19 @@ interface SearchAheadResult {
   };
 }
 
-export async function searchAhead(query: string, limit: number = 6): Promise<SearchAheadResult[]> {
+export async function searchAhead(
+  query: string,
+  limit: number = 6,
+  context?: SearchContext,
+): Promise<SearchAheadResult[]> {
   try {
-    const url = buildUrl(`endpoint=searchahead&q=${encodeURIComponent(query)}&limit=${limit}`);
+    const params = new URLSearchParams({
+      endpoint: 'searchahead',
+      q: query,
+      limit: String(limit),
+    });
+    applySearchContext(params, context);
+    const url = buildUrl(params);
     const res = await fetch(url);
     
     if (!res.ok) {
