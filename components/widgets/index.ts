@@ -16,6 +16,8 @@ export { default as DeliveryETA } from './DeliveryETA';
 export { default as CommuteTimeCalculator } from './CommuteTimeCalculator';
 export { default as NHLArenaExplorer } from './NHLArenaExplorer';
 export { default as HereIsolineWidget } from './HereIsolineWidget';
+export { default as HereClusterRouteDemo } from './HereClusterRouteDemo';
+export { default as DevicePreviewFrame } from './DevicePreviewFrame';
 export { default as IsolineOverlapWidget } from './IsolineOverlapWidget';
 export { default as TruckRouting } from './TruckRouting';
 export { default as TruckRoutePlanner } from './TruckRoutePlanner';

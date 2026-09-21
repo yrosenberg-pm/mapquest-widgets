@@ -24,6 +24,7 @@ import {
   InstacartDeliveryETA,
   NHLArenaExplorer,
   HereIsolineWidget,
+  HereClusterRouteDemo,
   IsolineOverlapWidget,
   RouteWeatherAlerts,
   CheckoutFlowWidget,
@@ -61,6 +62,7 @@ const VALID_WIDGETS = [
   'instacart',
   'isoline',
   'isoline-overlap',
+  'here-cluster-route',
   'checkout',
   'ev-charging',
   'traffic',
@@ -346,6 +348,8 @@ export default function WidgetPage() {
         return <HereIsolineWidget key={widgetKey} {...commonProps} defaultTimeMinutes={15} {...loc} />;
       case 'isoline-overlap':
         return <IsolineOverlapWidget key={widgetKey} {...commonProps} />;
+      case 'here-cluster-route':
+        return <HereClusterRouteDemo key={widgetKey} {...commonProps} />;
       case 'transit':
         return <PublicTransitDepartures key={widgetKey} {...commonProps} {...loc} />;
       case 'parking':

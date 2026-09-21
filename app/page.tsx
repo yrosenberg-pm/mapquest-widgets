@@ -18,6 +18,7 @@ import {
   InstacartDeliveryETA,
   NHLArenaExplorer,
   HereIsolineWidget,
+  HereClusterRouteDemo,
   IsolineOverlapWidget,
   TruckRouting,
   TruckRoutePlanner,
@@ -68,6 +69,7 @@ type WidgetId =
   | 'route-weather'
   | 'isoline'
   | 'isoline-overlap'
+  | 'here-cluster-route'
   | 'checkout'
   | 'ev-charging'
   | 'traffic'
@@ -83,7 +85,7 @@ type WidgetId =
   | 'streetview-showcase';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
-const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner']);
+const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner', 'here-cluster-route']);
 
 type MenuSection = 'routing' | 'other' | 'branded';
 
@@ -100,6 +102,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'transit' as WidgetId, name: 'Public Transit Departures', description: 'Real-time station boards & departure times', section: 'routing', menuLucide: Train },
   { id: 'isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
   { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
+  { id: 'here-cluster-route' as WidgetId, name: 'Cluster & Route Demo', description: 'Marker clustering with multi-stop routing', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
   { id: 'zone-coverage' as WidgetId, name: 'Coverage Zone Builder', description: 'Multi-zone boundary visualization tool', section: 'other', menuLucide: Layers },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
@@ -702,6 +705,8 @@ function HomeContent() {
         return <HereIsolineWidget key={widgetKey} {...commonProps} defaultTimeMinutes={15} {...loc} />;
       case 'isoline-overlap':
         return <IsolineOverlapWidget key={widgetKey} {...commonProps} />;
+      case 'here-cluster-route':
+        return <HereClusterRouteDemo key={widgetKey} {...commonProps} />;
       case 'transit':
         return <PublicTransitDepartures key={widgetKey} {...commonProps} {...loc} />;
       case 'parking':

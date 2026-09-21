@@ -123,7 +123,14 @@ interface MapQuestMapProps {
   showZoomControls?: boolean;
   interactive?: boolean;
   className?: string;
-  fitBounds?: { north: number; south: number; east: number; west: number };
+  fitBounds?: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+    maxZoom?: number;
+    durationMs?: number;
+  };
   /** Optional `key` forces the zoom effect to run again when lat/lng are unchanged (e.g. re-selecting the same step). */
   zoomToLocation?: { lat: number; lng: number; zoom?: number; key?: number | string };
   showTraffic?: boolean;
@@ -1147,7 +1154,12 @@ export default function MapQuestMap({
       [fitBounds.south, fitBounds.west],
       [fitBounds.north, fitBounds.east]
     );
-    mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+    mapRef.current.fitBounds(bounds, {
+      padding: [50, 50],
+      animate: true,
+      duration: (fitBounds.durationMs ?? 1000) / 1000,
+      ...(fitBounds.maxZoom != null ? { maxZoom: fitBounds.maxZoom } : {}),
+    });
   }, [fitBounds, mapReady]);
 
   // Zoom to specific location
