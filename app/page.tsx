@@ -85,7 +85,7 @@ type WidgetId =
   | 'streetview-showcase';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
-const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner', 'here-cluster-route']);
+const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner']);
 
 type MenuSection = 'routing' | 'other' | 'branded';
 
@@ -102,8 +102,8 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'transit' as WidgetId, name: 'Public Transit Departures', description: 'Real-time station boards & departure times', section: 'routing', menuLucide: Train },
   { id: 'isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
   { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
-  { id: 'here-cluster-route' as WidgetId, name: 'Cluster & Route Demo', description: 'Marker clustering with multi-stop routing', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
+  { id: 'here-cluster-route' as WidgetId, name: 'Cluster & Route Demo', description: 'Marker clustering with multi-stop routing', section: 'other', menuLucide: Layers },
   { id: 'zone-coverage' as WidgetId, name: 'Coverage Zone Builder', description: 'Multi-zone boundary visualization tool', section: 'other', menuLucide: Layers },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
   { id: 'streetview-showcase' as WidgetId, name: 'Street View', description: 'Street View Image Widget', section: 'other', menuLucide: User },
