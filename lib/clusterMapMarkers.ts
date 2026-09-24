@@ -74,6 +74,24 @@ function stopColor(stop: ClusterDemoStop, fallback: string) {
   return stop.color || fallback;
 }
 
+/** When a cluster mixes pin colors (regional/national view), use the most common one. */
+function dominantStopColor(members: ClusterDemoStop[], fallback: string) {
+  const counts = new Map<string, number>();
+  for (const member of members) {
+    const color = stopColor(member, fallback);
+    counts.set(color, (counts.get(color) ?? 0) + 1);
+  }
+  let best = fallback;
+  let max = 0;
+  for (const [color, count] of counts) {
+    if (count > max) {
+      max = count;
+      best = color;
+    }
+  }
+  return best;
+}
+
 function minPixelSeparation(stops: ClusterDemoStop[], zoom: number) {
   if (stops.length < 2) return Infinity;
   const pxPoints = stops.map((s) => latLngToPixel(s.lat, s.lng, zoom));
@@ -263,7 +281,9 @@ function clusterStopsToMarkers(opts: {
       const weight = members.length;
       const lat = members.reduce((s, m) => s + m.lat, 0) / weight;
       const lng = members.reduce((s, m) => s + m.lng, 0) / weight;
-      const color = groupByColor ? stopColor(members[0], accentColor) : UNIFIED_CLUSTER_COLOR;
+      const color = groupByColor
+        ? stopColor(members[0], accentColor)
+        : dominantStopColor(members, accentColor);
       out.push({
         lat,
         lng,
