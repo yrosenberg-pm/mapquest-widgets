@@ -14,8 +14,10 @@ import {
   DEFAULT_VEHICLE,
   fetchHereTruckDirections,
   fetchMapQuestTruckDirections,
+  type TruckDirectionsResult,
   type VehicleProfile,
 } from '@/lib/truckRouting/directions';
+import type { TrafficRouteSegment } from '@/lib/truckRouteTrafficSegments';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
@@ -213,6 +215,18 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
   const [showDepartureOptions, setShowDepartureOptions] = useState(false);
   const [useHereRouting, setUseHereRouting] = useState(true); // Default to provider routing for better truck restrictions support
   const [routePolyline, setRoutePolyline] = useState<{ lat: number; lng: number }[] | undefined>(undefined);
+  const [routeTrafficSegments, setRouteTrafficSegments] = useState<TrafficRouteSegment[]>([]);
+
+  const applyMapRouteFromDirections = (directions: TruckDirectionsResult) => {
+    const segments = directions.trafficSegments ?? [];
+    setRouteTrafficSegments(segments);
+    setRoutePolyline(directions.polyline?.length ? directions.polyline : undefined);
+  };
+
+  const clearMapRoute = () => {
+    setRoutePolyline(undefined);
+    setRouteTrafficSegments([]);
+  };
   const [showTruckPois, setShowTruckPois] = useState(true);
   const [truckPois, setTruckPois] = useState<Array<{ lat: number; lng: number; title: string }>>([]);
   const [truckPoisLoading, setTruckPoisLoading] = useState(false);
@@ -340,7 +354,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
       setFromCoords(null);
       setToCoords(null);
       setRoute(null);
-      setRoutePolyline(undefined);
+      clearMapRoute();
       setStepsExpanded(false);
       setError(null);
       setElevationNote(null);
@@ -349,7 +363,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
 
     setLoading(true);
     setError(null);
-    setRoutePolyline(undefined);
+    clearMapRoute();
 
     try {
       // If we already have selected coordinates (from autocomplete selection),
@@ -394,23 +408,16 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
               : undefined;
 
           directions = await getHereTruckDirections(fromLoc!, toLoc!, vehicle, departureTime, maxElevationFt, via);
-          if (directions.polyline && directions.polyline.length > 0) {
-            setRoutePolyline(directions.polyline);
-          } else {
-            setRoutePolyline(undefined);
-          }
+          applyMapRouteFromDirections(directions);
         } catch (hereErr) {
           console.warn('[TruckRouting] HERE truck routing failed, falling back to MapQuest:', hereErr);
-          setRoutePolyline(undefined);
           directions = await getMapQuestTruckDirections(
             `${fromLoc!.lat},${fromLoc!.lng}`,
             `${toLoc!.lat},${toLoc!.lng}`,
             vehicle,
             departureTime,
           );
-          if (directions.polyline && directions.polyline.length > 0) {
-            setRoutePolyline(directions.polyline);
-          }
+          applyMapRouteFromDirections(directions);
           setElevationNote(null);
           setRouteMaxElevationFt(null);
         }
@@ -421,11 +428,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
           vehicle,
           departureTime,
         );
-        if (directions.polyline && directions.polyline.length > 0) {
-          setRoutePolyline(directions.polyline);
-        } else {
-          setRoutePolyline(undefined);
-        }
+        applyMapRouteFromDirections(directions);
         setElevationNote(null);
         setRouteMaxElevationFt(null);
       }
@@ -492,7 +495,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
     setLoading(true);
     setError(null);
     setRoute(null);
-    setRoutePolyline(undefined);
+    clearMapRoute();
     setStepsExpanded(false);
 
     const minLoadingMs = jitter(600, 0.3);
@@ -555,11 +558,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
 
       const [, directions] = await Promise.all([sleep(minLoadingMs), routingWork]);
 
-      if (directions.polyline && directions.polyline.length > 0) {
-        setRoutePolyline(directions.polyline);
-      } else {
-        setRoutePolyline(undefined);
-      }
+      applyMapRouteFromDirections(directions);
 
       const routeInfo: RouteInfo = {
         distance: directions.distance,
@@ -906,10 +905,10 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
               clusterMarkers={showTruckPois && truckPois.length > 0}
               clusterRadiusPx={56}
               showRoute={showRouteOnMap}
-              routeStart={showRouteOnMap ? fromCoords || undefined : undefined}
-              routeEnd={showRouteOnMap ? toCoords || undefined : undefined}
-              routeType="fastest"
-              routePolyline={showRouteOnMap ? routePolyline : undefined}
+              routeSegments={routeTrafficSegments.length > 0 ? routeTrafficSegments : undefined}
+              routePolyline={
+                showRouteOnMap && routeTrafficSegments.length === 0 ? routePolyline : undefined
+              }
               mapType={resolvedMapType}
               lockBasemap={lockRoadBasemap ? 'road' : undefined}
               flyToView={
@@ -1125,7 +1124,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
                       setFrom(v);
                       setFromCoords(null);
                       setRoute(null);
-                      setRoutePolyline(undefined);
+                      clearMapRoute();
                       setError(null);
                     }}
                   onSelect={(result) => {
@@ -1169,7 +1168,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
                       setTo(v);
                       setToCoords(null);
                       setRoute(null);
-                      setRoutePolyline(undefined);
+                      clearMapRoute();
                       setError(null);
                     }}
                   onSelect={(result) => {

@@ -4,6 +4,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react';
 import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp, Clock, Train, Bus, Footprints, Ship, TramFront, Star, Trash2 } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
+import {
+  buildTrafficRouteSegmentsFromShapeInput,
+  type RouteLeg,
+} from '@/lib/truckRouteTrafficSegments';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
@@ -288,6 +292,13 @@ export default function DirectionsEmbed({
 
   /** Drive / bike / walk: path coords per turn-by-turn step (from route shape + maneuver indexes). */
   const [routeStepPathCoords, setRouteStepPathCoords] = useState<({ lat: number; lng: number }[] | undefined)[]>([]);
+  const [driveRouteShape, setDriveRouteShape] = useState<{
+    shapePoints: { lat: number; lng: number }[];
+    maneuverIndexes?: number[];
+    legs?: RouteLeg[];
+    timeSeconds?: number;
+    realTimeSeconds?: number;
+  } | null>(null);
   /** Non-transit: zoom map to this step’s segment; tap again to show full route. */
   const [focusedRouteStepIndex, setFocusedRouteStepIndex] = useState<number | null>(null);
 
@@ -355,6 +366,7 @@ export default function DirectionsEmbed({
     setTransitSummary(null);
     setPedestrianShape([]);
     setTransitFocusedStepIndex(null);
+    setDriveRouteShape(null);
   }, []);
 
   const applyFavoriteFrom = useCallback((f: FavoritePlace) => {
@@ -599,6 +611,7 @@ export default function DirectionsEmbed({
     setError(null);
     setFocusedRouteStepIndex(null);
     setRouteStepPathCoords([]);
+    setDriveRouteShape(null);
 
     try {
       const [fromResult, toResult] = await Promise.all([
@@ -653,6 +666,18 @@ export default function DirectionsEmbed({
         buildDriveStepPaths(directions.shapePoints, directions.maneuverIndexes, rawSteps),
       );
 
+      if (directions.shapePoints && directions.shapePoints.length >= 2) {
+        setDriveRouteShape({
+          shapePoints: directions.shapePoints,
+          maneuverIndexes: directions.maneuverIndexes,
+          legs: directions.legs,
+          timeSeconds: directions.timeSeconds,
+          realTimeSeconds: directions.realTimeSeconds,
+        });
+      } else {
+        setDriveRouteShape(null);
+      }
+
       setRoute(routeInfo);
       onRouteCalculated?.(routeInfo);
 
@@ -696,6 +721,11 @@ export default function DirectionsEmbed({
 
   // Per-segment colored polylines — visually distinct per transit mode,
   // and road-snapped shape for pedestrian mode
+  const trafficRouteSegments = useMemo(() => {
+    if (isTransit || isPedestrian || !driveRouteShape) return [];
+    return buildTrafficRouteSegmentsFromShapeInput(driveRouteShape);
+  }, [driveRouteShape, isTransit, isPedestrian]);
+
   const routePolylines = useMemo(() => {
     if (isTransit && transitSegs.length > 0) {
       const lines: Array<{
@@ -781,7 +811,7 @@ export default function DirectionsEmbed({
         className: 'highlighted-segment-glow',
       }];
     }
-    return undefined;
+    return [];
   }, [isTransit, isPedestrian, transitSegs, pedestrianShape, accentColor, focusedRouteStepIndex, routeStepPathCoords, transitFocusedStepIndex]);
 
   const mapFitBounds = useMemo(() => {
@@ -885,10 +915,19 @@ export default function DirectionsEmbed({
             accentColor={accentColor}
             height="100%"
             markers={markers}
-            showRoute={!isTransit && !isPedestrian && !!(fromCoords && toCoords)}
-            routeStart={!isTransit && !isPedestrian ? (fromCoords || undefined) : undefined}
-            routeEnd={!isTransit && !isPedestrian ? (toCoords || undefined) : undefined}
+            showRoute={!isTransit && !isPedestrian && !!route}
+            routeStart={
+              !isTransit && !isPedestrian && trafficRouteSegments.length === 0
+                ? fromCoords || undefined
+                : undefined
+            }
+            routeEnd={
+              !isTransit && !isPedestrian && trafficRouteSegments.length === 0
+                ? toCoords || undefined
+                : undefined
+            }
             routeType={isTransit || isPedestrian ? undefined : (routeType === 'shortest' ? 'fastest' : routeType)}
+            routeSegments={trafficRouteSegments.length > 0 ? trafficRouteSegments : undefined}
             polylines={routePolylines}
             fitBounds={directionsMapFitBounds}
           />

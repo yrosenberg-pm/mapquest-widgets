@@ -3,7 +3,25 @@ export type ClusterDemoStop = {
   lat: number;
   lng: number;
   metroId: string;
+  /** User-assigned pin color — clusters only merge pins of the same color. */
+  color: string;
 };
+
+/** Typical user color-codes for map pins (categories, teams, status, etc.). */
+export const DEMO_PIN_COLORS = [
+  '#2563eb',
+  '#dc2626',
+  '#16a34a',
+  '#9333ea',
+  '#ea580c',
+  '#0891b2',
+  '#ca8a04',
+  '#db2777',
+  '#4f46e5',
+  '#0d9488',
+  '#7c3aed',
+  '#b45309',
+] as const;
 
 export type DemoMetro = {
   id: string;
@@ -328,7 +346,7 @@ function randomOnLandOrganic(
 }
 
 const STOP_CACHE = new Map<number, ClusterDemoStop[]>();
-const STOP_CACHE_VERSION = 7;
+const STOP_CACHE_VERSION = 8;
 
 /** Fixed, cached stop sets — identical every load for a given point count. */
 export function getClusterDemoStops(count: number): ClusterDemoStop[] {
@@ -366,14 +384,26 @@ export function generateClusterDemoStops(count: number, seed = CLUSTER_DEMO_SEED
     const metro = DEMO_METROS[Math.floor(rng() * DEMO_METROS.length)];
     const seeds = metroSeeds.get(metro.id)!;
     const { lat, lng } = randomOnLandOrganic(rng, METRO_PLACEMENT[metro.id], seeds);
-    stops.push({ id: `m-${i}`, lat, lng, metroId: metro.id });
+    stops.push({
+      id: `m-${i}`,
+      lat,
+      lng,
+      metroId: metro.id,
+      color: DEMO_PIN_COLORS[Math.floor(rng() * DEMO_PIN_COLORS.length)],
+    });
   }
 
   for (let i = 0; i < strayCount; i++) {
     const anchor = STRAY_ANCHORS[Math.floor(rng() * STRAY_ANCHORS.length)];
     const seeds = straySeeds.get(anchor.id)!;
     const { lat, lng } = randomOnLandOrganic(rng, STRAY_PLACEMENT[anchor.id], seeds);
-    stops.push({ id: `s-${i}`, lat, lng, metroId: 'stray' });
+    stops.push({
+      id: `s-${i}`,
+      lat,
+      lng,
+      metroId: 'stray',
+      color: DEMO_PIN_COLORS[Math.floor(rng() * DEMO_PIN_COLORS.length)],
+    });
   }
 
   return stops;
@@ -383,7 +413,10 @@ export function getMetroById(id: string): DemoMetro | undefined {
   return DEMO_METROS.find((m) => m.id === id);
 }
 
-/** Pick routeStopCount stops from one metro (dense cluster for realistic routing). */
+/**
+ * Pick routeStopCount stops through the geographic center of a metro's pin field
+ * so the generated route sits amid surrounding clusters.
+ */
 export function pickRouteStops(
   allStops: ClusterDemoStop[],
   routeStopCount: number,
@@ -394,14 +427,31 @@ export function pickRouteStops(
   const local = allStops.filter((s) => s.metroId === metro.id);
   if (local.length < routeStopCount) return null;
 
-  const rng = mulberry32(CLUSTER_DEMO_SEED + routeStopCount * 997);
-  const anchor = local[Math.floor(rng() * local.length)];
-  const sorted = [...local].sort((a, b) => {
-    const da =
-      (a.lat - anchor.lat) ** 2 + (a.lng - anchor.lng) ** 2;
-    const db =
-      (b.lat - anchor.lat) ** 2 + (b.lng - anchor.lng) ** 2;
-    return da - db;
+  const centroidLat = local.reduce((sum, s) => sum + s.lat, 0) / local.length;
+  const centroidLng = local.reduce((sum, s) => sum + s.lng, 0) / local.length;
+
+  const byDistance = [...local]
+    .map((stop) => ({
+      stop,
+      dist: (stop.lat - centroidLat) ** 2 + (stop.lng - centroidLng) ** 2,
+    }))
+    .sort((a, b) => a.dist - b.dist);
+
+  // Core band: inner ~35% of stops — keeps the route in the dense middle.
+  const coreCount = Math.max(routeStopCount * 3, Math.ceil(local.length * 0.35));
+  const core = byDistance.slice(0, coreCount).map((entry) => entry.stop);
+
+  const ordered = [...core].sort((a, b) => {
+    const angA = Math.atan2(a.lat - centroidLat, a.lng - centroidLng);
+    const angB = Math.atan2(b.lat - centroidLat, b.lng - centroidLng);
+    return angA - angB;
   });
-  return { metro, stops: sorted.slice(0, routeStopCount) };
+
+  const picked: ClusterDemoStop[] = [];
+  const step = ordered.length / routeStopCount;
+  for (let i = 0; i < routeStopCount; i++) {
+    picked.push(ordered[Math.min(ordered.length - 1, Math.floor(i * step))]);
+  }
+
+  return { metro, stops: picked };
 }

@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
 import type { DemoTruckRouteResult } from '@/lib/demo/demoTruckRouteTypes';
 import { DEMO_ACCENT, DEMO_MAP_CENTER, DEMO_ROUTE_BLUE } from '@/lib/demo/demoTokens';
 import {
@@ -8,12 +7,13 @@ import {
   fractionAtElapsed,
   trimPolylineByFraction,
 } from '@/lib/demo/routeReveal';
-
-declare global {
-  interface Window {
-    L: any;
-  }
-}
+import { type LatLngTuple } from '@/lib/maplibre/geo';
+import { registerMaplibreWorker } from '@/lib/maplibre/registerWorker';
+import { drawRibbonRoute } from '@/lib/maplibre/routeDraw';
+import { resolveMapQuestTileStyle } from '@/lib/mapquestMaplibreStyle';
+import { Map as MaplibreMap, Marker } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { useEffect, useRef, useState } from 'react';
 
 const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -24,120 +24,53 @@ type Props = {
 
 export default function DemoTruckMap({ runKey, route }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const routeLayerRef = useRef<any>(null);
-  const markersLayerRef = useRef<any>(null);
-  const routeLineRef = useRef<any>(null);
-  const mapIdRef = useRef(`demo-truck-map-${runKey}`);
+  const mapRef = useRef<MaplibreMap | null>(null);
+  const markersRef = useRef<Marker[]>([]);
   const [mapReady, setMapReady] = useState(false);
 
-  const invalidateMapSize = () => {
+  const resizeMap = () => {
     try {
-      mapRef.current?.invalidateSize?.(false);
+      mapRef.current?.resize();
     } catch {
       /* ignore */
     }
   };
 
-  const drawRouteLayers = (L: typeof window.L, layer: any, latLngs: [number, number][]) => {
-    if (latLngs.length < 2) return null;
-    L.polyline(latLngs, {
-      color: '#000000',
-      weight: 11,
-      opacity: 0.12,
-      lineCap: 'round',
-      lineJoin: 'round',
-    }).addTo(layer);
-    L.polyline(latLngs, {
-      color: '#ffffff',
-      weight: 9,
-      opacity: 0.95,
-      lineCap: 'round',
-      lineJoin: 'round',
-    }).addTo(layer);
-    const routeLine = L.polyline(latLngs, {
-      color: DEMO_ROUTE_BLUE,
-      weight: 6,
-      opacity: 0.92,
-      lineCap: 'round',
-      lineJoin: 'round',
-    }).addTo(layer);
-    return routeLine;
-  };
-
-  const fitRouteBounds = (map: any, boundingBox: DemoTruckRouteResult['boundingBox']) => {
-    const L = window.L;
-    const north = Math.max(boundingBox.ul.lat, boundingBox.lr.lat);
-    const south = Math.min(boundingBox.ul.lat, boundingBox.lr.lat);
-    const west = Math.min(boundingBox.ul.lng, boundingBox.lr.lng);
-    const east = Math.max(boundingBox.ul.lng, boundingBox.lr.lng);
-    const bounds = L.latLngBounds([south, west], [north, east]);
-    map.fitBounds(bounds, { padding: [48, 48] });
-  };
-
   useEffect(() => {
     let alive = true;
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const host = hostRef.current;
+    if (!host || !API_KEY) return;
 
-    const destroyMap = () => {
-      if (mapRef.current) {
-        try {
-          mapRef.current.remove();
-        } catch {
-          /* ignore */
-        }
-        mapRef.current = null;
-      }
-      routeLayerRef.current = null;
-      markersLayerRef.current = null;
-      routeLineRef.current = null;
-      if (hostRef.current) hostRef.current.innerHTML = '';
-    };
+    registerMaplibreWorker();
 
-    const init = () => {
-      if (!alive || !hostRef.current) return;
-      const L = window.L;
-      if (!L?.mapquest?.map || !L?.mapquest?.tileLayer) {
-        retryTimer = setTimeout(init, 100);
-        return;
-      }
+    const map = new MaplibreMap({
+      container: host,
+      style: resolveMapQuestTileStyle(API_KEY, 'map'),
+      center: [DEMO_MAP_CENTER.lng, DEMO_MAP_CENTER.lat],
+      zoom: DEMO_MAP_CENTER.zoom,
+      attributionControl: { compact: true },
+    });
 
-      destroyMap();
-      L.mapquest.key = API_KEY;
-
-      const mapDiv = document.createElement('div');
-      mapDiv.id = mapIdRef.current;
-      mapDiv.style.width = '100%';
-      mapDiv.style.height = '100%';
-      hostRef.current.appendChild(mapDiv);
-
-      const map = L.mapquest.map(mapIdRef.current, {
-        center: [DEMO_MAP_CENTER.lat, DEMO_MAP_CENTER.lng],
-        zoom: DEMO_MAP_CENTER.zoom,
-        zoomControl: false,
-        dragging: true,
-        scrollWheelZoom: true,
-        doubleClickZoom: true,
-        touchZoom: true,
-      });
-
-      L.mapquest.tileLayer('map').addTo(map);
-      routeLayerRef.current = L.layerGroup().addTo(map);
-      markersLayerRef.current = L.layerGroup().addTo(map);
-      mapRef.current = map;
+    mapRef.current = map;
+    const onLoad = () => {
+      if (!alive) return;
       setMapReady(true);
-
-      window.setTimeout(invalidateMapSize, 50);
-      window.setTimeout(invalidateMapSize, 350);
+      window.setTimeout(resizeMap, 50);
+      window.setTimeout(resizeMap, 350);
     };
-
-    setMapReady(false);
-    init();
+    map.on('load', onLoad);
+    if (map.loaded()) onLoad();
 
     return () => {
       alive = false;
-      if (retryTimer) clearTimeout(retryTimer);
-      destroyMap();
+      for (const m of markersRef.current) m.remove();
+      markersRef.current = [];
+      try {
+        map.remove();
+      } catch {
+        /* ignore */
+      }
+      mapRef.current = null;
       setMapReady(false);
     };
   }, [runKey]);
@@ -150,96 +83,84 @@ export default function DemoTruckMap({ runKey, route }: Props) {
     const onTransitionEnd = (e: TransitionEvent) => {
       if (e.target !== host) return;
       if (e.propertyName !== 'opacity' && e.propertyName !== 'transform') return;
-      invalidateMapSize();
+      resizeMap();
     };
 
     host.addEventListener('transitionend', onTransitionEnd);
-    window.setTimeout(invalidateMapSize, 350);
-
-    return () => {
-      host.removeEventListener('transitionend', onTransitionEnd);
-    };
+    window.setTimeout(resizeMap, 350);
+    return () => host.removeEventListener('transitionend', onTransitionEnd);
   }, [mapReady, runKey]);
 
   useEffect(() => {
-    if (!mapReady || !mapRef.current || !routeLayerRef.current || !markersLayerRef.current) return;
-    if (!route?.polyline || route.polyline.length < 2) return;
+    if (!mapReady || !mapRef.current || !route?.polyline || route.polyline.length < 2) return;
 
-    const L = window.L;
-    const fullLatLngs = route.polyline.map((p) => [p.lat, p.lng] as [number, number]);
+    const map = mapRef.current;
+    const fullLatLngs = route.polyline.map((p) => [p.lat, p.lng] as LatLngTuple);
     const timing = createDemoRouteRevealTiming();
 
-    routeLayerRef.current.clearLayers();
-    markersLayerRef.current.clearLayers();
-    routeLineRef.current = null;
+    for (const m of markersRef.current) m.remove();
+    markersRef.current = [];
 
-    const pinHtml = (label: string, fill: string, opacity = 1) =>
-      `<div style="width:28px;height:28px;border-radius:50%;background:${fill};color:#fff;font:bold 12px/28px system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.28);border:2px solid #fff;opacity:${opacity}">${label}</div>`;
+    const pinEl = (label: string, fill: string) => {
+      const el = document.createElement('div');
+      el.innerHTML = `<div style="width:28px;height:28px;border-radius:50%;background:${fill};color:#fff;font:bold 12px/28px system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.28);border:2px solid #fff;transform:translate(-14px,-14px);">${label}</div>`;
+      return el;
+    };
 
-    const startIcon = L.divIcon({
-      className: '',
-      html: pinHtml('A', DEMO_ACCENT),
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
-    });
-
-    L.marker([route.start.lat, route.start.lng], { icon: startIcon, interactive: false }).addTo(
-      markersLayerRef.current,
+    markersRef.current.push(
+      new Marker({ element: pinEl('A', DEMO_ACCENT) })
+        .setLngLat([route.start.lng, route.start.lat])
+        .addTo(map),
     );
 
-    let endMarker: any = null;
+    let endMarker: Marker | null = null;
     let cancelled = false;
     let raf = 0;
     let startTs = 0;
 
-    const drawFrame = (fraction: number) => {
-      routeLayerRef.current.clearLayers();
+    const drawPartial = (fraction: number) => {
       const partial = trimPolylineByFraction(fullLatLngs, fraction);
       if (partial.length >= 2) {
-        routeLineRef.current = drawRouteLayers(L, routeLayerRef.current, partial);
+        drawRibbonRoute(map, 'mq-demo-route-', partial, DEMO_ROUTE_BLUE, 6, 0.92);
       }
     };
 
     const finish = () => {
       if (cancelled) return;
-      routeLayerRef.current.clearLayers();
-      routeLineRef.current = drawRouteLayers(L, routeLayerRef.current, fullLatLngs);
+      drawRibbonRoute(map, 'mq-demo-route-', fullLatLngs, DEMO_ROUTE_BLUE, 6, 0.92);
+      endMarker = new Marker({ element: pinEl('B', '#DC2626') })
+        .setLngLat([route.end.lng, route.end.lat])
+        .addTo(map);
+      markersRef.current.push(endMarker);
 
-      const endIcon = L.divIcon({
-        className: '',
-        html: pinHtml('B', '#DC2626'),
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
-      endMarker = L.marker([route.end.lat, route.end.lng], { icon: endIcon, interactive: false }).addTo(
-        markersLayerRef.current,
+      const north = Math.max(route.boundingBox.ul.lat, route.boundingBox.lr.lat);
+      const south = Math.min(route.boundingBox.ul.lat, route.boundingBox.lr.lat);
+      const west = Math.min(route.boundingBox.ul.lng, route.boundingBox.lr.lng);
+      const east = Math.max(route.boundingBox.ul.lng, route.boundingBox.lr.lng);
+      map.fitBounds(
+        [
+          [west, south],
+          [east, north],
+        ],
+        { padding: 48 },
       );
-
-      fitRouteBounds(mapRef.current, route.boundingBox);
-      invalidateMapSize();
-      window.setTimeout(invalidateMapSize, 0);
-      window.setTimeout(invalidateMapSize, 150);
+      resizeMap();
     };
 
     const tick = (ts: number) => {
       if (cancelled) return;
       if (!startTs) startTs = ts;
       const elapsed = ts - startTs;
-      const fraction = fractionAtElapsed(elapsed, timing);
-      drawFrame(fraction);
-      if (fraction < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        finish();
-      }
+      drawPartial(fractionAtElapsed(elapsed, timing));
+      if (fractionAtElapsed(elapsed, timing) < 1) raf = requestAnimationFrame(tick);
+      else finish();
     };
 
     raf = requestAnimationFrame(tick);
-
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
-      endMarker?.remove?.();
+      endMarker?.remove();
     };
   }, [mapReady, route, runKey]);
 

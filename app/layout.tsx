@@ -1,7 +1,6 @@
 // app/layout.tsx
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import Script from 'next/script';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -24,10 +23,6 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-        <link
-          rel="stylesheet"
-          href="https://api.mqcdn.com/sdk/mapquest-js/v1.3.2/mapquest.css"
-        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -37,10 +32,6 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         {children}
-        <Script
-          src="https://api.mqcdn.com/sdk/mapquest-js/v1.3.2/mapquest.js"
-          strategy="beforeInteractive"
-        />
       </body>
     </html>
   );

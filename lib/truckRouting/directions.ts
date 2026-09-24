@@ -1,4 +1,8 @@
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
+import {
+  buildTrafficRouteSegments,
+  type TrafficRouteSegment,
+} from '@/lib/truckRouteTrafficSegments';
 
 export interface VehicleProfile {
   height: number; // feet
@@ -30,6 +34,8 @@ export interface TruckDirectionsResult {
   hasHighway?: boolean;
   steps: TruckRouteStep[];
   polyline: { lat: number; lng: number }[];
+  /** Congestion-colored segments when MapQuest returns maneuver timing. */
+  trafficSegments?: TrafficRouteSegment[];
   maxElevationFt?: number | null;
   elevationNote?: string | null;
   routeMaxElevationFt?: number | null;
@@ -217,6 +223,7 @@ export function buildMapQuestTruckRouteSearchParams(
     vehicleLength: mq.vehicleLength,
     vehicleWidth: mq.vehicleWidth,
     vehicleAxles: mq.vehicleAxles,
+    useTraffic: 'true',
   });
 
   if (departure && departure !== 'now') {
@@ -412,6 +419,13 @@ export async function fetchMapQuestTruckDirections(
     }
   }
 
+  const trafficSegments = buildTrafficRouteSegments({
+    shape: routeData.shape,
+    legs: routeData.legs,
+    time: routeData.time,
+    realTime: routeData.realTime,
+  });
+
   return {
     distance: routeData.distance,
     time: routeData.time / 60,
@@ -425,6 +439,7 @@ export async function fetchMapQuestTruckDirections(
         time: m.time / 60,
       })) || [],
     polyline,
+    trafficSegments: trafficSegments.length > 0 ? trafficSegments : undefined,
   };
 }
 

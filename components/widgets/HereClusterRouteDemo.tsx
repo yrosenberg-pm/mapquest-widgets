@@ -27,6 +27,7 @@ import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import { markerPinColorForIndex } from '@/lib/mapMarkerIcons';
 import {
   boundsForExpandedCluster,
+  boundsForRouteWithSurroundingPins,
   boundsFromPoints,
   buildClusterMapMarkers,
   largeNumberedPinIconUrl,
@@ -48,10 +49,11 @@ const CLUSTER_INCREMENTAL_MIN = 25;
 const CLUSTER_MAX_ZOOM = 18;
 const CLUSTER_ZOOM_STEP = 2;
 const MAP_ZOOM_DURATION_MS = 400;
-/** Mapbox Supercluster default radius (Google MarkerClusterer gridSize is 60). */
 const DEFAULT_CLUSTER_RADIUS_PX = 40;
-/** Mapbox `minPoints` / Google `minimumClusterSize` default. */
-const DEFAULT_MIN_CLUSTER_SIZE = 2;
+const DEFAULT_MIN_CLUSTER_SIZE = 5;
+const MAX_CLUSTER_ZOOM_MOBILE = 11;
+const MAX_CLUSTER_ZOOM_DESKTOP = 12;
+const CLUSTER_REBUILD_DEBOUNCE_MS = 80;
 
 type MapViewPreset = 'metro' | 'regional' | 'nationwide';
 type DevicePreviewMode = 'desktop' | DevicePreviewKind;
@@ -93,6 +95,12 @@ export default function HereClusterRouteDemo({
   const [devicePreview, setDevicePreview] = useState<DevicePreviewMode>('desktop');
   const [mapViewPreset, setMapViewPreset] = useState<MapViewPreset>('metro');
   const [zoomLevel, setZoomLevel] = useState(METRO_ZOOM);
+  const [mapBounds, setMapBounds] = useState<{
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null>(null);
   const [rebuildMs, setRebuildMs] = useState<number | null>(null);
   const [routeActive, setRouteActive] = useState(false);
   const [routeLoading, setRouteLoading] = useState(false);
@@ -121,16 +129,27 @@ export default function HereClusterRouteDemo({
       }
     | undefined
   >();
-  const [flyToView, setFlyToView] = useState<
-    { lat: number; lng: number; zoom: number; durationMs?: number; key: number } | undefined
-  >();
+  const [flyToView, setFlyToView] = useState<{
+    lat: number;
+    lng: number;
+    zoom: number;
+    durationMs?: number;
+    key: number;
+  }>(() => ({
+    lat: DEFAULT_CLUSTER_METRO.lat,
+    lng: DEFAULT_CLUSTER_METRO.lng,
+    zoom: METRO_ZOOM,
+    key: 1,
+  }));
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
-  const [showBackgroundClusters, setShowBackgroundClusters] = useState(false);
+  const [showBackgroundClusters, setShowBackgroundClusters] = useState(true);
+  const [showRouteStopPins, setShowRouteStopPins] = useState(true);
   const [routeStopIds, setRouteStopIds] = useState<Set<string>>(() => new Set());
   const [expandedSpiderGroups, setExpandedSpiderGroups] = useState<ClusterDemoStop[][]>([]);
 
   const stopsRef = useRef<ClusterDemoStop[]>([]);
   const mobileControlsRef = useRef<HTMLDivElement>(null);
+  const clusterRebuildTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const viewMetro = useMemo(
     () => DEMO_METROS.find((m) => m.id === viewMetroId) ?? DEFAULT_CLUSTER_METRO,
@@ -154,7 +173,6 @@ export default function HereClusterRouteDemo({
         if (members.every((m) => expandedIds.has(m.id))) return prev;
         return [...prev, members];
       });
-      setFlyToView(undefined);
       setFitBounds({
         ...boundsForExpandedCluster(members, Math.max(zoomLevel, 16)),
         maxZoom: CLUSTER_MAX_ZOOM,
@@ -192,23 +210,16 @@ export default function HereClusterRouteDemo({
         flyTo(NATIONWIDE_CENTER.lat, NATIONWIDE_CENTER.lng, NATIONWIDE_ZOOM);
         return;
       }
-      flyTo(
-        metro.lat,
-        metro.lng,
-        preset === 'metro' ? METRO_ZOOM : REGIONAL_ZOOM,
-      );
+      if (preset === 'regional') {
+        flyTo(NATIONWIDE_CENTER.lat, NATIONWIDE_CENTER.lng, REGIONAL_ZOOM);
+        return;
+      }
+      flyTo(metro.lat, metro.lng, METRO_ZOOM);
     },
     [viewMetro, flyTo],
   );
 
   const stops = useMemo(() => getClusterDemoStops(pointCount), [pointCount]);
-
-  const displayStops = useMemo(() => {
-    if (mapViewPreset === 'metro') {
-      return stops.filter((s) => s.metroId === viewMetroId);
-    }
-    return stops;
-  }, [stops, mapViewPreset, viewMetroId]);
 
   useEffect(() => {
     stopsRef.current = stops;
@@ -242,50 +253,69 @@ export default function HereClusterRouteDemo({
   }, [mobileControlsOpen]);
 
   const clusterSourceStops = useMemo(() => {
-    if (!routeActive || routeStopIds.size === 0) return displayStops;
-    return displayStops.filter((s) => !routeStopIds.has(s.id));
-  }, [displayStops, routeActive, routeStopIds]);
+    if (!routeActive || routeStopIds.size === 0) return stops;
+    // Keep every pin in the dataset; only drop route-stop locations (numbered pins cover those).
+    return stops.filter((s) => !routeStopIds.has(s.id));
+  }, [stops, routeActive, routeStopIds]);
+
+  const isMobilePreview = devicePreview === 'iphone' || devicePreview === 'ipad';
+  const maxClusterZoom = isMobilePreview ? MAX_CLUSTER_ZOOM_MOBILE : MAX_CLUSTER_ZOOM_DESKTOP;
 
   useEffect(() => {
-    if (routeActive && !showBackgroundClusters) return;
-    const t0 = performance.now();
-    const markers = buildClusterMapMarkers({
-      stops: clusterSourceStops,
-      zoom: zoomLevel,
-      eps,
-      minWeight,
-      accentColor,
-      onClusterTap: handleClusterTap,
-      spiderGroups: expandedSpiderGroups,
-    });
-    setClusterMarkers(markers);
-    setRebuildMs(Math.round(performance.now() - t0));
+    if (clusterRebuildTimerRef.current) clearTimeout(clusterRebuildTimerRef.current);
+    clusterRebuildTimerRef.current = setTimeout(() => {
+      const t0 = performance.now();
+      const markers = buildClusterMapMarkers({
+        stops: clusterSourceStops,
+        zoom: zoomLevel,
+        eps,
+        minWeight,
+        accentColor,
+        onClusterTap: handleClusterTap,
+        spiderGroups: expandedSpiderGroups,
+        maxClusterZoom,
+        viewportBounds: mapBounds,
+      });
+      setClusterMarkers(markers);
+      setRebuildMs(Math.round(performance.now() - t0));
+    }, CLUSTER_REBUILD_DEBOUNCE_MS);
+    return () => {
+      if (clusterRebuildTimerRef.current) clearTimeout(clusterRebuildTimerRef.current);
+    };
   }, [
     clusterSourceStops,
     zoomLevel,
     eps,
     minWeight,
     routeActive,
-    showBackgroundClusters,
     accentColor,
     handleClusterTap,
     expandedSpiderGroups,
+    maxClusterZoom,
+    mapBounds,
   ]);
 
   const mapMarkers = useMemo(() => {
     if (!routeActive) return clusterMarkers;
-    if (!showBackgroundClusters) return routeMarkers;
-    const background = clusterMarkers.map((m) => ({
-      ...m,
-      iconOpacity: 0.5,
-      zIndexOffset: -200,
-    }));
-    const route = routeMarkers.map((m) => ({
-      ...m,
-      zIndexOffset: (m.zIndexOffset ?? 0) + 200,
-    }));
+
+    const background = showBackgroundClusters
+      ? clusterMarkers.map((m) => ({
+          ...m,
+          iconOpacity: 0.92,
+          zIndexOffset: 350,
+        }))
+      : [];
+
+    const route = showRouteStopPins
+      ? routeMarkers.map((m) => ({
+          ...m,
+          zIndexOffset: 900,
+        }))
+      : [];
+
+    if (background.length === 0 && route.length === 0) return [];
     return [...background, ...route];
-  }, [routeActive, showBackgroundClusters, clusterMarkers, routeMarkers]);
+  }, [routeActive, showBackgroundClusters, showRouteStopPins, clusterMarkers, routeMarkers]);
 
   const clearRoute = useCallback(() => {
     setRouteActive(false);
@@ -294,10 +324,10 @@ export default function HereClusterRouteDemo({
     setRouteMarkers([]);
     setRoutePolyline(undefined);
     setRouteStopIds(new Set());
-    setShowBackgroundClusters(false);
+    setShowBackgroundClusters(true);
+    setShowRouteStopPins(true);
     setExpandedSpiderGroups([]);
     setFitBounds(undefined);
-    setFlyToView(undefined);
     setRouteError(null);
     goToViewPreset(mapViewPreset, viewMetro);
   }, [goToViewPreset, mapViewPreset, viewMetro]);
@@ -377,18 +407,22 @@ export default function HereClusterRouteDemo({
         };
       });
 
+      const surroundingStops = stopsRef.current.filter((s) => s.metroId === viewMetroId);
+
       setRouteStopIds(new Set(routeStops.map((s) => s.id)));
       setRouteMarkers(numbered);
       setRoutePolyline(polylinePoints);
       setRouteActive(true);
+      setShowBackgroundClusters(true);
+      setShowRouteStopPins(true);
       setRouteMetrics({
         stopCount: routeStops.length,
         distanceMiles: metersToMiles(distanceMeters),
         durationSec,
       });
-      setFlyToView(undefined);
       setFitBounds({
-        ...boundsFromPoints([...routeStops, ...polylinePoints]),
+        ...boundsForRouteWithSurroundingPins(polylinePoints, surroundingStops),
+        maxZoom: 14,
         durationMs: MAP_ZOOM_DURATION_MS,
       });
     } catch (e) {
@@ -402,8 +436,8 @@ export default function HereClusterRouteDemo({
     clearRoute();
   };
 
-  const controlsDisabled = routeActive || routeLoading;
-  const isDevicePreview = devicePreview === 'iphone' || devicePreview === 'ipad';
+  const controlsDisabled = routeLoading;
+  const isDevicePreview = isMobilePreview;
 
   const shellClass = isDevicePreview
     ? 'prism-widget w-full max-w-full'
@@ -417,7 +451,7 @@ export default function HereClusterRouteDemo({
     ? 'flex-1 relative min-h-0 min-w-0'
     : 'h-[400px] md:h-auto md:flex-1 md:order-2 relative';
 
-  const mapKey = `${devicePreview}-${viewMetroId}-${pointCount}`;
+  const mapKey = devicePreview;
 
   const previewToggle = (
     <div
@@ -587,8 +621,10 @@ export default function HereClusterRouteDemo({
         className="mb-3 p-3 rounded-xl text-xs space-y-1"
         style={{ background: 'var(--bg-panel)', color: 'var(--text-muted)' }}
       >
+        <div>Pins loaded: {stops.length.toLocaleString()}</div>
+        <div>Map markers: {clusterMarkers.length.toLocaleString()}</div>
         <div>Zoom: {zoomLevel.toFixed(1)}</div>
-        {!routeActive && rebuildMs != null && <div>Last rebuild: {rebuildMs} ms</div>}
+        {rebuildMs != null && <div>Last rebuild: {rebuildMs} ms</div>}
         {routeMetrics && (
           <>
             <div>Route stops: {routeMetrics.stopCount}</div>
@@ -613,7 +649,7 @@ export default function HereClusterRouteDemo({
           max={25}
           step={1}
           value={routeStopCount}
-          disabled={routeActive}
+          disabled={routeLoading}
           onChange={(e) => setRouteStopCount(Number(e.target.value))}
           className="w-full mb-2"
         />
@@ -651,19 +687,57 @@ export default function HereClusterRouteDemo({
           </button>
         ) : (
           <>
-            <label
-              className="mb-2 flex items-center gap-2 cursor-pointer select-none text-xs"
-              style={{ color: 'var(--text-muted)' }}
+            <div
+              className="mb-2 p-2.5 rounded-lg space-y-2"
+              style={{ background: 'var(--bg-panel)' }}
             >
-              <input
-                type="checkbox"
-                checked={showBackgroundClusters}
-                onChange={(e) => setShowBackgroundClusters(e.target.checked)}
-                className="rounded border-gray-300"
-                style={{ accentColor }}
-              />
-              Show background clusters
-            </label>
+              <label
+                className="flex items-center gap-2 cursor-pointer select-none text-xs"
+                style={{ color: 'var(--text-main)' }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showBackgroundClusters}
+                  onChange={(e) => setShowBackgroundClusters(e.target.checked)}
+                  className="rounded border-gray-300"
+                  style={{ accentColor }}
+                />
+                Surrounding pins &amp; clusters
+              </label>
+              <label
+                className="flex items-center gap-2 cursor-pointer select-none text-xs"
+                style={{ color: 'var(--text-main)' }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showRouteStopPins}
+                  onChange={(e) => setShowRouteStopPins(e.target.checked)}
+                  className="rounded border-gray-300"
+                  style={{ accentColor }}
+                />
+                Route stop pins
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={routeLoading}
+              onClick={handleGenerateRoute}
+              className="prism-btn prism-btn-primary w-full mb-2 hover:brightness-110 transition-all"
+              style={{
+                background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}dd 100%)`,
+                boxShadow: `0 4px 12px ${accentColor}40`,
+              }}
+            >
+              {routeLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 prism-spinner" /> Regenerating…
+                </>
+              ) : (
+                <>
+                  <Route className="w-4 h-4" /> Regenerate route
+                </>
+              )}
+            </button>
             <button
               type="button"
               onClick={handleClearRoute}
@@ -697,30 +771,57 @@ export default function HereClusterRouteDemo({
         markers={mapMarkers}
         clusterMarkers={false}
         routePolyline={routeActive ? routePolyline : undefined}
+        showRoute={routeActive}
         routeColor={accentColor}
         fitBounds={fitBounds}
         flyToView={flyToView}
-        onBoundsChange={(b) => setZoomLevel(b.zoom)}
+        onBoundsChange={(b) => {
+          setZoomLevel(b.zoom);
+          setMapBounds({
+            north: b.north,
+            south: b.south,
+            east: b.east,
+            west: b.west,
+          });
+        }}
       />
 
       {routeActive && (
-        <button
-          type="button"
-          aria-pressed={showBackgroundClusters}
-          onClick={() => setShowBackgroundClusters((on) => !on)}
-          className="absolute z-[500] flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium shadow-lg transition-colors hover:opacity-90"
-          style={{
-            bottom: 12,
-            left: 12,
-            background: showBackgroundClusters ? accentColor : 'var(--bg-canvas, #fff)',
-            color: showBackgroundClusters ? '#fff' : 'var(--text-main, #111)',
-            border: `1px solid ${showBackgroundClusters ? accentColor : 'var(--border-subtle, rgba(0,0,0,0.12))'}`,
-            boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
-          }}
+        <div
+          className="absolute z-[500] flex flex-col gap-1.5"
+          style={{ bottom: 12, left: 12 }}
         >
-          <Layers className="w-3.5 h-3.5" />
-          {showBackgroundClusters ? 'Hide clusters' : 'Show clusters'}
-        </button>
+          <button
+            type="button"
+            aria-pressed={showBackgroundClusters}
+            onClick={() => setShowBackgroundClusters((on) => !on)}
+            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium shadow-lg transition-colors hover:opacity-90"
+            style={{
+              background: showBackgroundClusters ? accentColor : 'var(--bg-canvas, #fff)',
+              color: showBackgroundClusters ? '#fff' : 'var(--text-main, #111)',
+              border: `1px solid ${showBackgroundClusters ? accentColor : 'var(--border-subtle, rgba(0,0,0,0.12))'}`,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+            }}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            {showBackgroundClusters ? 'Hide pins' : 'Show pins'}
+          </button>
+          <button
+            type="button"
+            aria-pressed={showRouteStopPins}
+            onClick={() => setShowRouteStopPins((on) => !on)}
+            className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium shadow-lg transition-colors hover:opacity-90"
+            style={{
+              background: showRouteStopPins ? accentColor : 'var(--bg-canvas, #fff)',
+              color: showRouteStopPins ? '#fff' : 'var(--text-main, #111)',
+              border: `1px solid ${showRouteStopPins ? accentColor : 'var(--border-subtle, rgba(0,0,0,0.12))'}`,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.18)',
+            }}
+          >
+            <Route className="w-3.5 h-3.5" />
+            {showRouteStopPins ? 'Hide stops' : 'Show stops'}
+          </button>
+        </div>
       )}
 
       {isDevicePreview && (

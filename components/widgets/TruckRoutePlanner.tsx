@@ -1048,7 +1048,13 @@ export default function TruckRoutePlanner({
             darkMode={darkMode}
             accentColor={accentColor}
             markers={markers}
-            routePolyline={shapePolyline.length > 0 ? shapePolyline : undefined}
+            routePolyline={
+              trafficRouteSegments.length > 0
+                ? undefined
+                : shapePolyline.length > 0
+                  ? shapePolyline
+                  : undefined
+            }
             routeSegments={trafficRouteSegments.length > 0 ? trafficRouteSegments : undefined}
             routeColor={ROUTE_LINE_BLUE}
             showRoute={Boolean(route && (shapePolyline.length > 0 || trafficRouteSegments.length > 0))}

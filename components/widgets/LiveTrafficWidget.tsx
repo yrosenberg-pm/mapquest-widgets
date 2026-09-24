@@ -1394,7 +1394,11 @@ export default function LiveTrafficWidget({
               interactive={true}
               zoomToLocation={zoomToLocation}
               onBoundsChange={handleBoundsChange}
-              routePolyline={routeState.status === 'ready' ? routeState.polyline : undefined}
+              routePolyline={
+                routeState.status === 'ready' && routeState.segments.length === 0
+                  ? routeState.polyline
+                  : undefined
+              }
               routeSegments={routeState.status === 'ready' ? routeState.segments : undefined}
               showRoute={routeState.status === 'ready'}
               showTraffic={false}

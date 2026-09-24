@@ -1,6 +1,47 @@
 'use client';
 
 import { easeInOutCubic, jitter } from '@/lib/gallery/jitter';
+import { layoutMapQuestAttribution } from '@/lib/maplibre/attribution';
+import { registerMaplibreWorker } from '@/lib/maplibre/registerWorker';
+import {
+  containerPointToLatLng,
+  coordsToBounds,
+  computeLinearProgressWithPause,
+  latLngBoundsToMapLibre,
+  latLngsToLineString,
+  safeFitBounds,
+  trimPolylineByFraction,
+  type LatLngTuple,
+} from '@/lib/maplibre/geo';
+import { injectMapQuestMapStyles } from '@/lib/maplibre/injectedStyles';
+import { moveLayerToTop, removeLayersAndSource, setGeoJsonSource } from '@/lib/maplibre/layers';
+import {
+  clearAllRouteLayers,
+  clearRouteLayers,
+  DEFAULT_ROUTE_BLUE,
+  drawColoredLine,
+  drawRibbonRoute,
+  drawSimpleRoutePolyline,
+} from '@/lib/maplibre/routeDraw';
+import {
+  mapQuestRasterSourceSpec,
+  resolveMapQuestBasemapType,
+  resolveMapQuestTileStyle,
+  type MapQuestTileType,
+} from '@/lib/mapquestMaplibreStyle';
+import {
+  CLUSTER_ANCHOR,
+  CLUSTER_CIRCLE_SIZE,
+  clusterPinIconUrl,
+} from '@/lib/clusterMapMarkers';
+import { circle } from '@turf/turf';
+import {
+  Map as MaplibreMap,
+  Marker,
+  NavigationControl,
+  type MapMouseEvent,
+} from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 function escapeHtml(text: string): string {
@@ -11,7 +52,6 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-/** Leaflet tooltip body — block min-width prevents single-character vertical wrapping. */
 function markerTooltipHtml(label: string): string {
   return `<div class="marker-tooltip-inner">${escapeHtml(label)}</div>`;
 }
@@ -23,22 +63,15 @@ interface MapMarker {
   color?: string;
   type?: 'home' | 'poi' | 'default';
   iconUrl?: string;
-  /** Inline SVG/HTML — sharper than rasterized data-URI images on Leaflet markers. */
   iconHtml?: string;
   iconSize?: [number, number];
   iconAnchor?: [number, number];
-  // When using `iconUrl`, MapQuestMap used to force a circular crop via border-radius.
-  // Keep that as the default for backward compatibility, but allow callers to opt out.
   iconCircular?: boolean;
-  // Opt out of marker clustering (when enabled).
   clusterable?: boolean;
-  /** Pulse animation (highlight a sidebar-hovered marker, etc.) */
   pulse?: boolean;
   zIndexOffset?: number;
-  /** Opacity of the marker graphic (0–1), e.g. dim non-hovered days on overview */
   iconOpacity?: number;
   onClick?: () => void;
-  /** Right-click / long-press on the marker (stops propagation to the map) */
   onContextMenu?: (lat: number, lng: number, meta?: { clientX: number; clientY: number }) => void;
   draggable?: boolean;
   onDragEnd?: (lat: number, lng: number) => void;
@@ -67,16 +100,14 @@ interface MapPolyline {
   color?: string;
   weight?: number;
   opacity?: number;
-  /** Leaflet simplification (default 1). Slightly higher values look smoother on road geometry. */
   smoothFactor?: number;
   dashed?: boolean;
-  /** Passed to Leaflet polyline `className` (e.g. breathing highlight on a segment). */
   className?: string;
   onClick?: (lat: number, lng: number) => void;
 }
 
 interface TransitSegment {
-  type: string; // pedestrian, subway, bus, train, etc.
+  type: string;
   coords: { lat: number; lng: number }[];
 }
 
@@ -95,7 +126,6 @@ interface MapQuestMapProps {
   darkMode?: boolean;
   accentColor?: string;
   markers?: MapMarker[];
-  // Lightweight clustering (no external plugin): groups nearby markers into a count bubble.
   clusterMarkers?: boolean;
   clusterRadiusPx?: number;
   circles?: MapCircle[];
@@ -108,16 +138,13 @@ interface MapQuestMapProps {
   waypoints?: { lat: number; lng: number }[];
   routeType?: 'fastest' | 'pedestrian' | 'bicycle';
   routeColor?: string;
-  routePolyline?: { lat: number; lng: number }[]; // Pre-calculated route coordinates
-  routeSegments?: RouteSegment[]; // Pre-calculated colored segments (e.g., congestion along route)
-  transitSegments?: TransitSegment[]; // For multi-segment transit routes with different line styles
+  routePolyline?: { lat: number; lng: number }[];
+  routeSegments?: RouteSegment[];
+  transitSegments?: TransitSegment[];
   onClick?: (lat: number, lng: number) => void;
-  /** HTML5 drop on map: lat/lng at drop point (e.g. drag a control onto the map). */
   onMapDrop?: (lat: number, lng: number) => void;
   onRightClick?: (lat: number, lng: number, meta?: { clientX: number; clientY: number }) => void;
   onRouteLineClick?: (lat: number, lng: number) => void;
-  // Drag the route line to "shape" the route by dropping a waypoint on release.
-  // Leaflet core doesn't support true polyline editing, so this is implemented as a drag-to-insert waypoint gesture.
   onRouteLineDrag?: (evt: { phase: 'start' | 'move' | 'end'; lat: number; lng: number }) => void;
   onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number; zoom: number }) => void;
   showZoomControls?: boolean;
@@ -131,317 +158,175 @@ interface MapQuestMapProps {
     maxZoom?: number;
     durationMs?: number;
   };
-  /** Optional `key` forces the zoom effect to run again when lat/lng are unchanged (e.g. re-selecting the same step). */
   zoomToLocation?: { lat: number; lng: number; zoom?: number; key?: number | string };
   showTraffic?: boolean;
-  highlightedSegment?: number | null; // Index of segment to highlight
-  stops?: { lat: number; lng: number }[]; // All stops for segment-by-segment routing
-  driverPosition?: { lat: number; lng: number }; // Live driver position for tracking
-  showTruckRestrictions?: boolean; // Show truck restriction overlay on map
+  highlightedSegment?: number | null;
+  stops?: { lat: number; lng: number }[];
+  driverPosition?: { lat: number; lng: number };
+  showTruckRestrictions?: boolean;
   skipPolygonFitBounds?: boolean;
   mapType?: 'map' | 'dark' | 'satellite' | 'hybrid';
-  /** Fires once when the Leaflet map instance is ready (tiles can load). */
   onMapReady?: () => void;
-  /** Stagger tile fade-in with jittered delays (gallery demo). */
   tilesRaggedReveal?: boolean;
-  /** Trace precomputed route over ~1.3–1.6s with ease + mid-path hesitation. */
   animateRouteReveal?: boolean;
   routeRevealDurationMs?: number;
-  /** Fires when animated route trace completes. */
   onRouteRevealComplete?: () => void;
-  /** Skip fitBounds after drawing route (gallery — keep Durham framing). */
   suppressRouteAutoFit?: boolean;
-  /** Smooth camera move (re-runs when `key` changes). */
   flyToView?: { lat: number; lng: number; zoom: number; durationMs?: number; key?: number | string };
-  /** Keep road/street tiles at any zoom (no satellite/hybrid). */
   lockBasemap?: 'road';
 }
 
-declare global {
-  interface Window {
-    L: any;
+function swapBasemap(map: MaplibreMap, apiKey: string, tileType: MapQuestTileType) {
+  const layers = map.getStyle()?.layers ?? [];
+  const beforeId = layers.find((l) => l.id !== 'mapquest-raster')?.id;
+  try {
+    if (map.getLayer('mapquest-raster')) map.removeLayer('mapquest-raster');
+    if (map.getSource('mapquest-raster')) map.removeSource('mapquest-raster');
+  } catch {
+    /* ignore */
   }
+  map.addSource('mapquest-raster', mapQuestRasterSourceSpec(apiKey, tileType));
+  map.addLayer(
+    {
+      id: 'mapquest-raster',
+      type: 'raster',
+      source: 'mapquest-raster',
+      paint: { 'raster-fade-duration': 0 },
+    },
+    beforeId,
+  );
 }
 
-// Fallback when neither routeColor nor accentColor is set
-const DEFAULT_ROUTE_BLUE = '#3B82F6';
-
-function haversineMi(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 3959;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
-
-/** Trim a polyline to a fraction of its path length (0–1). */
-function trimPolylineByFraction(latLngs: [number, number][], fraction: number): [number, number][] {
-  if (latLngs.length === 0) return [];
-  if (fraction <= 0) return [latLngs[0]];
-  if (fraction >= 1) return latLngs;
-  if (latLngs.length < 2) return latLngs;
-
-  const segLens: number[] = [];
-  let total = 0;
-  for (let i = 1; i < latLngs.length; i++) {
-    const d = haversineMi(latLngs[i - 1][0], latLngs[i - 1][1], latLngs[i][0], latLngs[i][1]);
-    segLens.push(d);
-    total += d;
-  }
-  if (total <= 0) return latLngs.slice(0, 2);
-
-  const target = total * fraction;
-  let acc = 0;
-  const out: [number, number][] = [latLngs[0]];
-  for (let i = 0; i < segLens.length; i++) {
-    const seg = segLens[i];
-    if (acc + seg >= target) {
-      const t = (target - acc) / seg;
-      const [lat0, lng0] = latLngs[i];
-      const [lat1, lng1] = latLngs[i + 1];
-      out.push([lat0 + (lat1 - lat0) * t, lng0 + (lng1 - lng0) * t]);
-      return out;
+function clearMarkers(markers: Marker[]) {
+  for (const m of markers) {
+    try {
+      m.remove();
+    } catch {
+      /* ignore */
     }
-    acc += seg;
-    out.push(latLngs[i + 1]);
   }
-  return latLngs;
+  markers.length = 0;
 }
 
-function computeLinearProgressWithPause(
-  elapsedMs: number,
-  durationMs: number,
-  pauseAtLinear: number,
-  pauseMs: number,
-): number {
-  const pauseStart = durationMs * pauseAtLinear;
-  let effective = elapsedMs;
-  if (elapsedMs > pauseStart) {
-    effective = pauseStart + Math.max(0, elapsedMs - pauseStart - pauseMs);
-  }
-  return Math.min(1, effective / durationMs);
-}
+function createMarkerElement(
+  marker: MapMarker,
+  accentColor: string,
+): { el: HTMLDivElement; iconAnchor: [number, number] } {
+  const color = marker.color || accentColor;
+  const type = marker.type || 'default';
+  let markerHtml: string;
+  let iconSize: [number, number];
+  let iconAnchor: [number, number];
 
-type SimpleRouteDrawOpts = {
-  showTraffic?: boolean;
-  routeColor?: string;
-  accentColor?: string;
-  interactive?: boolean;
-  onRouteLineClick?: (lat: number, lng: number) => void;
-  onRouteLineDrag?: (evt: { phase: 'start' | 'move' | 'end'; lat: number; lng: number }) => void;
-  map?: any;
-};
-
-/** Draw a precomputed route polyline (full or partial). Returns main line for fitBounds. */
-function drawSimpleRoutePolyline(
-  L: any,
-  layer: any,
-  latLngs: [number, number][],
-  opts: SimpleRouteDrawOpts,
-): any | null {
-  if (latLngs.length < 2) return null;
-
-  const { showTraffic, routeColor, accentColor, interactive = true, onRouteLineClick, onRouteLineDrag, map } =
-    opts;
-
-  if (showTraffic) {
-    L.polyline(latLngs, {
-      color: routeColor || accentColor || DEFAULT_ROUTE_BLUE,
-      weight: 8,
-      opacity: 0.3,
-      lineCap: 'round',
-      lineJoin: 'round',
-      smoothFactor: 1,
-      pane: 'routeCasingPane',
-    }).addTo(layer);
+  if (marker.iconHtml) {
+    iconSize = (marker.iconSize || [48, 48]) as [number, number];
+    iconAnchor = (marker.iconAnchor || [iconSize[0] / 2, iconSize[1] / 2]) as [number, number];
+    markerHtml = marker.iconHtml;
+  } else if (marker.iconUrl) {
+    const size = marker.iconSize || [28, 28];
+    const iconCircular = marker.iconCircular !== false;
+    iconSize = size as [number, number];
+    iconAnchor = (marker.iconAnchor || [size[0] / 2, size[1] / 2]) as [number, number];
+    const iconOp = typeof marker.iconOpacity === 'number' ? marker.iconOpacity : 1;
+    markerHtml = `
+          <img src="${marker.iconUrl}"
+               width="${size[0]}"
+               height="${size[1]}"
+               style="${iconCircular ? 'border-radius: 50%;' : ''} opacity: ${iconOp}; transition: opacity 0.15s ease;"
+               alt=""
+          />
+        `;
+  } else if (type === 'home') {
+    iconSize = [40, 40];
+    iconAnchor = [20, 20];
+    markerHtml = `
+          <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
+            <div class="pulse-ring" style="width: 48px; height: 48px;"></div>
+            <svg width="40" height="40" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: relative; z-index: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
+              <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="3"/>
+              <path d="M16 10L12 14V22H20V14L16 10Z" fill="white"/>
+              <rect x="14" y="18" width="4" height="4" fill="${color}"/>
+            </svg>
+          </div>
+        `;
+  } else if (type === 'poi') {
+    iconSize = [22, 28];
+    iconAnchor = [11, 28];
+    markerHtml = `
+          <svg width="22" height="28" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));">
+            <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2"/>
+          </svg>
+        `;
   } else {
-    L.polyline(latLngs, {
-      color: '#000000',
-      weight: 13,
-      opacity: 0.1,
-      lineCap: 'round',
-      lineJoin: 'round',
-    }).addTo(layer);
-    L.polyline(latLngs, {
-      color: '#ffffff',
-      weight: 11,
-      opacity: 0.98,
-      lineCap: 'round',
-      lineJoin: 'round',
-    }).addTo(layer);
+    iconSize = [28, 36];
+    iconAnchor = [14, 36];
+    markerHtml = `
+          <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));">
+            <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2.5"/>
+          </svg>
+        `;
   }
 
-  const lineBlue = routeColor || accentColor || DEFAULT_ROUTE_BLUE;
-  const routeLine = showTraffic
-    ? L.polyline(latLngs, {
-        color: lineBlue,
-        weight: 18,
-        opacity: 0,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(layer)
-    : L.polyline(latLngs, {
-        color: lineBlue,
-        weight: 5,
-        opacity: 0.9,
-        lineCap: 'round',
-        lineJoin: 'round',
-      }).addTo(layer);
+  const markerClassName = marker.iconHtml
+    ? marker.pulse
+      ? 'modern-marker modern-marker-crisp pulse-marker'
+      : 'modern-marker modern-marker-crisp'
+    : marker.iconUrl
+      ? marker.pulse
+        ? 'modern-marker pulse-marker'
+        : 'modern-marker'
+      : type === 'home'
+        ? 'modern-marker modern-marker-with-shadow pulse-marker'
+        : 'modern-marker modern-marker-with-shadow';
 
-  if (interactive && (onRouteLineClick || onRouteLineDrag)) {
-    const hitLine = L.polyline(latLngs, {
-      color: '#000000',
-      weight: 22,
-      opacity: 0.001,
-      lineCap: 'round',
-      lineJoin: 'round',
-      interactive: true,
-    }).addTo(layer);
+  // MapLibre positions this element via transform — no transform transitions here.
+  // Anchor offset is applied through Marker({ anchor, offset }) so the pin keeps its size.
+  const el = document.createElement('div');
+  el.className = markerClassName;
 
-    if (onRouteLineClick) {
-      hitLine.on('click', (e: any) => {
-        const ll = e?.latlng;
-        if (!ll) return;
-        onRouteLineClick(ll.lat, ll.lng);
-      });
-    }
+  const body = document.createElement('div');
+  body.className = 'modern-marker-body';
+  body.innerHTML = markerHtml;
+  el.appendChild(body);
 
-    if (onRouteLineDrag && map) {
-      let active = false;
-
-      const emit = (phase: 'start' | 'move' | 'end', e: any) => {
-        const ll = e?.latlng;
-        if (!ll) return;
-        try {
-          onRouteLineDrag({ phase, lat: ll.lat, lng: ll.lng });
-        } catch (_) {}
-      };
-
-      const moveHandler = (e: any) => {
-        if (!active) return;
-        emit('move', e);
-      };
-
-      const endHandler = (e: any) => {
-        if (!active) return;
-        active = false;
-        try {
-          map.dragging?.enable?.();
-        } catch (_) {}
-        emit('end', e);
-        try {
-          map.off('mousemove', moveHandler);
-          map.off('mouseup', endHandler);
-          map.off('touchmove', moveHandler);
-          map.off('touchend', endHandler);
-          map.off('touchcancel', endHandler);
-        } catch (_) {}
-      };
-
-      const startHandler = (e: any) => {
-        active = true;
-        try {
-          map.dragging?.disable?.();
-        } catch (_) {}
-        emit('start', e);
-        try {
-          map.on('mousemove', moveHandler);
-          map.on('mouseup', endHandler);
-          map.on('touchmove', moveHandler);
-          map.on('touchend', endHandler);
-          map.on('touchcancel', endHandler);
-        } catch (_) {}
-      };
-
-      hitLine.on('mousedown', startHandler);
-      hitLine.on('touchstart', startHandler);
-    }
+  if (marker.label) {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'marker-tooltip-popup';
+    tooltip.innerHTML = markerTooltipHtml(marker.label);
+    el.appendChild(tooltip);
   }
 
-  return routeLine;
+  const zIndexOffset =
+    typeof marker.zIndexOffset === 'number'
+      ? marker.zIndexOffset
+      : type === 'home'
+        ? 1000
+        : marker.iconUrl || marker.iconHtml
+          ? 500
+          : type === 'poi'
+            ? 0
+            : 500;
+  el.style.zIndex = String(zIndexOffset);
+
+  return { el, iconAnchor };
 }
 
-/** Remove OSM copyright from attribution (preferred over moving it). Runs on each layout pass. */
-function stripOsmAttribution(container: HTMLElement) {
-  const attr = container.querySelector('.leaflet-control-attribution');
-  if (!attr) return;
-
-  attr.querySelectorAll('a[href]').forEach((a) => {
-    const href = (a.getAttribute('href') || '').toLowerCase();
-    if (href.includes('openstreetmap') || href.includes('osm.org') || href.includes('osmfoundation')) {
-      a.remove();
-    }
-  });
-
-  let html = attr.innerHTML;
-  const before = html;
-  html = html.replace(/&copy;\s*OpenStreetMap[^|<]*/gi, '');
-  html = html.replace(/©\s*OpenStreetMap[^|<]*/gi, '');
-  html = html.replace(/OpenStreetMap\s+contributors/gi, '');
-  html = html.replace(/\|\s*\|\s*/g, '|');
-  html = html.replace(/^\s*\|\s*|\s*\|\s*$/g, '').trim();
-  if (html !== before) {
-    attr.innerHTML = html;
-  }
-}
-
-/**
- * MapQuest.js: attribution + logo bottom-left. Terms → bottom-right.
- * OSM copyright is stripped from the left attribution bar (hidden); CSS also hides any stray OSM links.
- */
-function layoutMapAttributionAndLogo(map: any) {
-  if (!map?.getContainer) return;
-  const container = map.getContainer() as HTMLElement;
-
-  try {
-    if (map.attributionControl && typeof map.attributionControl.setPosition === 'function') {
-      map.attributionControl.setPosition('bottomleft');
-    }
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    const logoCtl = map._mapQuestLogoControl;
-    if (logoCtl && typeof logoCtl.setPosition === 'function') {
-      logoCtl.setPosition('bottomleft');
-    }
-    if (logoCtl && typeof logoCtl.showLogo === 'function') {
-      logoCtl.showLogo();
-    }
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    stripOsmAttribution(container);
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    const attr = container.querySelector('.leaflet-control-attribution');
-    const terms =
-      (attr?.querySelector('a#terms') as HTMLElement | null) ||
-      (attr?.querySelector('a.termsLink') as HTMLElement | null) ||
-      (container.querySelector(':scope > a#terms.mapquest-terms-docked') as HTMLElement | null) ||
-      (container.querySelector(':scope > a.mapquest-terms-docked') as HTMLElement | null);
-    if (terms) {
-      container.querySelectorAll(':scope > a.mapquest-terms-docked').forEach((el) => {
-        if (el !== terms) el.remove();
-      });
-      terms.classList.add('mapquest-terms-docked');
-      if (terms.parentElement !== container) {
-        container.appendChild(terms);
-      }
-    }
-  } catch {
-    /* ignore */
-  }
+function addHtmlMarker(
+  map: MaplibreMap,
+  lat: number,
+  lng: number,
+  el: HTMLDivElement,
+  iconAnchor: [number, number],
+  draggable = false,
+): Marker {
+  return new Marker({
+    element: el,
+    anchor: 'top-left',
+    offset: [-iconAnchor[0], -iconAnchor[1]],
+    draggable,
+  })
+    .setLngLat([lng, lat])
+    .addTo(map);
 }
 
 export default function MapQuestMap({
@@ -494,29 +379,34 @@ export default function MapQuestMap({
   flyToView,
   lockBasemap,
 }: MapQuestMapProps) {
+  const safeMarkers = markers ?? [];
+  const safeCircles = circles ?? [];
+  const safePolygons = polygons ?? [];
+  const safePolylines = polylines ?? [];
+  const safeStops = stops ?? [];
+
   const containerRef = useRef<HTMLDivElement>(null);
   const onMapReadyRef = useRef(onMapReady);
   onMapReadyRef.current = onMapReady;
   const mapReadyNotifiedRef = useRef(false);
-  const mapRef = useRef<any>(null);
-  const markersLayerRef = useRef<any>(null);
-  const routeLayerRef = useRef<any>(null);
-  const circlesLayerRef = useRef<any>(null);
-  const polygonsLayerRef = useRef<any>(null);
-  const polylinesLayerRef = useRef<any>(null);
-  const trafficLayerRef = useRef<any>(null);
-  const highlightLayerRef = useRef<any>(null);
-  const driverLayerRef = useRef<any>(null);
-  const truckRestrictionsLayerRef = useRef<any>(null);
-  const mapIdRef = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
-  /** Only auto-fit to polygons when their combined bounds change — not on unrelated re-renders. */
+  const mapRef = useRef<MaplibreMap | null>(null);
+  const htmlMarkersRef = useRef<Marker[]>([]);
+  const driverMarkerRef = useRef<Marker | null>(null);
+  const truckMarkersRef = useRef<Marker[]>([]);
   const polygonAutoFitKeyRef = useRef<string>('');
   const onRightClickRef = useRef(onRightClick);
   onRightClickRef.current = onRightClick;
   const onMapDropRef = useRef(onMapDrop);
   onMapDropRef.current = onMapDrop;
+  const polylineClickRef = useRef<MapPolyline[]>([]);
+  const polygonClickRef = useRef<MapPolygon[]>([]);
+  const routePolylineRef = useRef(routePolyline);
+  routePolylineRef.current = routePolyline;
+  const routeSegmentsRef = useRef(routeSegments);
+  routeSegmentsRef.current = routeSegments;
   const [mapReady, setMapReady] = useState(false);
   const [viewRevision, setViewRevision] = useState(0);
+  const basemapTypeRef = useRef<MapQuestTileType>('map');
 
   const routeLocationKey = useMemo(() => {
     if (!routeStart || !routeEnd) return '';
@@ -529,472 +419,82 @@ export default function MapQuestMap({
     ].join('|');
   }, [routeStart, routeEnd, waypoints]);
 
-  function svgDataUri(svg: string) {
-    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-  }
+  useEffect(() => {
+    injectMapQuestMapStyles();
+  }, []);
 
-  function clusterIconUri(count: number, color: string) {
-    const n = Math.max(2, Math.min(999, Math.floor(count)));
-    const digits = String(n).length;
-    // Slightly smaller cluster bubble
-    const size = digits >= 3 ? 38 : digits === 2 ? 34 : 30;
-    const r = size / 2;
-    // Slightly smaller number inside the cluster bubble for better visual balance.
-    const fontSize = digits >= 3 ? 12 : digits === 2 ? 13 : 14;
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-        <circle cx="${r}" cy="${r}" r="${r - 2}" fill="#111827" stroke="white" stroke-width="3"/>
-        <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central"
-              font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
-              font-size="${fontSize}" font-weight="800" fill="white">${n}</text>
-      </svg>
-    `.trim();
-    return svgDataUri(svg);
-  }
-
-  // Ensure Leaflet recalculates tiles when the container size changes (common in flex/resize layouts).
   useEffect(() => {
     const el = containerRef.current;
-    if (!el) return;
-    if (!mapRef.current || !mapReady) return;
+    if (!el || !mapRef.current || !mapReady) return;
 
     let raf = 0;
-    const invalidate = () => {
+    const resize = () => {
       if (!mapRef.current) return;
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         try {
-          mapRef.current.invalidateSize();
-        } catch (_) {}
+          mapRef.current?.resize();
+        } catch {
+          /* ignore */
+        }
       });
     };
 
-    invalidate();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(invalidate) : null;
+    resize();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resize) : null;
     ro?.observe(el);
-    window.addEventListener('resize', invalidate);
+    window.addEventListener('resize', resize);
     return () => {
-      window.removeEventListener('resize', invalidate);
+      window.removeEventListener('resize', resize);
       ro?.disconnect();
       if (raf) cancelAnimationFrame(raf);
     };
   }, [mapReady]);
 
-  // Inject modern styles
   useEffect(() => {
-    // In dev (Fast Refresh), MapQuestMap may not remount, so we need to *update* the style tag
-    // rather than bailing early when it already exists. This also guarantees tooltip tweaks apply.
-    const styleId = 'mapquest-modern-styles-v5';
-    const css = `
-      /* Fix tile gaps - make tiles slightly overlap */
-      .leaflet-tile {
-        margin: -0.5px !important;
-        width: 257px !important;
-        height: 257px !important;
-      }
+    if (!containerRef.current || !apiKey) return;
 
-      /* Gallery demo: tiles pop in at uneven times */
-      .mq-tiles-ragged-reveal .leaflet-tile {
-        opacity: 0;
-        transition: opacity 0.12s ease-out;
-      }
-      .mq-tiles-ragged-reveal .leaflet-tile.mq-tile-visible {
-        opacity: 1;
-      }
-
-      /* Clean zoom controls */
-      .leaflet-control-zoom {
-        border: none !important;
-        border-radius: 6px !important;
-        overflow: hidden;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.12) !important;
-      }
-      .leaflet-control-zoom a {
-        width: 32px !important;
-        height: 32px !important;
-        line-height: 32px !important;
-        font-size: 16px !important;
-        font-weight: 400 !important;
-        color: #374151 !important;
-        background: white !important;
-        border: none !important;
-        transition: background 0.15s ease !important;
-      }
-      .leaflet-control-zoom a:hover {
-        background: #f3f4f6 !important;
-      }
-      .leaflet-control-zoom-in {
-        border-bottom: 1px solid #e5e7eb !important;
-        border-radius: 6px 6px 0 0 !important;
-      }
-      .leaflet-control-zoom-out {
-        border-radius: 0 0 6px 6px !important;
-      }
-      
-      /* Dark mode controls */
-      .dark-map .leaflet-control-zoom {
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
-      }
-      .dark-map .leaflet-control-zoom a {
-        background: #1f2937 !important;
-        color: #d1d5db !important;
-      }
-      .dark-map .leaflet-control-zoom a:hover {
-        background: #374151 !important;
-      }
-      .dark-map .leaflet-control-zoom-in {
-        border-bottom-color: #374151 !important;
-      }
-      
-      /* Clean attribution */
-      .leaflet-control-attribution {
-        background: rgba(255,255,255,0.85) !important;
-        padding: 3px 8px !important;
-        border-radius: 4px !important;
-        font-size: 9px !important;
-        margin: 6px !important;
-        color: #6b7280 !important;
-      }
-      .dark-map .leaflet-control-attribution {
-        background: rgba(17,24,39,0.85) !important;
-        color: #9ca3af !important;
-      }
-      .leaflet-control-attribution a {
-        color: inherit !important;
-      }
-
-      /* Clean popup — wide enough for full street addresses */
-      .leaflet-container .leaflet-popup {
-        max-width: min(520px, calc(100vw - 32px)) !important;
-      }
-      .leaflet-popup-content-wrapper {
-        border-radius: 8px !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
-        padding: 0 !important;
-        max-width: min(520px, calc(100vw - 32px)) !important;
-        box-sizing: border-box !important;
-      }
-      .leaflet-popup-content {
-        margin: 10px 14px !important;
-        font-size: 13px !important;
-        font-weight: 500 !important;
-        color: #1f2937;
-        max-width: none !important;
-        white-space: normal !important;
-        word-wrap: break-word !important;
-        overflow-wrap: anywhere !important;
-        word-break: break-word !important;
-      }
-      .leaflet-popup-tip {
-        box-shadow: none !important;
-      }
-      .dark-map .leaflet-popup-content-wrapper {
-        background: #1f2937 !important;
-      }
-      .dark-map .leaflet-popup-content {
-        color: #f9fafb !important;
-      }
-      .dark-map .leaflet-popup-tip {
-        background: #1f2937 !important;
-      }
-
-      /* Bottom-left: everything above, MapQuest logo last (touching map edge).
-         Logo is div.leaflet-control.mapquest-logo — it does NOT contain .mapquest-logo, so :has(.mapquest-logo) never matched. */
-      .leaflet-bottom.leaflet-left {
-        display: flex !important;
-        flex-direction: column !important;
-        justify-content: flex-end !important;
-        align-items: flex-start !important;
-        gap: 4px !important;
-      }
-      .leaflet-bottom.leaflet-left > .leaflet-control:not(.mapquest-logo) {
-        order: 1 !important;
-      }
-      .leaflet-bottom.leaflet-left > .leaflet-control.mapquest-logo,
-      .leaflet-bottom.leaflet-left > .mapquest-logo {
-        order: 10 !important;
-      }
-      .leaflet-bottom.leaflet-left .leaflet-control-attribution {
-        margin-left: 6px !important;
-        margin-bottom: 0 !important;
-        max-width: min(70vw, 380px) !important;
-        text-align: left !important;
-      }
-      /* Hide OSM attribution links if SDK re-injects them before the next stripOsmAttribution pass */
-      .leaflet-control-attribution a[href*="openstreetmap.org"],
-      .leaflet-control-attribution a[href*="openstreetmap"],
-      .leaflet-control-attribution a[href*="osm.org"] {
-        display: none !important;
-        visibility: hidden !important;
-        width: 0 !important;
-        height: 0 !important;
-        overflow: hidden !important;
-        position: absolute !important;
-        pointer-events: none !important;
-      }
-      .leaflet-bottom.leaflet-left .mapquest-logo {
-        margin-left: 6px !important;
-        margin-bottom: 4px !important;
-      }
-
-      /* Terms link moved to map container (see layoutMapAttributionAndLogo) — bottom-right, off the left attribution strip */
-      .leaflet-container a.mapquest-terms-docked,
-      .leaflet-container a#terms.mapquest-terms-docked {
-        position: absolute !important;
-        right: 8px !important;
-        bottom: 8px !important;
-        left: auto !important;
-        top: auto !important;
-        z-index: 1001 !important;
-        margin: 0 !important;
-        display: inline-block !important;
-        font-size: 9px !important;
-        line-height: 1.2 !important;
-        padding: 2px 6px !important;
-        border-radius: 4px !important;
-        background: rgba(255, 255, 255, 0.9) !important;
-        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
-      }
-      .dark-map .leaflet-container a.mapquest-terms-docked,
-      .dark-map .leaflet-container a#terms.mapquest-terms-docked {
-        background: rgba(17, 24, 39, 0.92) !important;
-        color: #9ca3af !important;
-        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
-      }
-      
-      /* Marker styling */
-      .modern-marker {
-        transition: transform 0.15s ease !important;
-      }
-      .modern-marker:hover {
-        transform: scale(1.1);
-      }
-      /* Make custom-icon markers easier to see (includes condition icons, POI icons, clusters, etc.) */
-      .modern-marker img {
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
-      }
-      .modern-marker:hover img {
-        filter: drop-shadow(0 5px 10px rgba(0,0,0,0.35));
-      }
-      .modern-marker-crisp svg {
-        display: block;
-        filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.28));
-      }
-      .modern-marker-crisp:hover svg {
-        filter: drop-shadow(0 4px 8px rgba(15, 23, 42, 0.34));
-      }
-      /* Only add shadow to non-custom-icon markers */
-      .modern-marker-with-shadow {
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-      }
-      .modern-marker-with-shadow:hover {
-        filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
-      }
-      
-      /* Subtle pulsing blue ring for home marker */
-      .pulse-marker {
-        position: relative;
-      }
-      
-      .pulse-ring {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        border: 2px solid #3b82f6;
-        opacity: 0;
-        animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-        pointer-events: none;
-      }
-      
-      @keyframes pulse-ring {
-        0% {
-          opacity: 0.6;
-          transform: translate(-50%, -50%) scale(0.8);
-        }
-        50% {
-          opacity: 0.3;
-          transform: translate(-50%, -50%) scale(1.2);
-        }
-        100% {
-          opacity: 0;
-          transform: translate(-50%, -50%) scale(1.5);
-        }
-      }
-      
-      /* Marker hover tooltip — min-width keeps addresses on horizontal lines (not 1 char/line) */
-      .leaflet-container .leaflet-tooltip.marker-tooltip {
-        background: rgba(15, 23, 42, 0.95) !important;
-        color: #fff !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 0 !important;
-        font-size: 12px !important;
-        font-weight: 500 !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
-        box-sizing: border-box !important;
-        min-width: 220px !important;
-        width: max-content !important;
-        max-width: min(360px, calc(100vw - 32px)) !important;
-        max-height: none !important;
-        overflow: visible !important;
-        white-space: normal !important;
-      }
-      .leaflet-container .leaflet-tooltip.marker-tooltip .marker-tooltip-inner {
-        display: block;
-        padding: 10px 14px;
-        line-height: 1.45;
-        min-width: 220px;
-        max-width: min(360px, calc(100vw - 32px));
-        white-space: normal;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        word-break: normal;
-      }
-      .marker-tooltip::before {
-        border-top-color: rgba(15, 23, 42, 0.95) !important;
-      }
-      .leaflet-tooltip-top::before {
-        border-top-color: rgba(15, 23, 42, 0.95) !important;
-      }
-      .leaflet-tooltip-bottom::before {
-        border-bottom-color: rgba(15, 23, 42, 0.95) !important;
-      }
-      .leaflet-tooltip-left::before {
-        border-left-color: rgba(15, 23, 42, 0.95) !important;
-      }
-      .leaflet-tooltip-right::before {
-        border-right-color: rgba(15, 23, 42, 0.95) !important;
-      }
-    `;
-
-    let style = document.getElementById(styleId) as HTMLStyleElement | null;
-    if (!style) {
-      style = document.createElement('style');
-      style.id = styleId;
-      document.head.appendChild(style);
-    }
-    if (style.textContent !== css) style.textContent = css;
-  });
-
-  // Initialize map with MapQuest SDK - only run once on mount
-  useEffect(() => {
-    if (!containerRef.current) return;
+    registerMaplibreWorker();
 
     let isMounted = true;
-    let timeoutId: NodeJS.Timeout;
+    const container = containerRef.current;
+    const safeCenter =
+      center && Number.isFinite(center.lat) && Number.isFinite(center.lng)
+        ? center
+        : { lat: 40.7128, lng: -74.006 };
+    const initialBasemap = resolveMapQuestBasemapType({ mapType, darkMode, lockBasemap });
+    basemapTypeRef.current = initialBasemap;
 
-    const initMap = () => {
-      if (!isMounted || !containerRef.current) return;
-      
-      const L = window.L;
-      if (!L?.mapquest) {
-        timeoutId = setTimeout(initMap, 100);
-        return;
-      }
+    if (darkMode) container.classList.add('dark-map');
+    else container.classList.remove('dark-map');
 
-      // Check if map already exists and is valid
-      const existingMapDiv = document.getElementById(mapIdRef.current);
-      if (existingMapDiv && L.mapquest.maps && L.mapquest.maps[mapIdRef.current]) {
-        // Map already initialized, just update it
-        mapRef.current = L.mapquest.maps[mapIdRef.current];
-        setMapReady(true);
-        return;
-      }
+    const map = new MaplibreMap({
+      container,
+      style: resolveMapQuestTileStyle(apiKey, initialBasemap),
+      center: [safeCenter.lng, safeCenter.lat],
+      zoom,
+      minZoom,
+      fadeDuration: 0,
+      attributionControl: false,
+      interactive,
+      dragPan: interactive,
+      scrollZoom: interactive,
+      boxZoom: interactive,
+      doubleClickZoom: interactive,
+      touchZoomRotate: interactive,
+      refreshExpiredTiles: true,
+      maxTileCacheSize: null,
+    });
 
-      // Remove any existing container that doesn't have a valid map
-      if (existingMapDiv && existingMapDiv.parentNode) {
-        existingMapDiv.remove();
-      }
+    if (showZoomControls) {
+      map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+    }
 
-      if (!containerRef.current) return;
+    mapRef.current = map;
 
-      L.mapquest.key = apiKey;
-
-      // Create new container
-      const mapDiv = document.createElement('div');
-      mapDiv.id = mapIdRef.current;
-      mapDiv.style.width = '100%';
-      mapDiv.style.height = '100%';
-      containerRef.current.appendChild(mapDiv);
-
-      const safeCenter = (center && Number.isFinite(center.lat) && Number.isFinite(center.lng))
-        ? [center.lat, center.lng]
-        : [40.7128, -74.006];
-
-      const map = L.mapquest.map(mapIdRef.current, {
-        center: safeCenter,
-        zoom: zoom,
-        minZoom: minZoom,
-        zoomControl: showZoomControls,
-        dragging: interactive,
-        scrollWheelZoom: interactive,
-        doubleClickZoom: interactive,
-        touchZoom: interactive,
-      });
-
-      if (darkMode) {
-        mapDiv.classList.add('dark-map');
-      }
-
-      // When showTraffic is enabled the native MapQuest traffic layer renders in
-      // the default overlayPane (z-index 400).  We draw the route "casing" in a
-      // lower pane so the smooth traffic flow colouring sits ON TOP of the route,
-      // while markers (600) stay above everything.
-      map.createPane('routeCasingPane');
-      map.getPane('routeCasingPane').style.zIndex = '380';
-
-      mapRef.current = map;
-      markersLayerRef.current = L.layerGroup().addTo(map);
-      routeLayerRef.current = L.layerGroup().addTo(map);
-      circlesLayerRef.current = L.layerGroup().addTo(map);
-      polygonsLayerRef.current = L.layerGroup().addTo(map);
-      polylinesLayerRef.current = L.layerGroup().addTo(map);
-      highlightLayerRef.current = L.layerGroup().addTo(map);
-      driverLayerRef.current = L.layerGroup().addTo(map);
-
-      if (onClick) {
-        map.on('click', (e: any) => {
-          onClick(e.latlng.lat, e.latlng.lng);
-        });
-      }
-
-      // Leaflet uses `contextmenu` for right-click / long-press. Ref keeps latest callback
-      // without re-initing the map (init effect deps are only [apiKey]).
-      map.on('contextmenu', (e: any) => {
-        const fn = onRightClickRef.current;
-        if (!fn) return;
-        try {
-          e.originalEvent?.preventDefault?.();
-          const oe = e?.originalEvent;
-          fn(e.latlng.lat, e.latlng.lng, {
-            clientX: typeof oe?.clientX === 'number' ? oe.clientX : 0,
-            clientY: typeof oe?.clientY === 'number' ? oe.clientY : 0,
-          });
-        } catch (_) {}
-      });
-
-      // Notify parent of bounds changes (for viewport-based filtering)
-      if (onBoundsChange) {
-        const notifyBounds = () => {
-          const bounds = map.getBounds();
-          onBoundsChange({
-            north: bounds.getNorth(),
-            south: bounds.getSouth(),
-            east: bounds.getEast(),
-            west: bounds.getWest(),
-            zoom: map.getZoom(),
-          });
-        };
-        map.on('moveend', notifyBounds);
-        map.on('zoomend', notifyBounds);
-        // Initial bounds notification
-        setTimeout(notifyBounds, 100);
-      }
-
+    const handleReady = () => {
+      if (!isMounted) return;
+      layoutMapQuestAttribution(map, darkMode);
       setMapReady(true);
       if (!mapReadyNotifiedRef.current) {
         mapReadyNotifiedRef.current = true;
@@ -1002,36 +502,55 @@ export default function MapQuestMap({
       }
     };
 
-    timeoutId = setTimeout(initMap, 50);
+    map.on('load', handleReady);
+    if (map.loaded()) handleReady();
 
     return () => {
       isMounted = false;
-      clearTimeout(timeoutId);
       mapReadyNotifiedRef.current = false;
-      // Only clean up on unmount
-      if (mapRef.current) {
-        try {
-          mapRef.current.remove();
-        } catch (e) {
-          // Ignore errors
-        }
-        mapRef.current = null;
+      clearMarkers(htmlMarkersRef.current);
+      clearMarkers(truckMarkersRef.current);
+      driverMarkerRef.current?.remove();
+      driverMarkerRef.current = null;
+      try {
+        map.remove();
+      } catch {
+        /* ignore */
       }
-      const mapDiv = document.getElementById(mapIdRef.current);
-      if (mapDiv && mapDiv.parentNode) {
-        mapDiv.remove();
-      }
+      mapRef.current = null;
       setMapReady(false);
     };
-  }, [apiKey]); // Only depend on apiKey - map should initialize once
+  }, [apiKey]);
 
-  // HTML5 drag-and-drop onto the map (lat/lng at cursor). Ref keeps latest callback.
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
-    const L = window.L;
-    if (!L) return;
-    const el = map.getContainer() as HTMLDivElement;
+    const clickHandler = onClick
+      ? (e: MapMouseEvent) => onClick(e.lngLat.lat, e.lngLat.lng)
+      : null;
+    const contextHandler = (e: MapMouseEvent) => {
+      const fn = onRightClickRef.current;
+      if (!fn) return;
+      e.preventDefault();
+      fn(e.lngLat.lat, e.lngLat.lng, {
+        clientX: e.originalEvent.clientX,
+        clientY: e.originalEvent.clientY,
+      });
+    };
+
+    if (clickHandler) map.on('click', clickHandler);
+    map.on('contextmenu', contextHandler);
+    return () => {
+      if (clickHandler) map.off('click', clickHandler);
+      map.off('contextmenu', contextHandler);
+    };
+  }, [mapReady, onClick]);
+
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    const el = map.getContainer();
+
     const onDragOver = (e: DragEvent) => {
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
@@ -1043,15 +562,13 @@ export default function MapQuestMap({
       e.stopPropagation();
       try {
         const rect = el.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        const latlng = map.containerPointToLatLng(L.point(x, y));
-        if (!latlng) return;
-        fn(latlng.lat, latlng.lng);
+        const { lat, lng } = containerPointToLatLng(map, e.clientX - rect.left, e.clientY - rect.top);
+        fn(lat, lng);
       } catch {
         /* ignore */
       }
     };
+
     el.addEventListener('dragover', onDragOver);
     el.addEventListener('drop', onDrop);
     return () => {
@@ -1060,143 +577,108 @@ export default function MapQuestMap({
     };
   }, [mapReady]);
 
-  // Track tile layer reference
-  const tileLayerRef = useRef<any>(null);
-
-  // Update dark mode / tiles - also handles initial tile layer
   useEffect(() => {
-    if (!mapRef.current || !mapReady) return;
-    const L = window.L;
-    const mapDiv = document.getElementById(mapIdRef.current);
-    
-    // Remove only tile layers (not polylines, markers, etc.)
-    const layersToRemove: any[] = [];
-    mapRef.current.eachLayer((layer: any) => {
-      if (layer._tiles || (layer.options && layer.options.tileSize) || layer instanceof L.TileLayer) {
-        layersToRemove.push(layer);
-      }
-    });
-    layersToRemove.forEach((layer: any) => {
-      mapRef.current.removeLayer(layer);
-    });
-    
-    // Clear the ref
-    tileLayerRef.current = null;
+    if (!mapRef.current || !mapReady || !onBoundsChange) return;
+    const map = mapRef.current;
+    const notifyBounds = () => {
+      const bounds = map.getBounds();
+      onBoundsChange({
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest(),
+        zoom: map.getZoom(),
+      });
+    };
+    map.on('moveend', notifyBounds);
+    map.on('zoomend', notifyBounds);
+    const t = window.setTimeout(notifyBounds, 100);
+    return () => {
+      window.clearTimeout(t);
+      map.off('moveend', notifyBounds);
+      map.off('zoomend', notifyBounds);
+    };
+  }, [mapReady, onBoundsChange]);
 
-    // Update dark-map class BEFORE adding tiles
-    if (darkMode) {
-      mapDiv?.classList.add('dark-map');
-    } else {
-      mapDiv?.classList.remove('dark-map');
-    }
-
-    // Resolve tile layer type: explicit mapType overrides dark/light default
-    let tileType: string;
-    if (lockBasemap === 'road') {
-      tileType = darkMode ? 'dark' : 'map';
-    } else if (mapType === 'satellite' || mapType === 'hybrid') {
-      tileType = 'hybrid';
-    } else if (mapType === 'dark' || (!mapType && darkMode)) {
-      tileType = 'dark';
-    } else {
-      tileType = 'map';
-    }
-
-    const newTileLayer = L.mapquest.tileLayer(tileType);
-    newTileLayer.addTo(mapRef.current);
-    tileLayerRef.current = newTileLayer;
-    
-    // Force map to recalculate and redraw after tile change
-    setTimeout(() => {
-      if (mapRef.current) {
-        mapRef.current.invalidateSize();
-      }
-    }, 100);
-  }, [darkMode, mapReady, mapType, lockBasemap]);
-
-  // Bottom-left: attribution (OSM stripped) + logo; Terms docked bottom-right on map container
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
-    const run = () => layoutMapAttributionAndLogo(map);
-    run();
-    const t1 = window.setTimeout(run, 200);
-    const t2 = window.setTimeout(run, 700);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
+    const container = map.getContainer();
+    const tileType = resolveMapQuestBasemapType({ mapType, darkMode, lockBasemap });
+    if (tileType === basemapTypeRef.current && map.getSource('mapquest-raster')) {
+      if (darkMode) container.classList.add('dark-map');
+      else container.classList.remove('dark-map');
+      layoutMapQuestAttribution(map, darkMode);
+      return;
+    }
+    basemapTypeRef.current = tileType;
+    if (darkMode) container.classList.add('dark-map');
+    else container.classList.remove('dark-map');
+    swapBasemap(map, apiKey, tileType);
+    window.setTimeout(() => {
+      map.resize();
+      layoutMapQuestAttribution(map, darkMode);
+    }, 100);
+  }, [darkMode, mapReady, mapType, lockBasemap, apiKey]);
+
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    layoutMapQuestAttribution(mapRef.current, darkMode);
   }, [mapReady, darkMode, mapType]);
 
-  // Smooth flyTo (gallery demo — avoids hard setView jumps)
   useEffect(() => {
     if (!mapRef.current || !mapReady || !flyToView) return;
     const { lat, lng, zoom: z, durationMs = 1000 } = flyToView;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-    mapRef.current.flyTo([lat, lng], z, { duration: durationMs / 1000, easeLinearity: 0.25 });
+    mapRef.current.flyTo({ center: [lng, lat], zoom: z, duration: durationMs });
   }, [flyToView?.lat, flyToView?.lng, flyToView?.zoom, flyToView?.durationMs, flyToView?.key, mapReady]);
 
-  // Update center and zoom (skipped while flyToView is driving the camera)
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return;
     if (fitBounds) return;
     if (transitSegments && transitSegments.length > 0) return;
     if (flyToView) return;
-    mapRef.current.setView([center.lat, center.lng], zoom);
+    mapRef.current.jumpTo({ center: [center.lng, center.lat], zoom });
   }, [center?.lat, center?.lng, zoom, mapReady, fitBounds, transitSegments, flyToView]);
 
-  // Fit bounds (for showing all markers)
   useEffect(() => {
     if (!mapRef.current || !mapReady || !fitBounds) return;
-    const L = window.L;
-    const bounds = L.latLngBounds(
-      [fitBounds.south, fitBounds.west],
-      [fitBounds.north, fitBounds.east]
-    );
-    mapRef.current.fitBounds(bounds, {
-      padding: [50, 50],
-      animate: true,
-      duration: (fitBounds.durationMs ?? 1000) / 1000,
-      ...(fitBounds.maxZoom != null ? { maxZoom: fitBounds.maxZoom } : {}),
+    safeFitBounds(mapRef.current, latLngBoundsToMapLibre(fitBounds), {
+      padding: 50,
+      maxZoom: fitBounds.maxZoom,
+      duration: fitBounds.durationMs ?? 1000,
     });
   }, [fitBounds, mapReady]);
 
-  // Zoom to specific location
   useEffect(() => {
     if (!mapRef.current || !mapReady || !zoomToLocation) return;
-    const targetZoom = zoomToLocation.zoom || 16;
-    mapRef.current.setView([zoomToLocation.lat, zoomToLocation.lng], targetZoom);
+    mapRef.current.jumpTo({
+      center: [zoomToLocation.lng, zoomToLocation.lat],
+      zoom: zoomToLocation.zoom || 16,
+    });
   }, [zoomToLocation?.lat, zoomToLocation?.lng, zoomToLocation?.zoom, zoomToLocation?.key, mapReady]);
 
-  // Update markers - different icons for home vs POI
   useEffect(() => {
-    if (!markersLayerRef.current || !mapReady) return;
-    const L = window.L;
+    if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
+    clearMarkers(htmlMarkersRef.current);
 
-    markersLayerRef.current.clearLayers();
-
-    // Sort markers so POIs render first (bottom) and home/important markers render last (top)
-    const sortedMarkers = [...markers].sort((a, b) => {
-      const typeOrder = { 'poi': 0, 'default': 1, 'home': 2 };
+    const sortedMarkers = [...safeMarkers].sort((a, b) => {
+      const typeOrder = { poi: 0, default: 1, home: 2 };
       return (typeOrder[a.type || 'default'] || 1) - (typeOrder[b.type || 'default'] || 1);
     });
 
     const renderMarkers: MapMarker[] = (() => {
-      if (!clusterMarkers || !map) return sortedMarkers;
+      if (!clusterMarkers) return sortedMarkers;
       const radius = Math.max(24, Math.min(120, clusterRadiusPx));
-      const zoom = map.getZoom();
+      const z = map.getZoom();
       const fixed = sortedMarkers.filter((m) => m.clusterable === false);
       const clusterable = sortedMarkers.filter((m) => m.clusterable !== false);
-
-      const buckets = new Map<
-        string,
-        { sumX: number; sumY: number; members: MapMarker[] }
-      >();
+      const buckets = new Map<string, { sumX: number; sumY: number; members: MapMarker[] }>();
 
       for (const m of clusterable) {
-        const p = map.project(L.latLng(m.lat, m.lng), zoom);
+        const p = map.project([m.lng, m.lat]);
         const key = `${Math.floor(p.x / radius)}:${Math.floor(p.y / radius)}`;
         const b = buckets.get(key);
         if (b) {
@@ -1216,27 +698,41 @@ export default function MapQuestMap({
         }
         const cx = b.sumX / b.members.length;
         const cy = b.sumY / b.members.length;
-        const ll = map.unproject(L.point(cx, cy), zoom);
-        const bounds = L.latLngBounds(b.members.map((m) => [m.lat, m.lng]));
-        const color = accentColor;
-        const digits = String(b.members.length).length;
-        const bubbleSize = digits >= 3 ? 38 : digits === 2 ? 34 : 30;
+        const ll = map.unproject([cx, cy]);
         out.push({
           lat: ll.lat,
           lng: ll.lng,
           type: 'default',
-          color,
+          color: accentColor,
           label: `${b.members.length} events`,
-          iconUrl: clusterIconUri(b.members.length, color),
+          iconUrl: clusterPinIconUrl(b.members.length),
           iconCircular: false,
-          iconSize: [bubbleSize, bubbleSize],
+          iconSize: [CLUSTER_CIRCLE_SIZE, CLUSTER_CIRCLE_SIZE],
+          iconAnchor: CLUSTER_ANCHOR,
           zIndexOffset: 9500,
           clusterable: false,
           onClick: () => {
-            try {
-              map.fitBounds(bounds, { padding: [50, 50] });
-            } catch (_) {
-              map.setView(ll, Math.min(19, zoom + 2));
+            let west = Infinity;
+            let south = Infinity;
+            let east = -Infinity;
+            let north = -Infinity;
+            for (const m of b.members) {
+              west = Math.min(west, m.lng);
+              south = Math.min(south, m.lat);
+              east = Math.max(east, m.lng);
+              north = Math.max(north, m.lat);
+            }
+            if (
+              !safeFitBounds(
+                map,
+                [
+                  [west, south],
+                  [east, north],
+                ],
+                { padding: 50 },
+              )
+            ) {
+              map.easeTo({ center: [ll.lng, ll.lat], zoom: Math.min(19, z + 2) });
             }
           },
         });
@@ -1244,158 +740,45 @@ export default function MapQuestMap({
       return out;
     })();
 
-    renderMarkers.forEach((marker) => {
-      const color = marker.color || accentColor;
-      const type = marker.type || 'default';
-      
-      let markerHtml: string;
-      let iconSize: [number, number];
-      let iconAnchor: [number, number];
-      let popupAnchor: [number, number];
-      
-      // Inline SVG/HTML — crisp vector markers (preferred over data-URI img)
-      if (marker.iconHtml) {
-        iconSize = (marker.iconSize || [48, 48]) as [number, number];
-        iconAnchor = (marker.iconAnchor || [iconSize[0] / 2, iconSize[1] / 2]) as [number, number];
-        popupAnchor = [0, -iconAnchor[1]] as [number, number];
-        markerHtml = marker.iconHtml;
-      } else if (marker.iconUrl) {
-        const size = marker.iconSize || [28, 28];
-        const iconCircular = marker.iconCircular !== false;
-        iconSize = size as [number, number];
-        iconAnchor = marker.iconAnchor || [size[0] / 2, size[1] / 2] as [number, number];
-        popupAnchor = [0, -iconAnchor[1]] as [number, number];
-        const iconOp = typeof marker.iconOpacity === 'number' ? marker.iconOpacity : 1;
-        markerHtml = `
-          <img src="${marker.iconUrl}" 
-               width="${size[0]}" 
-               height="${size[1]}" 
-               style="${iconCircular ? 'border-radius: 50%;' : ''} opacity: ${iconOp}; transition: opacity 0.15s ease;"
-               alt=""
-          />
-        `;
-      } else if (type === 'home') {
-        // Home icon - larger circle with house shape, with pulsing ring
-        // Made larger (40x40) to stand out from POI markers
-        iconSize = [40, 40];
-        iconAnchor = [20, 20];
-        popupAnchor = [0, -20];
-        markerHtml = `
-          <div style="position: relative; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">
-            <div class="pulse-ring" style="width: 48px; height: 48px;"></div>
-            <svg width="40" height="40" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: relative; z-index: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));">
-              <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="3"/>
-              <path d="M16 10L12 14V22H20V14L16 10Z" fill="white"/>
-              <rect x="14" y="18" width="4" height="4" fill="${color}"/>
-            </svg>
-          </div>
-        `;
-      } else if (type === 'poi') {
-        // POI icon - smaller pin for parking/food/hotels
-        iconSize = [22, 28];
-        iconAnchor = [11, 28];
-        popupAnchor = [0, -28];
-        markerHtml = `
-          <svg width="22" height="28" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));">
-            <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2"/>
-          </svg>
-        `;
-      } else {
-        // Default icon - standard pin (for stadiums, etc)
-        iconSize = [28, 36];
-        iconAnchor = [14, 36];
-        popupAnchor = [0, -36];
-        markerHtml = `
-          <svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));">
-            <path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="${color}" stroke="white" stroke-width="2.5"/>
-          </svg>
-        `;
+    for (const marker of renderMarkers) {
+      if (
+        marker.lat == null ||
+        marker.lng == null ||
+        !Number.isFinite(marker.lat) ||
+        !Number.isFinite(marker.lng)
+      ) {
+        continue;
       }
-      
-      // Higher zIndexOffset for home markers to always be on top (unless caller overrides)
-      const zIndexOffset =
-        typeof marker.zIndexOffset === 'number'
-          ? marker.zIndexOffset
-          : type === 'home'
-            ? 1000
-            : marker.iconUrl || marker.iconHtml
-              ? 500
-              : type === 'poi'
-                ? 0
-                : 500;
-      
-      // Custom icon markers don't get shadow, others do
-      const markerClassName = marker.iconHtml
-        ? marker.pulse
-          ? 'modern-marker modern-marker-crisp pulse-marker'
-          : 'modern-marker modern-marker-crisp'
-        : marker.iconUrl
-        ? marker.pulse
-          ? 'modern-marker pulse-marker'
-          : 'modern-marker'
-        : type === 'home'
-          ? 'modern-marker modern-marker-with-shadow pulse-marker'
-          : 'modern-marker modern-marker-with-shadow';
-      
-      const icon = L.divIcon({
-        html: markerHtml,
-        className: markerClassName,
-        iconSize: iconSize,
-        iconAnchor: iconAnchor,
-        popupAnchor: popupAnchor,
-      });
 
-      if (marker.lat == null || marker.lng == null || !Number.isFinite(marker.lat) || !Number.isFinite(marker.lng)) return;
-      const m = L.marker([marker.lat, marker.lng], { icon, zIndexOffset, draggable: !!marker.draggable }).addTo(markersLayerRef.current);
-      
-      if (marker.label) {
-        // Tooltip for hover state - shows location name on hover.
-        // direction:'auto' repositions the tooltip to stay within the map
-        // when the marker is near an edge.
-        m.bindTooltip(markerTooltipHtml(marker.label), {
-          direction: 'auto',
-          offset: type === 'home' ? [0, -20] : type === 'poi' ? [0, -14] : [0, -18],
-          className: 'marker-tooltip',
-          permanent: false,
-        });
-        
-        // Also keep popup for click (more detailed view)
-        m.bindPopup(marker.label, { closeButton: false, maxWidth: 520 });
-      }
-      
-      // Add click handler if provided
+      const { el, iconAnchor } = createMarkerElement(marker, accentColor);
+      const m = addHtmlMarker(map, marker.lat, marker.lng, el, iconAnchor, !!marker.draggable);
+
       if (marker.onClick) {
-        m.on('click', () => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
           marker.onClick!();
         });
       }
 
       if (marker.onContextMenu) {
-        m.on('contextmenu', (e: any) => {
-          try {
-            L.DomEvent.stopPropagation(e);
-            e.originalEvent?.preventDefault?.();
-            const oe = e.originalEvent;
-            const ll = e.latlng;
-            marker.onContextMenu!(ll.lat, ll.lng, {
-              clientX: typeof oe?.clientX === 'number' ? oe.clientX : 0,
-              clientY: typeof oe?.clientY === 'number' ? oe.clientY : 0,
-            });
-          } catch (_) {}
+        el.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          marker.onContextMenu!(marker.lat, marker.lng, { clientX: e.clientX, clientY: e.clientY });
         });
       }
 
       if (marker.onDragEnd) {
-        m.on('dragend', (e: any) => {
-          const ll = e?.target?.getLatLng?.();
-          if (!ll) return;
+        m.on('dragend', () => {
+          const ll = m.getLngLat();
           marker.onDragEnd?.(ll.lat, ll.lng);
         });
       }
-    });
-  }, [markers, accentColor, mapReady, clusterMarkers, clusterRadiusPx, viewRevision]);
 
-  // Re-render markers when the map view changes so clusters expand/contract with zoom.
+      htmlMarkersRef.current.push(m);
+    }
+  }, [safeMarkers, accentColor, mapReady, clusterMarkers, clusterRadiusPx, viewRevision]);
+
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
@@ -1413,271 +796,242 @@ export default function MapQuestMap({
     };
   }, [mapReady]);
 
-  // Update driver position marker
   useEffect(() => {
-    if (!driverLayerRef.current || !mapReady) return;
-    const L = window.L;
-    
-    driverLayerRef.current.clearLayers();
-    
+    if (!mapRef.current || !mapReady) return;
+    driverMarkerRef.current?.remove();
+    driverMarkerRef.current = null;
     if (!driverPosition) return;
-    
-    // Create animated driver marker
-    const driverMarkerHtml = `
-      <div style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
-        <!-- Pulsing ring -->
-        <div style="
-          position: absolute;
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          background: ${accentColor}30;
-          animation: driver-pulse 2s ease-in-out infinite;
-        "></div>
-        <!-- Shadow -->
-        <div style="
-          position: absolute;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: rgba(0,0,0,0.2);
-          filter: blur(4px);
-          transform: translateY(2px);
-        "></div>
-        <!-- Car icon background -->
-        <div style="
-          position: relative;
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, ${accentColor} 0%, #1e40af 100%);
-          border: 3px solid white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          z-index: 2;
-        ">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
-            <circle cx="7" cy="17" r="2"/>
-            <circle cx="17" cy="17" r="2"/>
-          </svg>
+
+    const el = document.createElement('div');
+    el.className = 'modern-marker';
+    el.innerHTML = `
+      <div class="modern-marker-body" style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;">
+        <div style="position:absolute;width:48px;height:48px;border-radius:50%;background:${accentColor}30;animation:driver-pulse 2s ease-in-out infinite;"></div>
+        <div style="position:relative;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg, ${accentColor} 0%, #1e40af 100%);border:3px solid white;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/></svg>
         </div>
-      </div>
-      <style>
-        @keyframes driver-pulse {
-          0%, 100% { transform: scale(0.8); opacity: 0.8; }
-          50% { transform: scale(1.2); opacity: 0.3; }
-        }
-      </style>
-    `;
-    
-    const driverIcon = L.divIcon({
-      html: driverMarkerHtml,
-      className: 'driver-marker',
-      iconSize: [48, 48],
-      iconAnchor: [24, 24],
-    });
-    
-    const driverMarker = L.marker([driverPosition.lat, driverPosition.lng], { 
-      icon: driverIcon,
-      zIndexOffset: 2000, // Always on top
-    }).addTo(driverLayerRef.current);
-    
-    driverMarker.bindTooltip(markerTooltipHtml('Driver Location (Simulated)'), {
-      direction: 'auto',
-      offset: [0, -24],
-      className: 'marker-tooltip',
-    });
+      </div>`;
+    const tooltip = document.createElement('div');
+    tooltip.className = 'marker-tooltip-popup';
+    tooltip.innerHTML = markerTooltipHtml('Driver Location (Simulated)');
+    el.appendChild(tooltip);
+
+    driverMarkerRef.current = addHtmlMarker(
+      mapRef.current,
+      driverPosition.lat,
+      driverPosition.lng,
+      el,
+      [24, 24],
+    );
   }, [driverPosition, accentColor, mapReady]);
 
-  // Update circles
   useEffect(() => {
-    if (!circlesLayerRef.current || !mapReady) return;
-    const L = window.L;
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    removeLayersAndSource(map, 'mq-circles-');
+    if (!safeCircles.length) return;
 
-    circlesLayerRef.current.clearLayers();
+    const features: GeoJSON.Feature[] = safeCircles
+      .filter((c) => Number.isFinite(c.lat) && Number.isFinite(c.lng))
+      .map((c, idx) => {
+        const poly = circle([c.lng, c.lat], c.radius / 1000, { steps: 64, units: 'kilometers' });
+        poly.properties = {
+          idx,
+          fill: c.color || accentColor,
+          fillOpacity: c.fillOpacity ?? 0.15,
+          stroke: c.color || accentColor,
+          strokeOpacity: c.strokeOpacity ?? 0.5,
+          strokeWeight: c.strokeWeight ?? 2,
+        };
+        return poly;
+      });
 
-    circles.forEach((circle) => {
-      if (circle.lat == null || circle.lng == null || !Number.isFinite(circle.lat) || !Number.isFinite(circle.lng)) return;
-      L.circle([circle.lat, circle.lng], {
-        radius: circle.radius,
-        color: circle.color || accentColor,
-        fillColor: circle.color || accentColor,
-        fillOpacity: circle.fillOpacity ?? 0.15,
-        weight: circle.strokeWeight ?? 2,
-        opacity: circle.strokeOpacity ?? 0.5,
-      }).addTo(circlesLayerRef.current);
-    });
-  }, [circles, accentColor, mapReady]);
+    setGeoJsonSource(map, 'mq-circles-src', { type: 'FeatureCollection', features });
+    if (!map.getLayer('mq-circles-fill')) {
+      map.addLayer({
+        id: 'mq-circles-fill',
+        type: 'fill',
+        source: 'mq-circles-src',
+        paint: {
+          'fill-color': ['get', 'fill'],
+          'fill-opacity': ['get', 'fillOpacity'],
+        },
+      });
+      map.addLayer({
+        id: 'mq-circles-line',
+        type: 'line',
+        source: 'mq-circles-src',
+        paint: {
+          'line-color': ['get', 'stroke'],
+          'line-opacity': ['get', 'strokeOpacity'],
+          'line-width': ['get', 'strokeWeight'],
+        },
+      });
+    }
+  }, [safeCircles, accentColor, mapReady]);
 
-  // Update polygons (for isolines)
   useEffect(() => {
-    if (!polygonsLayerRef.current || !mapReady) return;
-    const L = window.L;
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    removeLayersAndSource(map, 'mq-polygons-');
+    polygonClickRef.current = safePolygons;
 
-    polygonsLayerRef.current.clearLayers();
+    const features: GeoJSON.Feature[] = [];
+    let west = Infinity;
+    let south = Infinity;
+    let east = -Infinity;
+    let north = -Infinity;
 
-    // Compute combined bounds for all polygons so we fit once (prevents "fighting" when rendering multiple).
-    let combinedBounds: any = null;
-
-    polygons.forEach((polygon) => {
-      const latLngs = polygon.coordinates.map(c => [c.lat, c.lng] as [number, number]);
-      
-      if (latLngs.length > 0) {
-        const poly = L.polygon(latLngs, {
-          color: polygon.color || accentColor,
-          fillColor: polygon.color || accentColor,
-          fillOpacity: polygon.fillOpacity ?? 0.2,
-          weight: polygon.strokeWidth ?? 2,
-          opacity: 0.8,
-        }).addTo(polygonsLayerRef.current);
-
-        if (polygon.onClick) {
-          poly.on('click', (e: any) => {
-            const ll = e?.latlng;
-            if (ll) polygon.onClick?.(ll.lat, ll.lng);
-          });
-        }
-
-        const b = poly.getBounds();
-        combinedBounds = combinedBounds ? combinedBounds.extend(b) : b;
+    safePolygons.forEach((polygon, idx) => {
+      const ring = polygon.coordinates.map((c) => [c.lng, c.lat] as GeoJSON.Position);
+      if (ring.length < 3) return;
+      if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+        ring.push(ring[0]);
       }
+      for (const [lng, lat] of ring) {
+        west = Math.min(west, lng);
+        south = Math.min(south, lat);
+        east = Math.max(east, lng);
+        north = Math.max(north, lat);
+      }
+      features.push({
+        type: 'Feature',
+        properties: {
+          idx,
+          fill: polygon.color || accentColor,
+          fillOpacity: polygon.fillOpacity ?? 0.2,
+          stroke: polygon.color || accentColor,
+          strokeWidth: polygon.strokeWidth ?? 2,
+        },
+        geometry: { type: 'Polygon', coordinates: [ring] },
+      });
     });
 
-    // Fit bounds to show all polygons (if any). If fitBounds prop is set, that still takes precedence elsewhere.
-    if (mapRef.current && combinedBounds && !fitBounds && !skipPolygonFitBounds) {
-      const sw = combinedBounds.getSouthWest();
-      const ne = combinedBounds.getNorthEast();
-      const key = `${polygons.length}|${sw.lat.toFixed(6)},${sw.lng.toFixed(6)},${ne.lat.toFixed(6)},${ne.lng.toFixed(6)}`;
+    if (!features.length) {
+      polygonAutoFitKeyRef.current = '';
+      return;
+    }
+
+    setGeoJsonSource(map, 'mq-polygons-src', { type: 'FeatureCollection', features });
+    if (!map.getLayer('mq-polygons-fill')) {
+      map.addLayer({
+        id: 'mq-polygons-fill',
+        type: 'fill',
+        source: 'mq-polygons-src',
+        paint: {
+          'fill-color': ['get', 'fill'],
+          'fill-opacity': ['get', 'fillOpacity'],
+        },
+      });
+      map.addLayer({
+        id: 'mq-polygons-line',
+        type: 'line',
+        source: 'mq-polygons-src',
+        paint: {
+          'line-color': ['get', 'stroke'],
+          'line-width': ['get', 'strokeWidth'],
+          'line-opacity': 0.8,
+        },
+      });
+      map.on('click', 'mq-polygons-fill', (e) => {
+        const idx = e.features?.[0]?.properties?.idx;
+        const poly = polygonClickRef.current[idx as number];
+        if (poly?.onClick) poly.onClick(e.lngLat.lat, e.lngLat.lng);
+      });
+    }
+
+    if (!fitBounds && !skipPolygonFitBounds) {
+      const key = `${safePolygons.length}|${south.toFixed(6)},${west.toFixed(6)},${north.toFixed(6)},${east.toFixed(6)}`;
       if (key !== polygonAutoFitKeyRef.current) {
         polygonAutoFitKeyRef.current = key;
-        mapRef.current.fitBounds(combinedBounds, { padding: [30, 30] });
-      }
-    } else if (!polygons || polygons.length === 0) {
-      polygonAutoFitKeyRef.current = '';
-    }
-  }, [polygons, accentColor, mapReady, skipPolygonFitBounds, fitBounds]);
-
-  // Update polylines (generic overlay lines: closures, highlights, etc.)
-  useEffect(() => {
-    if (!polylinesLayerRef.current || !mapReady) return;
-    const L = window.L;
-    polylinesLayerRef.current.clearLayers();
-
-    for (const pl of polylines) {
-      if (!pl?.coords || pl.coords.length < 2) continue;
-      const latLngs = pl.coords.map((c) => [c.lat, c.lng] as [number, number]);
-      const w = pl.weight ?? 6;
-      const dashArray = pl.dashed ? '10, 10' : undefined;
-
-      const line = L.polyline(latLngs, {
-        color: pl.color || '#F97316',
-        weight: w,
-        opacity: pl.opacity ?? 0.9,
-        lineCap: 'round',
-        lineJoin: 'round',
-        smoothFactor: pl.smoothFactor ?? 1,
-        dashArray,
-        ...(pl.className ? { className: pl.className } : {}),
-      }).addTo(polylinesLayerRef.current);
-
-      if (pl.onClick) {
-        line.on('click', (e: any) => {
-          const ll = e?.latlng;
-          if (!ll) return;
-          pl.onClick?.(ll.lat, ll.lng);
-        });
+        safeFitBounds(
+          map,
+          [
+            [west, south],
+            [east, north],
+          ],
+          { padding: 30 },
+        );
       }
     }
-  }, [polylines, mapReady]);
+  }, [safePolygons, accentColor, mapReady, skipPolygonFitBounds, fitBounds]);
 
-  // Traffic incidents layer ref
-  const trafficIncidentsRef = useRef<any>(null);
-
-  // Traffic layer
-  useEffect(() => {
-    if (!mapRef.current || !mapReady) return;
-    const L = window.L;
-    const map = mapRef.current;
-
-    // Remove existing traffic layers if any
-    if (trafficLayerRef.current) {
-      map.removeLayer(trafficLayerRef.current);
-      trafficLayerRef.current = null;
-    }
-    if (trafficIncidentsRef.current) {
-      map.removeLayer(trafficIncidentsRef.current);
-      trafficIncidentsRef.current = null;
-    }
-
-    if (showTraffic && apiKey) {
-      // Use the native MapQuest traffic layer from the SDK.  It renders smooth,
-      // continuous congestion colouring on roads (green/yellow/red/black) — the
-      // same visualisation shown on mapquest.com.
-      //
-      // The layer renders in the default overlayPane (z-index 400) which sits
-      // ABOVE our routeCasingPane (z-index 380), so traffic colours overlay the
-      // route line naturally.
-      try {
-        const trafficLayer = L.mapquest.trafficLayer();
-        trafficLayer.addTo(map);
-        trafficLayerRef.current = trafficLayer;
-      } catch (_) {
-        // Fallback: if the SDK method is unavailable, silently skip.
-        console.warn('L.mapquest.trafficLayer() unavailable — traffic overlay disabled');
-      }
-    }
-  }, [showTraffic, apiKey, mapReady]);
-
-  // Truck restrictions layer - fetch and display restriction markers from HERE API
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
-    const L = window.L;
+    removeLayersAndSource(map, 'mq-polylines-');
+    polylineClickRef.current = safePolylines;
 
-    // Remove existing truck restrictions layer
-    if (truckRestrictionsLayerRef.current) {
-      map.removeLayer(truckRestrictionsLayerRef.current);
-      truckRestrictionsLayerRef.current = null;
+    const features: GeoJSON.Feature[] = safePolylines
+      .filter((pl) => pl?.coords && pl.coords.length >= 2)
+      .map((pl, idx) => ({
+        type: 'Feature',
+        properties: {
+          idx,
+          color: pl.color || '#F97316',
+          weight: pl.weight ?? 6,
+          opacity: pl.opacity ?? 0.9,
+          dashed: pl.dashed ? 1 : 0,
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: pl.coords.map((c) => [c.lng, c.lat]),
+        },
+      }));
+
+    if (!features.length) return;
+
+    setGeoJsonSource(map, 'mq-polylines-src', { type: 'FeatureCollection', features });
+    if (!map.getLayer('mq-polylines-main')) {
+      map.addLayer({
+        id: 'mq-polylines-main',
+        type: 'line',
+        source: 'mq-polylines-src',
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['get', 'weight'],
+          'line-opacity': ['get', 'opacity'],
+          'line-dasharray': ['case', ['==', ['get', 'dashed'], 1], ['literal', [10, 10]], ['literal', [1, 0]]],
+        },
+      });
+      moveLayerToTop(map, 'mq-polylines-main');
+      map.on('click', 'mq-polylines-main', (e) => {
+        const idx = e.features?.[0]?.properties?.idx;
+        const pl = polylineClickRef.current[idx as number];
+        if (pl?.onClick) pl.onClick(e.lngLat.lat, e.lngLat.lng);
+      });
     }
+  }, [safePolylines, mapReady]);
+
+  useEffect(() => {
+    if (!mapReady || !showTraffic) return;
+    console.warn('[MapQuestMap] Native MapQuest traffic overlay is not available with MapLibre; route styling only.');
+  }, [showTraffic, mapReady]);
+
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    clearMarkers(truckMarkersRef.current);
 
     if (!showTruckRestrictions) return;
 
-    // Create a layer group for restriction markers
-    const restrictionsLayer = L.layerGroup();
-    restrictionsLayer.addTo(map);
-    truckRestrictionsLayerRef.current = restrictionsLayer;
-
-    // Function to fetch and display restrictions for current bounds
     const fetchRestrictions = async () => {
       const bounds = map.getBounds();
       const bbox = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-      
       try {
         const response = await fetch(`/api/here?endpoint=truckrestrictions&bbox=${bbox}`);
-        if (!response.ok) {
-          return;
-        }
-        
+        if (!response.ok) return;
         const data = await response.json();
-        console.log('[MapQuestMap] Truck restrictions data:', data);
-        
-        // Clear existing markers
-        restrictionsLayer.clearLayers();
-        
-        // Process restrictions from HERE API response
-        // HERE returns restrictions in overlays array
+        clearMarkers(truckMarkersRef.current);
+
         const restrictions = data.overlays || data.OVERLAY || [];
-        
-        restrictions.forEach((overlay: any) => {
+        for (const overlay of restrictions) {
           const shapes = overlay.SHAPE || overlay.shapes || [];
           const attrs = overlay.TRUCK_RESTRICTION || overlay.attributes || {};
-          
-          shapes.forEach((shape: any) => {
-            // Get coordinates from shape
-            let lat, lng;
+          for (const shape of shapes) {
+            let lat: number | undefined;
+            let lng: number | undefined;
             if (shape.LAT !== undefined && shape.LON !== undefined) {
               lat = shape.LAT;
               lng = shape.LON;
@@ -1688,230 +1042,82 @@ export default function MapQuestMap({
               lat = shape.lat;
               lng = shape.lng;
             }
-            
-            if (lat === undefined || lng === undefined) return;
-            
-            // Build restriction info
-            const restrictions: string[] = [];
-            
-            // Height restriction (convert from cm to feet)
+            if (lat === undefined || lng === undefined) continue;
+
+            const labels: string[] = [];
             if (attrs.HEIGHT_RESTRICTION || attrs.height) {
-              const heightCm = attrs.HEIGHT_RESTRICTION || attrs.height;
-              const heightFt = (heightCm / 30.48).toFixed(1);
-              restrictions.push(`🚧 ${heightFt} ft`);
+              labels.push(`🚧 ${((attrs.HEIGHT_RESTRICTION || attrs.height) / 30.48).toFixed(1)} ft`);
             }
-            
-            // Weight restriction (convert from kg to tons)
             if (attrs.WEIGHT_RESTRICTION || attrs.weight) {
-              const weightKg = attrs.WEIGHT_RESTRICTION || attrs.weight;
-              const weightTons = (weightKg / 907.185).toFixed(1);
-              restrictions.push(`⚖️ ${weightTons} tons`);
+              labels.push(`⚖️ ${((attrs.WEIGHT_RESTRICTION || attrs.weight) / 907.185).toFixed(1)} tons`);
             }
-            
-            // Length restriction (convert from cm to feet)
             if (attrs.LENGTH_RESTRICTION || attrs.length) {
-              const lengthCm = attrs.LENGTH_RESTRICTION || attrs.length;
-              const lengthFt = (lengthCm / 30.48).toFixed(0);
-              restrictions.push(`📏 ${lengthFt} ft`);
+              labels.push(`📏 ${((attrs.LENGTH_RESTRICTION || attrs.length) / 30.48).toFixed(0)} ft`);
             }
-            
-            // Width restriction
             if (attrs.WIDTH_RESTRICTION || attrs.width) {
-              const widthCm = attrs.WIDTH_RESTRICTION || attrs.width;
-              const widthFt = (widthCm / 30.48).toFixed(1);
-              restrictions.push(`↔️ ${widthFt} ft`);
+              labels.push(`↔️ ${((attrs.WIDTH_RESTRICTION || attrs.width) / 30.48).toFixed(1)} ft`);
             }
-            
-            // Axle weight
             if (attrs.SINGLE_AXLE_WEIGHT || attrs.axleWeight) {
-              const axleKg = attrs.SINGLE_AXLE_WEIGHT || attrs.axleWeight;
-              const axleTons = (axleKg / 907.185).toFixed(1);
-              restrictions.push(`🛞 ${axleTons}t/axle`);
+              labels.push(`🛞 ${((attrs.SINGLE_AXLE_WEIGHT || attrs.axleWeight) / 907.185).toFixed(1)}t/axle`);
             }
-            
-            // No trucks
-            if (attrs.NO_THROUGH_TRUCKS || attrs.noTrucks) {
-              restrictions.push(`🚫 No Trucks`);
-            }
-            
-            // Hazmat
-            if (attrs.HAZMAT_RESTRICTION || attrs.hazmat) {
-              restrictions.push(`☢️ No Hazmat`);
-            }
-            
-            if (restrictions.length === 0) {
-              restrictions.push(`⚠️ Restriction`);
-            }
-            
-            // Create marker with restriction icon
-            const iconHtml = `
-              <div style="
-                background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
-                color: white;
-                padding: 4px 8px;
-                border-radius: 6px;
-                font-size: 11px;
-                font-weight: 600;
-                white-space: nowrap;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                border: 2px solid white;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 2px;
-              ">
-                ${restrictions.map(r => `<span>${r}</span>`).join('')}
-              </div>
-            `;
-            
-            const icon = L.divIcon({
-              html: iconHtml,
-              className: 'truck-restriction-marker',
-              iconSize: [80, 40],
-              iconAnchor: [40, 20],
-            });
-            
-            L.marker([lat, lng], { icon }).addTo(restrictionsLayer);
-          });
-        });
-        
-        // If no structured data, try showing sample restrictions for testing
-        if (restrictions.length === 0) {
-          console.log('[MapQuestMap] No restrictions found in API response, checking alternative format');
-          
-          // Check for alternative response formats
-          if (data.ROUTE_LINKS || data.links) {
-            const links = data.ROUTE_LINKS || data.links || [];
-            links.forEach((link: any) => {
-              const linkRestrictions = link.TRUCK_RESTRICTIONS || link.restrictions || [];
-              linkRestrictions.forEach((r: any) => {
-                const lat = r.LAT || r.lat;
-                const lng = r.LON || r.lng || r.lon;
-                if (lat && lng) {
-                  const label = r.DESCRIPTION || r.description || 'Restriction';
-                  const iconHtml = `
-                    <div style="
-                      background: linear-gradient(135deg, #F97316 0%, #EA580C 100%);
-                      color: white;
-                      padding: 4px 8px;
-                      border-radius: 6px;
-                      font-size: 11px;
-                      font-weight: 600;
-                      white-space: nowrap;
-                      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                      border: 2px solid white;
-                    ">
-                      ⚠️ ${label}
-                    </div>
-                  `;
-                  const icon = L.divIcon({
-                    html: iconHtml,
-                    className: 'truck-restriction-marker',
-                    iconSize: [100, 30],
-                    iconAnchor: [50, 15],
-                  });
-                  L.marker([lat, lng], { icon }).addTo(restrictionsLayer);
-                }
-              });
-            });
+            if (attrs.NO_THROUGH_TRUCKS || attrs.noTrucks) labels.push('🚫 No Trucks');
+            if (attrs.HAZMAT_RESTRICTION || attrs.hazmat) labels.push('☢️ No Hazmat');
+            if (!labels.length) labels.push('⚠️ Restriction');
+
+            const el = document.createElement('div');
+            el.innerHTML = `<div style="background:linear-gradient(135deg,#F97316 0%,#EA580C 100%);color:white;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.3);border:2px solid white;display:flex;flex-direction:column;align-items:center;gap:2px;transform:translate(-40px,-20px);">${labels.map((r) => `<span>${r}</span>`).join('')}</div>`;
+            truckMarkersRef.current.push(
+              new Marker({ element: el }).setLngLat([lng, lat]).addTo(map),
+            );
           }
         }
-        
       } catch (err) {
         console.error('[MapQuestMap] Error fetching truck restrictions:', err);
       }
     };
 
-    // Fetch restrictions initially and on map move
     fetchRestrictions();
-    
     const onMoveEnd = () => {
-      // Only fetch if zoom level is high enough (restrictions are local)
-      if (map.getZoom() >= 10) {
-        fetchRestrictions();
-      } else {
-        restrictionsLayer.clearLayers();
-      }
+      if (map.getZoom() >= 10) fetchRestrictions();
+      else clearMarkers(truckMarkersRef.current);
     };
-    
     map.on('moveend', onMoveEnd);
-    
     return () => {
       map.off('moveend', onMoveEnd);
     };
   }, [showTruckRestrictions, mapReady]);
 
-  // Highlighted segment effect
   useEffect(() => {
-    if (!highlightLayerRef.current || !mapReady) return;
-    const L = window.L;
-    highlightLayerRef.current.clearLayers();
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    removeLayersAndSource(map, 'mq-highlight-');
 
-    // Only highlight if we have stops and a valid segment index
-    if (highlightedSegment === null || !stops || stops.length < 2) return;
-    if (highlightedSegment < 0 || highlightedSegment >= stops.length - 1) return;
+    if (highlightedSegment === null || safeStops.length < 2) return;
+    if (highlightedSegment < 0 || highlightedSegment >= safeStops.length - 1) return;
 
-    const segmentStart = stops[highlightedSegment];
-    const segmentEnd = stops[highlightedSegment + 1];
+    const segmentStart = safeStops[highlightedSegment];
+    const segmentEnd = safeStops[highlightedSegment + 1];
 
-    // Fetch route just for this segment
     const fetchSegmentRoute = async () => {
       try {
-        const response = await fetch(
-          `https://www.mapquestapi.com/directions/v2/route?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              locations: [
-                `${segmentStart.lat},${segmentStart.lng}`,
-                `${segmentEnd.lat},${segmentEnd.lng}`,
-              ],
-              options: {
-                routeType: 'fastest',
-                doReverseGeocode: false,
-                generalize: 0,
-              },
-            }),
-          }
-        );
-
+        const response = await fetch(`https://www.mapquestapi.com/directions/v2/route?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            locations: [
+              `${segmentStart.lat},${segmentStart.lng}`,
+              `${segmentEnd.lat},${segmentEnd.lng}`,
+            ],
+            options: { routeType: 'fastest', doReverseGeocode: false, generalize: 0 },
+          }),
+        });
         const data = await response.json();
         if (data.route?.shape?.shapePoints) {
           const points = data.route.shape.shapePoints;
-          const coords: [number, number][] = [];
-          for (let i = 0; i < points.length; i += 2) {
-            coords.push([points[i], points[i + 1]]);
-          }
-
-          // Same white ribbon + accent as full route (replaces flat blue “shadow” only)
-          L.polyline(coords, {
-            color: '#000000',
-            weight: 13,
-            opacity: 0.1,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }).addTo(highlightLayerRef.current);
-          L.polyline(coords, {
-            color: '#ffffff',
-            weight: 11,
-            opacity: 0.98,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }).addTo(highlightLayerRef.current);
-          const highlightLine = L.polyline(coords, {
-            color: accentColor,
-            weight: 6,
-            opacity: 1,
-            lineCap: 'round',
-            lineJoin: 'round',
-            className: 'highlighted-segment-glow',
-          });
-          highlightLayerRef.current.addLayer(highlightLine);
-
-          // Fit map bounds to highlighted segment with some padding
-          const bounds = L.latLngBounds(coords);
-          mapRef.current?.fitBounds(bounds, { padding: [80, 80], maxZoom: 15 });
+          const coords: LatLngTuple[] = [];
+          for (let i = 0; i < points.length; i += 2) coords.push([points[i], points[i + 1]]);
+          drawRibbonRoute(map, 'mq-highlight-', coords, accentColor, 6, 1);
+          safeFitBounds(map, coordsToBounds(coords), { padding: 80, maxZoom: 15 });
         }
       } catch (error) {
         console.error('Error fetching highlighted segment route:', error);
@@ -1919,263 +1125,192 @@ export default function MapQuestMap({
     };
 
     fetchSegmentRoute();
-  }, [highlightedSegment, stops, apiKey, mapReady, accentColor]);
+  }, [highlightedSegment, safeStops, apiKey, mapReady, accentColor]);
 
-  // Update route (MapQuest directions - NOT for transit)
   useEffect(() => {
-    if (!routeLayerRef.current || !mapReady) return;
-    
-    // Don't run if we have transit segments - that's handled by the other useEffect
+    if (!mapRef.current || !mapReady) return;
     if (transitSegments && transitSegments.length > 0) return;
-
-    // Only manage the route layer when this effect owns it (routeStart/routeEnd provided).
-    // When the route comes from pre-calculated routePolyline/routeSegments, the other
-    // effect handles drawing — clearing here would wipe it on darkMode toggle.
     if (!routeStart || !routeEnd) return;
 
+    const map = mapRef.current;
     if (!showRoute) {
-      routeLayerRef.current.clearLayers();
+      removeLayersAndSource(map, 'mq-route-api-');
       return;
     }
-    
-    const L = window.L;
-    routeLayerRef.current.clearLayers();
+
+    const hasPrecomputedGeometry = () => {
+      const poly = routePolylineRef.current;
+      const segs = routeSegmentsRef.current;
+      return (poly && poly.length >= 2) || (segs && segs.length > 0);
+    };
+
+    // Parent supplied full geometry (truck route, multi-stop shape, etc.) — skip car directions fetch.
+    if (hasPrecomputedGeometry()) {
+      removeLayersAndSource(map, 'mq-route-api-');
+      return;
+    }
 
     const abortController = new AbortController();
-
     const fetchRoute = async () => {
       try {
-        const locations = [routeStart];
-        if (waypoints && waypoints.length > 0) {
-          locations.push(...waypoints);
-        }
-        locations.push(routeEnd);
-
+        const locations = [routeStart, ...(waypoints ?? []), routeEnd];
         const from = `${locations[0].lat},${locations[0].lng}`;
-        const toParams = locations.slice(1).map(l => `to=${l.lat},${l.lng}`).join('&');
+        const toParams = locations.slice(1).map((l) => `to=${l.lat},${l.lng}`).join('&');
         const url = `/api/mapquest?endpoint=directions&from=${from}&${toParams}&routeType=${routeType}&fullShape=true`;
-        
         const res = await fetch(url, { signal: abortController.signal });
         const data = await res.json();
-
         if (abortController.signal.aborted) return;
+        if (hasPrecomputedGeometry()) {
+          removeLayersAndSource(map, 'mq-route-api-');
+          return;
+        }
 
         if (data?.route?.shape?.shapePoints) {
           const points = data.route.shape.shapePoints;
-          const latLngs: [number, number][] = [];
-          
-          for (let i = 0; i < points.length; i += 2) {
-            latLngs.push([points[i], points[i + 1]]);
-          }
+          const latLngs: LatLngTuple[] = [];
+          for (let i = 0; i < points.length; i += 2) latLngs.push([points[i], points[i + 1]]);
 
           const isSegmentHighlighted = highlightedSegment !== null;
           const mainRouteColor = isSegmentHighlighted
             ? '#9CA3AF'
-            : (routeColor || accentColor || DEFAULT_ROUTE_BLUE);
+            : routeColor || accentColor || DEFAULT_ROUTE_BLUE;
           const mainRouteOpacity = isSegmentHighlighted ? 0.5 : 0.9;
 
-          // Layer order (bottom → top): faint outer stroke, white ribbon, main route.
-          // Ribbon stays full strength when a segment is selected — only the center line dims.
-          L.polyline(latLngs, {
-            color: '#000000',
-            weight: 13,
-            opacity: 0.1,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }).addTo(routeLayerRef.current);
-          L.polyline(latLngs, {
-            color: '#ffffff',
-            weight: 11,
-            opacity: 0.98,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }).addTo(routeLayerRef.current);
+          removeLayersAndSource(map, 'mq-route-api-');
+          drawRibbonRoute(
+            map,
+            'mq-route-api-',
+            latLngs,
+            mainRouteColor,
+            isSegmentHighlighted ? 4 : 5,
+            mainRouteOpacity,
+          );
 
-          // Main route
-          const routeLine = L.polyline(latLngs, {
-            color: mainRouteColor,
-            weight: isSegmentHighlighted ? 4 : 5,
-            opacity: mainRouteOpacity,
-            lineCap: 'round',
-            lineJoin: 'round',
-          }).addTo(routeLayerRef.current);
-
-          if (mapRef.current && !isSegmentHighlighted) {
-            mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+          if (!isSegmentHighlighted && !fitBounds) {
+            safeFitBounds(map, coordsToBounds(latLngs), { padding: 50 });
           }
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === 'AbortError') return;
         console.error('Failed to fetch route:', err);
       }
     };
 
     fetchRoute();
+    return () => abortController.abort();
+  }, [
+    showRoute,
+    routeLocationKey,
+    routeStart,
+    routeEnd,
+    waypoints,
+    routeType,
+    routeColor,
+    accentColor,
+    mapReady,
+    transitSegments,
+    highlightedSegment,
+    fitBounds,
+    routePolyline,
+    routeSegments,
+  ]);
 
-    return () => { abortController.abort(); };
-  }, [showRoute, routeLocationKey, routeStart, routeEnd, waypoints, routeType, routeColor, accentColor, darkMode, mapReady, transitSegments, highlightedSegment]);
-
-  // Draw pre-calculated route polyline (e.g., from HERE transit API)
   useEffect(() => {
-    if (!routeLayerRef.current || !mapReady) return;
-    
-    const L = window.L;
-    routeLayerRef.current.clearLayers();
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
 
-    // If we have transit segments, draw them with different styles
+    if (!showRoute) {
+      clearAllRouteLayers(map);
+      return;
+    }
+
+    if (animateRouteReveal && routePolyline && routePolyline.length >= 2) {
+      removeLayersAndSource(map, 'mq-route-api-');
+      return;
+    }
+
     if (transitSegments && transitSegments.length > 0) {
-      console.log('Drawing transit segments:', transitSegments.length, 'segments');
-      const allLatLngs: [number, number][] = [];
-      
-      // Define colors for different transit types (public transit only)
+      clearAllRouteLayers(map);
+      const allLatLngs: LatLngTuple[] = [];
       const segmentColors: Record<string, string> = {
-        pedestrian: '#6B7280', // Gray for walking
-        subway: '#8B5CF6', // Purple for subway
-        metro: '#8B5CF6', // Purple for metro (same as subway)
-        bus: '#F59E0B', // Amber for bus
-        train: '#3B82F6', // Blue for train
-        rail: '#3B82F6', // Blue for rail
+        pedestrian: '#6B7280',
+        subway: '#8B5CF6',
+        metro: '#8B5CF6',
+        bus: '#F59E0B',
+        train: '#3B82F6',
+        rail: '#3B82F6',
         regionalTrain: '#3B82F6',
         intercityTrain: '#1D4ED8',
         highSpeedTrain: '#1D4ED8',
-        lightRail: '#10B981', // Emerald for light rail
+        lightRail: '#10B981',
         tram: '#10B981',
-        ferry: '#0EA5E9', // Sky blue for ferry
-        monorail: '#8B5CF6', // Purple for monorail
+        ferry: '#0EA5E9',
+        monorail: '#8B5CF6',
       };
 
-      transitSegments.forEach((segment) => {
+      transitSegments.forEach((segment, i) => {
         if (segment.coords.length < 2) return;
-        
-        const latLngs = segment.coords.map(p => [p.lat, p.lng] as [number, number]);
+        const latLngs = segment.coords.map((p) => [p.lat, p.lng] as LatLngTuple);
         allLatLngs.push(...latLngs);
-        
         const segmentType = segment.type.toLowerCase();
         const color = segmentColors[segmentType] || routeColor || DEFAULT_ROUTE_BLUE;
-        
-        // Determine if this segment should be dotted (walking or subway)
         const isDotted = segmentType === 'pedestrian' || segmentType === 'subway';
-        
-        // Shadow (subtle)
-        L.polyline(latLngs, {
-          color: '#000000',
-          weight: isDotted ? 6 : 8,
-          opacity: 0.08,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(routeLayerRef.current);
-
-        // Main segment line
-        const lineOptions: any = {
-          color,
-          weight: isDotted ? 4 : 5,
-          opacity: 0.9,
-          lineCap: 'round',
-          lineJoin: 'round',
-        };
-
-        if (isDotted) {
-          lineOptions.dashArray = '8, 12';
-          lineOptions.dashOffset = '0';
-        }
-
-        L.polyline(latLngs, lineOptions).addTo(routeLayerRef.current);
+        drawColoredLine(map, `mq-transit-${i}-`, latLngs, color, isDotted ? 4 : 5, 0.9, isDotted);
       });
 
-      // Fit bounds to all segments
-      if (mapRef.current && allLatLngs.length > 1) {
-        console.log('Fitting bounds to', allLatLngs.length, 'points');
-        const bounds = L.latLngBounds(allLatLngs);
-        console.log('Bounds:', bounds.getNorth(), bounds.getSouth(), bounds.getEast(), bounds.getWest());
-        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
-      } else {
-        console.log('Cannot fit bounds: mapRef=', !!mapRef.current, 'points=', allLatLngs.length);
+      if (allLatLngs.length > 1 && !fitBounds) {
+        safeFitBounds(map, coordsToBounds(allLatLngs), { padding: 50 });
       }
       return;
     }
 
-    // Colored route segments (e.g., congestion visualization) over a deep-blue base ribbon
     if (routeSegments && routeSegments.length > 0) {
-      const allLatLngs: [number, number][] = [];
-      const lineBlue = routeColor || accentColor || DEFAULT_ROUTE_BLUE;
-
+      clearAllRouteLayers(map);
+      const allLatLngs: LatLngTuple[] = [];
       routeSegments.forEach((seg) => {
-        if (!seg.coords || seg.coords.length < 2) return;
-        seg.coords.forEach((p) => {
-          allLatLngs.push([p.lat, p.lng]);
-        });
+        seg.coords?.forEach((p) => allLatLngs.push([p.lat, p.lng]));
       });
 
-      const casingLatLngs: [number, number][] =
-        routePolyline && routePolyline.length >= 2
-          ? routePolyline.map((p) => [p.lat, p.lng] as [number, number])
-          : allLatLngs;
-
-      if (casingLatLngs.length >= 2) {
-        L.polyline(casingLatLngs, {
-          color: '#000000',
-          weight: 13,
-          opacity: 0.1,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(routeLayerRef.current);
-        L.polyline(casingLatLngs, {
-          color: '#ffffff',
-          weight: 11,
-          opacity: 0.98,
-          lineCap: 'round',
-          lineJoin: 'round',
-        }).addTo(routeLayerRef.current);
-        L.polyline(casingLatLngs, {
-          color: lineBlue,
-          weight: 8,
-          opacity: 0.95,
-          lineCap: 'round',
-          lineJoin: 'round',
-          smoothFactor: 1.2,
-        }).addTo(routeLayerRef.current);
-      }
-
-      routeSegments.forEach((seg) => {
+      routeSegments.forEach((seg, i) => {
         if (!seg.coords || seg.coords.length < 2) return;
-        const latLngs = seg.coords.map((p) => [p.lat, p.lng] as [number, number]);
-        const w = seg.weight ?? 5;
-        L.polyline(latLngs, {
-          color: seg.color,
-          weight: w,
-          opacity: seg.opacity ?? 0.95,
-          lineCap: 'round',
-          lineJoin: 'round',
-          smoothFactor: 1.2,
-        }).addTo(routeLayerRef.current);
+        const latLngs = seg.coords.map((p) => [p.lat, p.lng] as LatLngTuple);
+        drawColoredLine(map, `mq-route-seg-${i}-`, latLngs, seg.color, seg.weight ?? 5, seg.opacity ?? 0.95);
       });
 
-      const fitLatLngs = casingLatLngs.length >= 2 ? casingLatLngs : allLatLngs;
-      if (mapRef.current && fitLatLngs.length > 1 && !suppressRouteAutoFit) {
-        const bounds = L.latLngBounds(fitLatLngs);
-        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      if (allLatLngs.length > 1 && !suppressRouteAutoFit && !fitBounds) {
+        safeFitBounds(map, coordsToBounds(allLatLngs), { padding: 50 });
       }
       return;
     }
 
-    // Fallback to simple routePolyline if no segments
-    if (!routePolyline || routePolyline.length === 0) return;
+    if (routePolyline && routePolyline.length >= 2) {
+      clearAllRouteLayers(map);
 
-    if (animateRouteReveal) return;
+      const latLngs = routePolyline
+        .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+        .map((p) => [p.lat, p.lng] as LatLngTuple);
+      if (latLngs.length >= 2) {
+        try {
+          drawSimpleRoutePolyline(map, latLngs, {
+            showTraffic,
+            routeColor,
+            accentColor,
+            onRouteLineClick,
+            onRouteLineDrag,
+            map,
+          });
 
-    const latLngs = routePolyline.map((p) => [p.lat, p.lng] as [number, number]);
-    const routeLine = drawSimpleRoutePolyline(L, routeLayerRef.current, latLngs, {
-      showTraffic,
-      routeColor,
-      accentColor,
-      onRouteLineClick,
-      onRouteLineDrag,
-      map: mapRef.current,
-    });
-
-    if (mapRef.current && routeLine && latLngs.length > 1 && !suppressRouteAutoFit) {
-      mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+          if (!suppressRouteAutoFit && !fitBounds) {
+            safeFitBounds(map, coordsToBounds(latLngs), { padding: 50 });
+          }
+        } catch (error) {
+          console.error('[MapQuestMap] failed drawing route polyline:', error);
+        }
+      }
+      return;
     }
+
+    clearAllRouteLayers(map);
   }, [
     routePolyline,
     routeSegments,
@@ -2186,29 +1321,25 @@ export default function MapQuestMap({
     showTraffic,
     routeStart,
     routeEnd,
-    darkMode,
     mapReady,
     onRouteLineClick,
     onRouteLineDrag,
     animateRouteReveal,
     suppressRouteAutoFit,
+    fitBounds,
   ]);
 
-  // Animated route trace (gallery demo)
   useEffect(() => {
-    if (!animateRouteReveal || !mapReady || !routeLayerRef.current) return;
+    if (!animateRouteReveal || !mapReady || !mapRef.current) return;
     if (!showRoute || !routePolyline || routePolyline.length < 2) {
-      if (animateRouteReveal && showRoute) {
-        onRouteRevealComplete?.();
-      }
+      if (animateRouteReveal && showRoute) onRouteRevealComplete?.();
       return;
     }
     if (transitSegments?.length || routeSegments?.length) return;
 
-    const L = window.L;
-    if (!L) return;
-
-    const fullLatLngs = routePolyline.map((p) => [p.lat, p.lng] as [number, number]);
+    const map = mapRef.current;
+    clearAllRouteLayers(map);
+    const fullLatLngs = routePolyline.map((p) => [p.lat, p.lng] as LatLngTuple);
     const durationMs = routeRevealDurationMs;
     const pauseLinearAt = 0.38 + Math.random() * 0.12;
     const pauseMs = jitter(275, 0.35);
@@ -2218,30 +1349,31 @@ export default function MapQuestMap({
     let cancelled = false;
 
     const drawFrame = (fraction: number) => {
-      routeLayerRef.current.clearLayers();
+      clearRouteLayers(map);
       const partial = trimPolylineByFraction(fullLatLngs, fraction);
-      if (partial.length < 2) return;
-      drawSimpleRoutePolyline(L, routeLayerRef.current, partial, {
-        showTraffic,
-        routeColor,
-        accentColor,
-        interactive: false,
-      });
+      if (partial.length >= 2) {
+        drawSimpleRoutePolyline(map, partial, {
+          showTraffic,
+          routeColor,
+          accentColor,
+          interactive: false,
+        });
+      }
     };
 
     const finish = () => {
       if (cancelled) return;
-      routeLayerRef.current.clearLayers();
-      const routeLine = drawSimpleRoutePolyline(L, routeLayerRef.current, fullLatLngs, {
+      clearRouteLayers(map);
+      drawSimpleRoutePolyline(map, fullLatLngs, {
         showTraffic,
         routeColor,
         accentColor,
         onRouteLineClick,
         onRouteLineDrag,
-        map: mapRef.current,
+        map,
       });
-      if (mapRef.current && routeLine && !suppressRouteAutoFit) {
-        mapRef.current.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+      if (!suppressRouteAutoFit && !fitBounds) {
+        safeFitBounds(map, coordsToBounds(fullLatLngs), { padding: 50 });
       }
       onRouteRevealComplete?.();
     };
@@ -2251,17 +1383,12 @@ export default function MapQuestMap({
       if (!startTs) startTs = ts;
       const elapsed = ts - startTs;
       const linear = computeLinearProgressWithPause(elapsed, durationMs, pauseLinearAt, pauseMs);
-      const fraction = easeInOutCubic(linear);
-      drawFrame(fraction);
-      if (linear < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        finish();
-      }
+      drawFrame(easeInOutCubic(linear));
+      if (linear < 1) raf = requestAnimationFrame(tick);
+      else finish();
     };
 
     raf = requestAnimationFrame(tick);
-
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
@@ -2280,44 +1407,9 @@ export default function MapQuestMap({
     onRouteLineClick,
     onRouteLineDrag,
     suppressRouteAutoFit,
+    fitBounds,
     onRouteRevealComplete,
   ]);
-
-  // Ragged tile pop-in (gallery demo)
-  useEffect(() => {
-    if (!tilesRaggedReveal || !mapReady || !mapRef.current) return;
-
-    const map = mapRef.current;
-    const container = map.getContainer() as HTMLElement;
-    const timeoutIds = new WeakMap<Element, number>();
-
-    const revealTile = (tileEl: Element) => {
-      if (timeoutIds.has(tileEl)) return;
-      const stagger = jitter(12 + Math.random() * 40, 0.55);
-      const hang = Math.random() < 0.2 ? jitter(180, 0.4) : 0;
-      const lag = Math.random() < 0.14 ? jitter(260, 0.35) : 0;
-      const id = window.setTimeout(() => {
-        tileEl.classList.add('mq-tile-visible');
-      }, stagger + hang + lag);
-      timeoutIds.set(tileEl, id);
-    };
-
-    const onTileLoad = (e: { tile?: Element }) => {
-      if (e?.tile) revealTile(e.tile);
-    };
-
-    map.on('tileload', onTileLoad);
-    container.querySelectorAll('.leaflet-tile').forEach(revealTile);
-
-    return () => {
-      map.off('tileload', onTileLoad);
-      container.querySelectorAll('.leaflet-tile').forEach((el) => {
-        const id = timeoutIds.get(el);
-        if (id) window.clearTimeout(id);
-        el.classList.remove('mq-tile-visible');
-      });
-    };
-  }, [tilesRaggedReveal, mapReady]);
 
   const containerClass = [className, tilesRaggedReveal ? 'mq-tiles-ragged-reveal' : '']
     .filter(Boolean)

@@ -1,9 +1,12 @@
 import type { ClusterDemoStop } from './hereClusterDemoStops';
 
-/** Match MapQuestMap teardrop pin footprint — clusters use the same box. */
+/** Teardrop pin footprint for individual stops. */
 export const PIN_W = 28;
 export const PIN_H = 36;
 export const PIN_ANCHOR: [number, number] = [14, 36];
+/** Circle cluster icon — same anchor as a pin so clusters sit on the map consistently. */
+export const CLUSTER_CIRCLE_SIZE = 28;
+export const CLUSTER_ANCHOR: [number, number] = [14, 14];
 
 export type ClusterMapMarker = {
   lat: number;
@@ -34,14 +37,16 @@ export function stopPinIconUrl(color: string) {
   return svgDataUri(svg);
 }
 
-/** Same 28×36 footprint as a pin — circle in the pin head with count. */
-function clusterPinIconUrl(count: number, fill = '#111827') {
+/** Numbered circle — clusters only; individual stops use teardrop pins. */
+export function clusterPinIconUrl(count: number, fill = '#111827') {
+  const size = CLUSTER_CIRCLE_SIZE;
+  const r = size / 2;
   const digits = String(count).length;
-  const fontSize = digits >= 3 ? 8 : digits === 2 ? 9 : 11;
+  const fontSize = digits >= 3 ? 10 : digits === 2 ? 11 : 12;
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${PIN_W}" height="${PIN_H}" viewBox="0 0 28 36" fill="none" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,0.25))">
-      <circle cx="14" cy="13" r="10.5" fill="${fill}" stroke="white" stroke-width="2.5"/>
-      <text x="14" y="13.25" text-anchor="middle" dominant-baseline="middle"
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,0.25))">
+      <circle cx="${r}" cy="${r}" r="${r - 2}" fill="${fill}" stroke="white" stroke-width="2.5"/>
+      <text x="${r}" y="${r}" text-anchor="middle" dominant-baseline="middle"
             font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
             font-size="${fontSize}" font-weight="800" fill="white">${count}</text>
     </svg>
@@ -65,6 +70,10 @@ function pixelToLatLng(x: number, y: number, zoom: number) {
   return { lat, lng };
 }
 
+function stopColor(stop: ClusterDemoStop, fallback: string) {
+  return stop.color || fallback;
+}
+
 function minPixelSeparation(stops: ClusterDemoStop[], zoom: number) {
   if (stops.length < 2) return Infinity;
   const pxPoints = stops.map((s) => latLngToPixel(s.lat, s.lng, zoom));
@@ -83,9 +92,8 @@ function minPixelSeparation(stops: ClusterDemoStop[], zoom: number) {
 export function buildSpiderPinMarkers(
   stops: ClusterDemoStop[],
   zoom: number,
-  accentColor: string,
+  fallbackColor: string,
 ): ClusterMapMarker[] {
-  const pinIcon = stopPinIconUrl(accentColor);
   const pinSize: [number, number] = [PIN_W, PIN_H];
   if (stops.length === 0) return [];
   if (stops.length === 1) {
@@ -94,7 +102,8 @@ export function buildSpiderPinMarkers(
       {
         lat: stop.lat,
         lng: stop.lng,
-        iconUrl: pinIcon,
+        color: stopColor(stop, fallbackColor),
+        iconUrl: stopPinIconUrl(stopColor(stop, fallbackColor)),
         iconSize: pinSize,
         iconAnchor: PIN_ANCHOR,
         iconCircular: false,
@@ -110,10 +119,13 @@ export function buildSpiderPinMarkers(
   const radiusPx = Math.max(32, 16 + stops.length * 5);
 
   return stops.map((stop, idx) => {
+    const color = stopColor(stop, fallbackColor);
+    const pinIcon = stopPinIconUrl(color);
     if (!needsSpider) {
       return {
         lat: stop.lat,
         lng: stop.lng,
+        color,
         iconUrl: pinIcon,
         iconSize: pinSize,
         iconAnchor: PIN_ANCHOR,
@@ -130,6 +142,7 @@ export function buildSpiderPinMarkers(
     return {
       lat: p.lat,
       lng: p.lng,
+      color,
       iconUrl: pinIcon,
       iconSize: pinSize,
       iconAnchor: PIN_ANCHOR,
@@ -152,19 +165,136 @@ export function boundsForExpandedCluster(
 /** All stops as individual pins (no clustering). */
 export function buildIndividualPinMarkers(
   stops: ClusterDemoStop[],
-  accentColor: string,
+  fallbackColor: string,
 ): ClusterMapMarker[] {
-  const pinIcon = stopPinIconUrl(accentColor);
   const pinSize: [number, number] = [PIN_W, PIN_H];
-  return stops.map((stop) => ({
-    lat: stop.lat,
-    lng: stop.lng,
-    iconUrl: pinIcon,
-    iconSize: pinSize,
-    iconAnchor: PIN_ANCHOR,
-    iconCircular: false,
-    clusterable: false,
-  }));
+  return stops.map((stop) => {
+    const color = stopColor(stop, fallbackColor);
+    return {
+      lat: stop.lat,
+      lng: stop.lng,
+      color,
+      iconUrl: stopPinIconUrl(color),
+      iconSize: pinSize,
+      iconAnchor: PIN_ANCHOR,
+      iconCircular: false,
+      clusterable: false,
+    };
+  });
+}
+
+export type ViewportBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
+
+/** Above this zoom, prefer individual pins (Mapbox Supercluster default maxZoom is 16). */
+export const DEFAULT_MAX_CLUSTER_ZOOM = 12;
+/** At/above this zoom, clusters only merge same-color pins; below = one cluster per cell. */
+export const DEFAULT_COLOR_CLUSTER_MIN_ZOOM = 11;
+/** Neutral bubble for regional/national clusters that combine all pin colors. */
+export const UNIFIED_CLUSTER_COLOR = '#111827';
+/** Max individual DOM markers before falling back to light clustering in dense viewports. */
+export const VIEWPORT_INDIVIDUAL_PIN_CAP = 400;
+
+export function filterStopsInViewport(
+  stops: ClusterDemoStop[],
+  bounds: ViewportBounds | null | undefined,
+  padRatio = 0.12,
+): ClusterDemoStop[] {
+  if (!bounds) return stops;
+  const latSpan = bounds.north - bounds.south;
+  const lngSpan = bounds.east - bounds.west;
+  const latPad = latSpan * padRatio;
+  const lngPad = lngSpan * padRatio;
+  const north = bounds.north + latPad;
+  const south = bounds.south - latPad;
+  const east = bounds.east + lngPad;
+  const west = bounds.west - lngPad;
+  return stops.filter(
+    (s) => s.lat >= south && s.lat <= north && s.lng >= west && s.lng <= east,
+  );
+}
+
+function effectiveCellPx(zoom: number, eps: number): number {
+  const base = Math.max(8, Math.min(128, eps));
+  if (zoom <= 10) return base;
+  const shrink = 0.7 ** (zoom - 10);
+  return Math.max(12, Math.round(base * shrink));
+}
+
+function effectiveMinWeight(zoom: number, minWeight: number, maxClusterZoom: number): number {
+  if (zoom >= maxClusterZoom - 1) return Math.max(minWeight, 10);
+  if (zoom >= 10) return Math.max(minWeight, minWeight + 2);
+  if (zoom >= 8) return Math.max(minWeight, minWeight + 1);
+  return minWeight;
+}
+
+function clusterStopsToMarkers(opts: {
+  stops: ClusterDemoStop[];
+  zoom: number;
+  cellPx: number;
+  minWeight: number;
+  accentColor: string;
+  groupByColor: boolean;
+  onClusterTap?: (weight: number, lat: number, lng: number, members: ClusterDemoStop[]) => void;
+  spiderIds: Set<string>;
+}): ClusterMapMarker[] {
+  const { stops, zoom, cellPx, minWeight, accentColor, groupByColor, onClusterTap, spiderIds } =
+    opts;
+  const pinSize: [number, number] = [PIN_W, PIN_H];
+  const buckets = new Map<string, ClusterDemoStop[]>();
+
+  for (const stop of stops) {
+    if (spiderIds.has(stop.id)) continue;
+    const p = latLngToPixel(stop.lat, stop.lng, zoom);
+    const cellKey = `${Math.floor(p.x / cellPx)}:${Math.floor(p.y / cellPx)}`;
+    const key = groupByColor ? `${cellKey}:${stopColor(stop, accentColor)}` : cellKey;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(stop);
+    else buckets.set(key, [stop]);
+  }
+
+  const out: ClusterMapMarker[] = [];
+  for (const members of buckets.values()) {
+    if (members.length >= minWeight) {
+      const weight = members.length;
+      const lat = members.reduce((s, m) => s + m.lat, 0) / weight;
+      const lng = members.reduce((s, m) => s + m.lng, 0) / weight;
+      const color = groupByColor ? stopColor(members[0], accentColor) : UNIFIED_CLUSTER_COLOR;
+      out.push({
+        lat,
+        lng,
+        color,
+        iconUrl: clusterPinIconUrl(weight, color),
+        iconSize: [CLUSTER_CIRCLE_SIZE, CLUSTER_CIRCLE_SIZE],
+        iconAnchor: CLUSTER_ANCHOR,
+        iconCircular: false,
+        clusterable: false,
+        onClick: () => {
+          console.log('[Cluster]', { weight, lat, lng, members: members.length, color });
+          onClusterTap?.(weight, lat, lng, members);
+        },
+      });
+    } else {
+      for (const stop of members) {
+        const color = stopColor(stop, accentColor);
+        out.push({
+          lat: stop.lat,
+          lng: stop.lng,
+          color,
+          iconUrl: stopPinIconUrl(color),
+          iconSize: pinSize,
+          iconAnchor: PIN_ANCHOR,
+          iconCircular: false,
+          clusterable: false,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -180,71 +310,90 @@ export function buildClusterMapMarkers(opts: {
   onClusterTap?: (weight: number, lat: number, lng: number, members: ClusterDemoStop[]) => void;
   /** Stops in these groups are never re-clustered — shown as individual/spider pins. */
   spiderGroups?: ClusterDemoStop[][];
+  /** Stop clustering at this zoom and show pins (viewport-capped for performance). */
+  maxClusterZoom?: number;
+  /** Only cluster/render stops near the visible map area. */
+  viewportBounds?: ViewportBounds | null;
+  individualPinCap?: number;
+  /** Zoom at/above which clusters split by pin color (below = unified neutral clusters). */
+  colorClusterMinZoom?: number;
 }): ClusterMapMarker[] {
-  const { stops, zoom, eps, minWeight, accentColor, onClusterTap, spiderGroups = [] } = opts;
-  const cellPx = Math.max(8, Math.min(128, eps));
-  const pinIcon = stopPinIconUrl(accentColor);
-  const pinSize: [number, number] = [PIN_W, PIN_H];
+  const {
+    stops,
+    zoom,
+    eps,
+    minWeight,
+    accentColor,
+    onClusterTap,
+    spiderGroups = [],
+    maxClusterZoom = DEFAULT_MAX_CLUSTER_ZOOM,
+    viewportBounds = null,
+    individualPinCap = VIEWPORT_INDIVIDUAL_PIN_CAP,
+    colorClusterMinZoom = DEFAULT_COLOR_CLUSTER_MIN_ZOOM,
+  } = opts;
 
   const spiderIds = new Set<string>();
   for (const group of spiderGroups) {
     for (const stop of group) spiderIds.add(stop.id);
   }
 
-  const buckets = new Map<string, ClusterDemoStop[]>();
+  const visibleStops = filterStopsInViewport(stops, viewportBounds);
+  const cellPx = effectiveCellPx(zoom, eps);
+  const clusterMin = effectiveMinWeight(zoom, minWeight, maxClusterZoom);
+  const groupByColor = zoom >= colorClusterMinZoom;
 
-  for (const stop of stops) {
-    if (spiderIds.has(stop.id)) continue;
-    const p = latLngToPixel(stop.lat, stop.lng, zoom);
-    const key = `${Math.floor(p.x / cellPx)}:${Math.floor(p.y / cellPx)}`;
-    const bucket = buckets.get(key);
-    if (bucket) {
-      bucket.push(stop);
+  let clustered: ClusterMapMarker[];
+  if (zoom >= maxClusterZoom) {
+    if (visibleStops.length <= individualPinCap) {
+      clustered = buildIndividualPinMarkers(
+        visibleStops.filter((s) => !spiderIds.has(s.id)),
+        accentColor,
+      );
     } else {
-      buckets.set(key, [stop]);
-    }
-  }
-
-  const out: ClusterMapMarker[] = [];
-
-  for (const members of buckets.values()) {
-    if (members.length >= minWeight) {
-      const weight = members.length;
-      const lat = members.reduce((s, m) => s + m.lat, 0) / weight;
-      const lng = members.reduce((s, m) => s + m.lng, 0) / weight;
-      out.push({
-        lat,
-        lng,
-        iconUrl: clusterPinIconUrl(weight),
-        iconSize: pinSize,
-        iconAnchor: PIN_ANCHOR,
-        iconCircular: false,
-        clusterable: false,
-        onClick: () => {
-          console.log('[Cluster]', { weight, lat, lng, members: members.length });
-          onClusterTap?.(weight, lat, lng, members);
-        },
+      let denseCellPx = Math.max(cellPx, 48);
+      clustered = clusterStopsToMarkers({
+        stops: visibleStops,
+        zoom,
+        cellPx: denseCellPx,
+        minWeight: 3,
+        accentColor,
+        groupByColor: true,
+        onClusterTap,
+        spiderIds,
       });
-    } else {
-      for (const stop of members) {
-        out.push({
-          lat: stop.lat,
-          lng: stop.lng,
-          iconUrl: pinIcon,
-          iconSize: pinSize,
-          iconAnchor: PIN_ANCHOR,
-          iconCircular: false,
-          clusterable: false,
+      for (let i = 0; i < 9 && clustered.length > individualPinCap; i++) {
+        denseCellPx = Math.min(128, Math.round(denseCellPx * 1.3));
+        clustered = clusterStopsToMarkers({
+          stops: visibleStops,
+          zoom,
+          cellPx: denseCellPx,
+          minWeight: 2,
+          accentColor,
+          groupByColor: true,
+          onClusterTap,
+          spiderIds,
         });
       }
     }
+  } else {
+    clustered = clusterStopsToMarkers({
+      stops: visibleStops,
+      zoom,
+      cellPx,
+      minWeight: clusterMin,
+      accentColor,
+      groupByColor,
+      onClusterTap,
+      spiderIds,
+    });
   }
 
+  const spiderMarkers: ClusterMapMarker[] = [];
   for (const group of spiderGroups) {
-    out.push(...buildSpiderPinMarkers(group, zoom, accentColor));
+    spiderMarkers.push(...buildSpiderPinMarkers(group, zoom, accentColor));
   }
 
-  return out;
+  return [...clustered, ...spiderMarkers];
 }
 
 export function largeNumberedPinIconUrl(label: string, color: string) {
@@ -261,6 +410,46 @@ export function largeNumberedPinIconUrl(label: string, color: string) {
     </svg>
   `.trim();
   return svgDataUri(svg);
+}
+
+/** Stops within an expanded bounding box around a route polyline. */
+export function filterStopsNearRoute(
+  stops: ClusterDemoStop[],
+  polyline: Array<{ lat: number; lng: number }>,
+  padDeg = 0.025,
+) {
+  if (polyline.length < 2) return stops;
+  const routeBounds = boundsFromPoints(polyline, padDeg * 0.35);
+  return stops.filter(
+    (s) =>
+      s.lat >= routeBounds.south &&
+      s.lat <= routeBounds.north &&
+      s.lng >= routeBounds.west &&
+      s.lng <= routeBounds.east,
+  );
+}
+
+/** Frame the route with nearby pins visible around it — not the whole metro. */
+export function boundsForRouteWithSurroundingPins(
+  polyline: Array<{ lat: number; lng: number }>,
+  surroundingStops: Array<{ lat: number; lng: number }>,
+  padDeg = 0.014,
+) {
+  if (polyline.length < 2) {
+    return boundsFromPoints([...polyline, ...surroundingStops], padDeg);
+  }
+
+  const routeBounds = boundsFromPoints(polyline, padDeg * 0.35);
+  const nearby = surroundingStops.filter(
+    (s) =>
+      s.lat >= routeBounds.south &&
+      s.lat <= routeBounds.north &&
+      s.lng >= routeBounds.west &&
+      s.lng <= routeBounds.east,
+  );
+  const points =
+    nearby.length >= 12 ? [...polyline, ...nearby] : [...polyline, ...surroundingStops];
+  return boundsFromPoints(points, padDeg);
 }
 
 export function boundsFromPoints(

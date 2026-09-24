@@ -36,7 +36,7 @@ export type TrafficRouteSegment = {
 };
 
 type Maneuver = { distance?: number; time?: number };
-type RouteLeg = { time?: number; distance?: number; maneuvers?: Maneuver[] };
+export type RouteLeg = { time?: number; distance?: number; maneuvers?: Maneuver[] };
 
 const SEGMENT_STYLE = { weight: 5, opacity: 0.95 } as const;
 const URBAN_FREE_FLOW_MPH = 25;
@@ -154,6 +154,32 @@ function buildLegSegments(
   }
 
   return overlapSegmentEndpoints(segments);
+}
+
+/** Build traffic-colored segments from lat/lng shape + MapQuest legs/maneuvers. */
+export function buildTrafficRouteSegmentsFromShapeInput(input: {
+  shapePoints?: { lat: number; lng: number }[];
+  maneuverIndexes?: number[];
+  legs?: RouteLeg[];
+  /** MapQuest route.time in seconds. */
+  timeSeconds?: number;
+  /** MapQuest route.realTime in seconds (traffic-adjusted). */
+  realTimeSeconds?: number;
+}): TrafficRouteSegment[] {
+  if (!input.shapePoints || input.shapePoints.length < 2) return [];
+  const flat: number[] = [];
+  for (const p of input.shapePoints) {
+    flat.push(p.lat, p.lng);
+  }
+  return buildTrafficRouteSegments({
+    shape: {
+      shapePoints: flat,
+      maneuverIndexes: input.maneuverIndexes,
+    },
+    legs: input.legs,
+    time: input.timeSeconds,
+    realTime: input.realTimeSeconds,
+  });
 }
 
 export function buildTrafficRouteSegments(route: {

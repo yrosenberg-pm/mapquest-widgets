@@ -456,8 +456,9 @@ async function searchPlacesSingle(
 
 // ============ DIRECTIONS ============
 
-interface DirectionsResult {
+export interface DirectionsResult {
   distance: number;
+  /** Drive time in minutes. */
   time: number;
   fuelUsed?: number;
   hasTolls?: boolean;
@@ -467,6 +468,10 @@ interface DirectionsResult {
   shapePoints?: { lat: number; lng: number }[];
   /** Indices into the route shape (one per maneuver); used to split the polyline by turn. */
   maneuverIndexes?: number[];
+  /** MapQuest route.time in seconds. */
+  timeSeconds?: number;
+  /** Traffic-adjusted drive time in seconds (MapQuest route.realTime). */
+  realTimeSeconds?: number;
 }
 
 export interface GetDirectionsOptions {
@@ -543,6 +548,8 @@ export async function getDirections(
       shapePoints,
       maneuverIndexes:
         maneuverIndexes && maneuverIndexes.length > 0 ? maneuverIndexes : undefined,
+      timeSeconds: Number.isFinite(Number(route.time)) ? Number(route.time) : undefined,
+      realTimeSeconds: Number.isFinite(Number(route.realTime)) ? Number(route.realTime) : undefined,
     };
   } catch (err) {
     console.error('getDirections failed:', err);
