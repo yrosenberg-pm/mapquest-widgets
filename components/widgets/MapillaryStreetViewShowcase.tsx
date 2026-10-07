@@ -233,7 +233,7 @@ export default function MapillaryStreetViewShowcase({
 
       <div
         className="streetview-showcase-stage relative w-full min-w-0 min-h-0 overflow-hidden border-t border-[var(--border-default)]"
-        style={{ minHeight: 'min(82vh, 920px)' }}
+        style={{ minHeight: 'min(55vh, 613px)' }}
       >
         {/* Map stays mounted (hidden while 360° is open) so position is preserved when closing */}
         <div

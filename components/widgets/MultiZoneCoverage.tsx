@@ -588,7 +588,7 @@ export default function MultiZoneCoverage({
               </div>
 
               {/* Preview map */}
-              <div className="h-[200px] relative">
+              <div className="h-[280px] relative">
                 <MapQuestMap
                   apiKey={apiKey}
                   center={previewCenter}
@@ -601,6 +601,7 @@ export default function MultiZoneCoverage({
                   fitBounds={previewBounds}
                   mapType={previewMapZoom >= 18 ? 'hybrid' : undefined}
                   onBoundsChange={handlePreviewBoundsChange}
+                  hideMapAttribution
                 />
                 {!custResult && zones.length > 0 && (
                   <div className="absolute inset-x-0 bottom-0 px-3 py-2 text-center text-[11px] font-medium" style={{ background: bgWidget, color: textMuted, borderTop: `1px solid ${border}` }}>

@@ -242,6 +242,32 @@ export default function ParkingFinder({
     }
   }, [destCoords, searchParking]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInitialDestination() {
+      if (defaultDestination.trim()) {
+        try {
+          const result = await geocode(defaultDestination);
+          if (cancelled || !result?.lat || !result?.lng) return;
+          setDestCoords({ lat: result.lat, lng: result.lng });
+        } catch {
+          /* noop */
+        }
+        return;
+      }
+
+      if (defaultMapCenter) {
+        setDestCoords(defaultMapCenter);
+      }
+    }
+
+    loadInitialDestination();
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultDestination, defaultMapCenter]);
+
   const spotsInRadius = useMemo(() => spots.filter(s => s.distance <= maxDistance), [spots, maxDistance]);
 
   const filtered = useMemo(() => {

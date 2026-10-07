@@ -23,6 +23,25 @@ export const DEMO_PIN_COLORS = [
   '#b45309',
 ] as const;
 
+export const DEMO_PIN_COLOR_LABELS: Record<string, string> = {
+  '#2563eb': 'Blue',
+  '#dc2626': 'Red',
+  '#16a34a': 'Green',
+  '#9333ea': 'Purple',
+  '#ea580c': 'Orange',
+  '#0891b2': 'Cyan',
+  '#ca8a04': 'Gold',
+  '#db2777': 'Pink',
+  '#4f46e5': 'Indigo',
+  '#0d9488': 'Teal',
+  '#7c3aed': 'Violet',
+  '#b45309': 'Amber',
+};
+
+export function demoPinColorName(hex: string): string {
+  return DEMO_PIN_COLOR_LABELS[hex.toLowerCase()] ?? hex;
+}
+
 export type DemoMetro = {
   id: string;
   name: string;

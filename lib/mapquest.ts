@@ -468,6 +468,8 @@ export interface DirectionsResult {
   shapePoints?: { lat: number; lng: number }[];
   /** Indices into the route shape (one per maneuver); used to split the polyline by turn. */
   maneuverIndexes?: number[];
+  /** Shape point indices marking the start of each leg (MapQuest `shape.legIndexes`). */
+  legIndexes?: number[];
   /** MapQuest route.time in seconds. */
   timeSeconds?: number;
   /** Traffic-adjusted drive time in seconds (MapQuest route.realTime). */
@@ -632,6 +634,10 @@ export async function getMultiStopDirections(
     const maneuverIndexes = Array.isArray(maneuverIndexesRaw)
       ? maneuverIndexesRaw.map((n: unknown) => Number(n)).filter((n) => Number.isFinite(n))
       : undefined;
+    const legIndexesRaw = route.shape?.legIndexes;
+    const legIndexes = Array.isArray(legIndexesRaw)
+      ? legIndexesRaw.map((n: unknown) => Number(n)).filter((n) => Number.isFinite(n))
+      : undefined;
 
     return {
       distance: route.distance,
@@ -643,6 +649,7 @@ export async function getMultiStopDirections(
       steps: route.legs?.[0]?.maneuvers || [],
       shapePoints: parseRouteShapePoints(route),
       maneuverIndexes: maneuverIndexes && maneuverIndexes.length > 0 ? maneuverIndexes : undefined,
+      legIndexes: legIndexes && legIndexes.length > 0 ? legIndexes : undefined,
     };
   } catch (err) {
     console.warn('getMultiStopDirections failed, trying HERE:', err);
@@ -710,6 +717,7 @@ export interface OptimizeRouteResult {
   time: number;
   legs?: { distance?: number; time?: number }[];
   shapePoints?: { lat: number; lng: number }[];
+  legIndexes?: number[];
 }
 
 export async function optimizeRoute(locations: Location[]): Promise<OptimizeRouteResult | null> {
@@ -743,12 +751,18 @@ export async function optimizeRoute(locations: Location[]): Promise<OptimizeRout
       time: route.time,
     });
     
+    const legIndexesRaw = route.shape?.legIndexes;
+    const legIndexes = Array.isArray(legIndexesRaw)
+      ? legIndexesRaw.map((n: unknown) => Number(n)).filter((n) => Number.isFinite(n))
+      : undefined;
+
     return {
       locationSequence: route.locationSequence || [],
       distance: route.distance || 0,
       time: (route.time || 0) / 60,
       legs: route.legs || [],
       shapePoints: parseRouteShapePoints(route),
+      legIndexes: legIndexes && legIndexes.length > 0 ? legIndexes : undefined,
     };
   } catch (err) {
     console.error('[optimizeRoute] Exception:', err);

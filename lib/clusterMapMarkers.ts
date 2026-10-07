@@ -1,4 +1,4 @@
-import type { ClusterDemoStop } from './hereClusterDemoStops';
+import { demoPinColorName, type ClusterDemoStop } from './hereClusterDemoStops';
 
 /** Teardrop pin footprint for individual stops. */
 export const PIN_W = 28;
@@ -7,11 +7,24 @@ export const PIN_ANCHOR: [number, number] = [14, 36];
 /** Circle cluster icon — same anchor as a pin so clusters sit on the map consistently. */
 export const CLUSTER_CIRCLE_SIZE = 28;
 export const CLUSTER_ANCHOR: [number, number] = [14, 14];
+/** Stacking for cluster demo markers (MapQuestMap uses el.style.zIndex). */
+export const DEMO_PIN_MARKER_Z = 400;
+export const DEMO_CLUSTER_MARKER_Z = 800;
+export const DEMO_CLUSTER_HOVER_Z = 100_000;
+
+export type ClusterStyleMode = 'by-color' | 'all-pins' | 'off';
 
 export type ClusterMapMarker = {
   lat: number;
   lng: number;
   label?: string;
+  /** On touch, first tap pins tooltip; second tap runs onClick (drill-in). */
+  touchTooltipFirst?: boolean;
+  /** All-pins cluster breakdown — rendered in map overlay (not inline). */
+  clusterBreakdownTooltip?: {
+    total: number;
+    rows: Array<{ color: string; colorName: string; count: number }>;
+  };
   color?: string;
   type?: 'default';
   iconUrl?: string;
@@ -37,21 +50,163 @@ export function stopPinIconUrl(color: string) {
   return svgDataUri(svg);
 }
 
-/** Numbered circle — clusters only; individual stops use teardrop pins. */
-export function clusterPinIconUrl(count: number, fill = '#111827') {
-  const size = CLUSTER_CIRCLE_SIZE;
-  const r = size / 2;
-  const digits = String(count).length;
-  const fontSize = digits >= 3 ? 10 : digits === 2 ? 11 : 12;
+const DONUT_ICON_CACHE = new Map<string, string>();
+const SOLID_CLUSTER_ICON_CACHE = new Map<string, string>();
+
+export type ClusterSizeTier = 'S' | 'M' | 'L';
+
+export function clusterCountTier(count: number): ClusterSizeTier {
+  if (count >= 50) return 'L';
+  if (count >= 10) return 'M';
+  return 'S';
+}
+
+export function formatClusterCountLabel(count: number): string {
+  return count > 999 ? '999+' : String(count);
+}
+
+export function clusterTierMetrics(count: number) {
+  const tier = clusterCountTier(count);
+  const size = tier === 'L' ? 46 : tier === 'M' ? 38 : 32;
+  const fontSize = tier === 'L' ? 17 : tier === 'M' ? 15 : 13;
+  const ringThickness = tier === 'L' ? 6 : tier === 'M' ? 5 : 4;
+  const anchor: [number, number] = [size / 2, size / 2];
+  return { tier, size, fontSize, ringThickness, anchor };
+}
+
+/** All-pins donut clusters — slightly larger ring + label for color breakdown readability. */
+export function clusterAllPinsTierMetrics(count: number) {
+  const tier = clusterCountTier(count);
+  const size = tier === 'L' ? 52 : tier === 'M' ? 44 : 36;
+  const fontSize = tier === 'L' ? 18 : tier === 'M' ? 16 : 14;
+  const ringThickness = tier === 'L' ? 7 : tier === 'M' ? 6 : 5;
+  const anchor: [number, number] = [size / 2, size / 2];
+  return { tier, size, fontSize, ringThickness, anchor };
+}
+
+function roundCountsForCacheKey(total: number, counts: Map<string, number>, tier: ClusterSizeTier): string {
+  const step = total >= 500 ? 10 : total >= 50 ? 5 : 1;
+  const parts = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([color, n]) => `${color}:${Math.round(n / step) * step}`);
+  return `${tier}|${total}|${parts.join('|')}`;
+}
+
+function aggregateColorCounts(members: ClusterDemoStop[], fallback: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const member of members) {
+    const color = stopColor(member, fallback);
+    counts.set(color, (counts.get(color) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function annularSegmentPath(
+  cx: number,
+  cy: number,
+  innerR: number,
+  outerR: number,
+  startDeg: number,
+  endDeg: number,
+): string {
+  const startOuter = polarToCartesian(cx, cy, outerR, startDeg);
+  const endOuter = polarToCartesian(cx, cy, outerR, endDeg);
+  const startInner = polarToCartesian(cx, cy, innerR, endDeg);
+  const endInner = polarToCartesian(cx, cy, innerR, startDeg);
+  const large = endDeg - startDeg > 180 ? 1 : 0;
+  return [
+    `M ${startOuter.x} ${startOuter.y}`,
+    `A ${outerR} ${outerR} 0 ${large} 1 ${endOuter.x} ${endOuter.y}`,
+    `L ${startInner.x} ${startInner.y}`,
+    `A ${innerR} ${innerR} 0 ${large} 0 ${endInner.x} ${endInner.y}`,
+    'Z',
+  ].join(' ');
+}
+
+/** Donut cluster — ring segments by color share, dark center with white count. */
+export function multiColorClusterDonutIconUrl(total: number, colorCounts: Map<string, number>) {
+  const { tier, size, fontSize, ringThickness } = clusterAllPinsTierMetrics(total);
+  const cacheKey = roundCountsForCacheKey(total, colorCounts, tier);
+  const cached = DONUT_ICON_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const cx = size / 2;
+  const cy = size / 2;
+  const outerR = size / 2 - 1;
+  const innerR = outerR - ringThickness;
+  const gapDeg = colorCounts.size > 1 ? 2 : 0;
+  const entries = [...colorCounts.entries()].sort((a, b) => b[1] - a[1]);
+  const totalGap = gapDeg * entries.length;
+  const avail = Math.max(0, 360 - totalGap);
+  let cursor = -90;
+  const segments: string[] = [];
+  for (const [color, count] of entries) {
+    const sweep = (count / total) * avail;
+    if (sweep <= 0) continue;
+    const end = cursor + sweep;
+    segments.push(
+      `<path d="${annularSegmentPath(cx, cy, innerR, outerR, cursor, end)}" fill="${color}"/>`,
+    );
+    cursor = end + gapDeg;
+  }
+
+  const label = formatClusterCountLabel(total);
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,0.25))">
-      <circle cx="${r}" cy="${r}" r="${r - 2}" fill="${fill}" stroke="white" stroke-width="2.5"/>
-      <text x="${r}" y="${r}" text-anchor="middle" dominant-baseline="middle"
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" style="filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25))">
+      ${segments.join('\n')}
+      <circle cx="${cx}" cy="${cy}" r="${Math.max(0, innerR - 0.5)}" fill="#1A1A1F"/>
+      <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle"
             font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
-            font-size="${fontSize}" font-weight="800" fill="white">${count}</text>
+            font-size="${fontSize}" font-weight="700" fill="#ffffff">${label}</text>
     </svg>
   `.trim();
-  return svgDataUri(svg);
+  const uri = svgDataUri(svg);
+  DONUT_ICON_CACHE.set(cacheKey, uri);
+  return uri;
+}
+
+export function buildClusterBreakdownTooltip(
+  total: number,
+  colorCounts: Map<string, number>,
+): ClusterMapMarker['clusterBreakdownTooltip'] {
+  return {
+    total,
+    rows: [...colorCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([color, count]) => ({
+        color,
+        colorName: demoPinColorName(color),
+        count,
+      })),
+  };
+}
+
+/** Solid circle cluster (by-color mode). */
+export function clusterPinIconUrl(count: number, fill = '#111827') {
+  const { tier, size, fontSize } = clusterTierMetrics(count);
+  const label = formatClusterCountLabel(count);
+  const cacheKey = `${tier}|${fill}|${label}`;
+  const cached = SOLID_CLUSTER_ICON_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const r = size / 2;
+  const fillR = r - 2;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" fill="none" style="filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25))">
+      <circle cx="${r}" cy="${r}" r="${fillR}" fill="${fill}" stroke="white" stroke-width="2"/>
+      <text x="${r}" y="${r}" text-anchor="middle" dominant-baseline="middle"
+            font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial"
+            font-size="${fontSize}" font-weight="700" fill="white">${label}</text>
+    </svg>
+  `.trim();
+  const uri = svgDataUri(svg);
+  SOLID_CLUSTER_ICON_CACHE.set(cacheKey, uri);
+  return uri;
 }
 
 function latLngToPixel(lat: number, lng: number, zoom: number) {
@@ -126,6 +281,7 @@ export function buildSpiderPinMarkers(
         iconAnchor: PIN_ANCHOR,
         iconCircular: false,
         clusterable: false,
+        zIndexOffset: DEMO_PIN_MARKER_Z,
       },
     ];
   }
@@ -149,6 +305,7 @@ export function buildSpiderPinMarkers(
         iconAnchor: PIN_ANCHOR,
         iconCircular: false,
         clusterable: false,
+        zIndexOffset: DEMO_PIN_MARKER_Z,
       };
     }
     const angle = (2 * Math.PI * idx) / stops.length - Math.PI / 2;
@@ -166,6 +323,7 @@ export function buildSpiderPinMarkers(
       iconAnchor: PIN_ANCHOR,
       iconCircular: false,
       clusterable: false,
+      zIndexOffset: DEMO_PIN_MARKER_Z,
     };
   });
 }
@@ -197,6 +355,7 @@ export function buildIndividualPinMarkers(
       iconAnchor: PIN_ANCHOR,
       iconCircular: false,
       clusterable: false,
+      zIndexOffset: DEMO_PIN_MARKER_Z,
     };
   });
 }
@@ -243,10 +402,7 @@ function effectiveCellPx(zoom: number, eps: number): number {
   return Math.max(12, Math.round(base * shrink));
 }
 
-function effectiveMinWeight(zoom: number, minWeight: number, maxClusterZoom: number): number {
-  if (zoom >= maxClusterZoom - 1) return Math.max(minWeight, 10);
-  if (zoom >= 10) return Math.max(minWeight, minWeight + 2);
-  if (zoom >= 8) return Math.max(minWeight, minWeight + 1);
+function effectiveMinWeight(_zoom: number, minWeight: number, _maxClusterZoom: number): number {
   return minWeight;
 }
 
@@ -257,11 +413,23 @@ function clusterStopsToMarkers(opts: {
   minWeight: number;
   accentColor: string;
   groupByColor: boolean;
+  clusterStyle: ClusterStyleMode;
+  touchTooltipFirst?: boolean;
   onClusterTap?: (weight: number, lat: number, lng: number, members: ClusterDemoStop[]) => void;
   spiderIds: Set<string>;
 }): ClusterMapMarker[] {
-  const { stops, zoom, cellPx, minWeight, accentColor, groupByColor, onClusterTap, spiderIds } =
-    opts;
+  const {
+    stops,
+    zoom,
+    cellPx,
+    minWeight,
+    accentColor,
+    groupByColor,
+    clusterStyle,
+    touchTooltipFirst = false,
+    onClusterTap,
+    spiderIds,
+  } = opts;
   const pinSize: [number, number] = [PIN_W, PIN_H];
   const buckets = new Map<string, ClusterDemoStop[]>();
 
@@ -281,23 +449,49 @@ function clusterStopsToMarkers(opts: {
       const weight = members.length;
       const lat = members.reduce((s, m) => s + m.lat, 0) / weight;
       const lng = members.reduce((s, m) => s + m.lng, 0) / weight;
+      const colorCounts = aggregateColorCounts(members, accentColor);
       const color = groupByColor
         ? stopColor(members[0], accentColor)
         : dominantStopColor(members, accentColor);
-      out.push({
-        lat,
-        lng,
-        color,
-        iconUrl: clusterPinIconUrl(weight, color),
-        iconSize: [CLUSTER_CIRCLE_SIZE, CLUSTER_CIRCLE_SIZE],
-        iconAnchor: CLUSTER_ANCHOR,
-        iconCircular: false,
-        clusterable: false,
-        onClick: () => {
-          console.log('[Cluster]', { weight, lat, lng, members: members.length, color });
-          onClusterTap?.(weight, lat, lng, members);
-        },
-      });
+
+      if (clusterStyle === 'all-pins') {
+        const { size, anchor } = clusterAllPinsTierMetrics(weight);
+        const iconUrl = multiColorClusterDonutIconUrl(weight, colorCounts);
+        out.push({
+          lat,
+          lng,
+          color,
+          iconUrl,
+          iconSize: [size, size],
+          iconAnchor: anchor,
+          iconCircular: false,
+          clusterable: false,
+          clusterBreakdownTooltip: buildClusterBreakdownTooltip(weight, colorCounts),
+          touchTooltipFirst,
+          zIndexOffset: DEMO_CLUSTER_MARKER_Z,
+          onClick: () => {
+            onClusterTap?.(weight, lat, lng, members);
+          },
+        });
+      } else {
+        const { size, anchor } = clusterTierMetrics(weight);
+        out.push({
+          lat,
+          lng,
+          color,
+          iconUrl: clusterPinIconUrl(weight, color),
+          iconSize: [size, size],
+          iconAnchor: anchor,
+          iconCircular: false,
+          clusterable: false,
+          zIndexOffset: DEMO_CLUSTER_MARKER_Z,
+          clusterBreakdownTooltip: buildClusterBreakdownTooltip(weight, colorCounts),
+          touchTooltipFirst,
+          onClick: () => {
+            onClusterTap?.(weight, lat, lng, members);
+          },
+        });
+      }
     } else {
       for (const stop of members) {
         const color = stopColor(stop, accentColor);
@@ -310,6 +504,7 @@ function clusterStopsToMarkers(opts: {
           iconAnchor: PIN_ANCHOR,
           iconCircular: false,
           clusterable: false,
+          zIndexOffset: DEMO_PIN_MARKER_Z,
         });
       }
     }
@@ -327,6 +522,9 @@ export function buildClusterMapMarkers(opts: {
   eps: number;
   minWeight: number;
   accentColor: string;
+  clusterStyle?: ClusterStyleMode;
+  /** First tap shows tooltip on touch devices (all-pins clusters). */
+  touchTooltipFirst?: boolean;
   onClusterTap?: (weight: number, lat: number, lng: number, members: ClusterDemoStop[]) => void;
   /** Stops in these groups are never re-clustered — shown as individual/spider pins. */
   spiderGroups?: ClusterDemoStop[][];
@@ -344,6 +542,8 @@ export function buildClusterMapMarkers(opts: {
     eps,
     minWeight,
     accentColor,
+    clusterStyle = 'by-color',
+    touchTooltipFirst = false,
     onClusterTap,
     spiderGroups = [],
     maxClusterZoom = DEFAULT_MAX_CLUSTER_ZOOM,
@@ -360,10 +560,16 @@ export function buildClusterMapMarkers(opts: {
   const visibleStops = filterStopsInViewport(stops, viewportBounds);
   const cellPx = effectiveCellPx(zoom, eps);
   const clusterMin = effectiveMinWeight(zoom, minWeight, maxClusterZoom);
-  const groupByColor = zoom >= colorClusterMinZoom;
+  const groupByColor =
+    clusterStyle === 'by-color' ? zoom >= colorClusterMinZoom : clusterStyle !== 'all-pins';
 
   let clustered: ClusterMapMarker[];
-  if (zoom >= maxClusterZoom) {
+  if (clusterStyle === 'off') {
+    clustered = buildIndividualPinMarkers(
+      visibleStops.filter((s) => !spiderIds.has(s.id)),
+      accentColor,
+    );
+  } else if (zoom >= maxClusterZoom) {
     if (visibleStops.length <= individualPinCap) {
       clustered = buildIndividualPinMarkers(
         visibleStops.filter((s) => !spiderIds.has(s.id)),
@@ -377,7 +583,9 @@ export function buildClusterMapMarkers(opts: {
         cellPx: denseCellPx,
         minWeight: 3,
         accentColor,
-        groupByColor: true,
+        groupByColor: clusterStyle === 'by-color',
+        clusterStyle,
+        touchTooltipFirst,
         onClusterTap,
         spiderIds,
       });
@@ -389,7 +597,9 @@ export function buildClusterMapMarkers(opts: {
           cellPx: denseCellPx,
           minWeight: 2,
           accentColor,
-          groupByColor: true,
+          groupByColor: clusterStyle === 'by-color',
+          clusterStyle,
+          touchTooltipFirst,
           onClusterTap,
           spiderIds,
         });
@@ -403,6 +613,8 @@ export function buildClusterMapMarkers(opts: {
       minWeight: clusterMin,
       accentColor,
       groupByColor,
+      clusterStyle,
+      touchTooltipFirst,
       onClusterTap,
       spiderIds,
     });

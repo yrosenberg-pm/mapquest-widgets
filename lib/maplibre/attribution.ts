@@ -6,8 +6,18 @@ function mapQuestLogoSrc(darkMode: boolean) {
   return darkMode ? '/brand/mapquest-footer-dark.svg' : '/brand/mapquest-footer-light.svg';
 }
 
+export type MapQuestAttributionOptions = {
+  /** When false, hides the on-map logo and Terms link (e.g. embeds with footer branding). */
+  visible?: boolean;
+};
+
 /** MapQuest logo + terms — bottom-left / bottom-right, matching legacy Leaflet layout. */
-export function layoutMapQuestAttribution(map: Map, darkMode: boolean) {
+export function layoutMapQuestAttribution(
+  map: Map,
+  darkMode: boolean,
+  options: MapQuestAttributionOptions = {},
+) {
+  const visible = options.visible !== false;
   const container = map.getContainer();
   if (darkMode) container.classList.add('dark-map');
   else container.classList.remove('dark-map');
@@ -43,6 +53,6 @@ export function layoutMapQuestAttribution(map: Map, darkMode: boolean) {
     container.appendChild(terms);
   }
 
-  logo.style.display = '';
-  terms.style.display = '';
+  logo.style.display = visible ? '' : 'none';
+  terms.style.display = visible ? '' : 'none';
 }

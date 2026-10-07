@@ -10,6 +10,7 @@ import {
   latLngBoundsToMapLibre,
   latLngsToLineString,
   safeFitBounds,
+  slicePolylineByLegIndex,
   trimPolylineByFraction,
   type LatLngTuple,
 } from '@/lib/maplibre/geo';
@@ -56,10 +57,151 @@ function markerTooltipHtml(label: string): string {
   return `<div class="marker-tooltip-inner">${escapeHtml(label)}</div>`;
 }
 
+type ClusterBreakdownTooltip = {
+  total: number;
+  rows: Array<{ color: string; colorName: string; count: number }>;
+};
+
+type ClusterTooltipController = {
+  hideTimer: ReturnType<typeof setTimeout> | null;
+  card: HTMLElement | null;
+  layer: HTMLElement | null;
+  hoveredEl: HTMLElement | null;
+  hoverKey: string;
+  anchorLat: number;
+  anchorLng: number;
+  iconAnchor: [number, number];
+  iconSize: [number, number];
+};
+
+function ensureClusterTooltipLayer(map: MaplibreMap): HTMLElement {
+  const container = map.getContainer();
+  let layer = container.querySelector(':scope > .map-cluster-tooltip-layer') as HTMLElement | null;
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.className = 'map-cluster-tooltip-layer';
+    container.appendChild(layer);
+  }
+  return layer;
+}
+
+function ensureClusterTooltipDock(map: MaplibreMap): HTMLElement {
+  const layer = ensureClusterTooltipLayer(map);
+  let dock = layer.querySelector(':scope > .map-cluster-tooltip-dock') as HTMLElement | null;
+  if (!dock) {
+    dock = document.createElement('div');
+    dock.className = 'map-cluster-tooltip-dock';
+    dock.setAttribute('aria-live', 'polite');
+    layer.appendChild(dock);
+  }
+  return dock;
+}
+
+const CLUSTER_HOVER_Z = 100_000;
+/** Match hit overlay to rendered cluster icon diameter. */
+const CLUSTER_HIT_SIZE_SCALE = 1;
+function dismissClusterHover(state: ClusterTooltipController) {
+  if (state.hideTimer) {
+    clearTimeout(state.hideTimer);
+    state.hideTimer = null;
+  }
+  hideClusterOverlayTooltip(state);
+  if (state.hoveredEl) {
+    restoreClusterMarker(state.hoveredEl);
+    state.hoveredEl = null;
+  }
+}
+
+function raiseClusterMarker(el: HTMLElement) {
+  el.classList.add('cluster-marker-raised');
+  el.style.zIndex = String(CLUSTER_HOVER_Z);
+}
+
+function restoreClusterMarker(el: HTMLElement) {
+  el.classList.remove('cluster-marker-raised');
+  el.style.zIndex = el.dataset.baseZIndex ?? '';
+}
+
+function hideClusterOverlayTooltip(state: ClusterTooltipController) {
+  if (state.hideTimer) {
+    clearTimeout(state.hideTimer);
+    state.hideTimer = null;
+  }
+  if (state.card) {
+    state.card.remove();
+    state.card = null;
+  }
+  state.layer?.querySelector('.map-cluster-tooltip-dock')?.classList.remove('is-visible');
+  state.hoverKey = '';
+}
+
+function buildClusterOverlayTooltipCard(data: ClusterBreakdownTooltip): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'map-cluster-tooltip-card';
+  const rows = data.rows
+    .map(
+      (row) =>
+        `<div class="map-cluster-tooltip-row"><span class="map-cluster-tooltip-dot" style="background:${escapeHtml(row.color)}"></span><span>${row.count.toLocaleString()} ${escapeHtml(row.colorName)}</span></div>`,
+    )
+    .join('');
+  card.innerHTML = `<div class="map-cluster-tooltip-title">${data.total.toLocaleString()} stops</div>${rows}`;
+  return card;
+}
+
+function clusterHoverKey(lat: number, lng: number) {
+  return `${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
+function showClusterOverlayTooltip(
+  map: MaplibreMap,
+  state: ClusterTooltipController,
+  data: ClusterBreakdownTooltip,
+  lat: number,
+  lng: number,
+  iconAnchor: [number, number],
+  iconSize: [number, number],
+  _markerEl: HTMLElement | null,
+) {
+  if (state.hideTimer) {
+    clearTimeout(state.hideTimer);
+    state.hideTimer = null;
+  }
+
+  const key = clusterHoverKey(lat, lng);
+  const dock = ensureClusterTooltipDock(map);
+  state.layer = dock.parentElement as HTMLElement;
+
+  if (state.card && state.hoverKey === key) {
+    state.anchorLat = lat;
+    state.anchorLng = lng;
+    state.iconAnchor = iconAnchor;
+    state.iconSize = iconSize;
+    state.card.classList.add('is-visible');
+    dock.classList.add('is-visible');
+    return;
+  }
+
+  hideClusterOverlayTooltip(state);
+  const card = buildClusterOverlayTooltipCard(data);
+  card.dataset.hoverKey = key;
+  dock.appendChild(card);
+  dock.classList.add('is-visible');
+  state.card = card;
+  state.hoverKey = key;
+  state.anchorLat = lat;
+  state.anchorLng = lng;
+  state.iconAnchor = iconAnchor;
+  state.iconSize = iconSize;
+  card.classList.add('is-visible');
+}
+
 interface MapMarker {
   lat: number;
   lng: number;
   label?: string;
+  tooltipHtml?: string;
+  touchTooltipFirst?: boolean;
+  clusterBreakdownTooltip?: ClusterBreakdownTooltip;
   color?: string;
   type?: 'home' | 'poi' | 'default';
   iconUrl?: string;
@@ -139,6 +281,8 @@ interface MapQuestMapProps {
   routeType?: 'fastest' | 'pedestrian' | 'bicycle';
   routeColor?: string;
   routePolyline?: { lat: number; lng: number }[];
+  /** Shape point indices for each leg start (MapQuest `legIndexes`); enables segment-only highlight. */
+  routeLegIndexes?: number[];
   routeSegments?: RouteSegment[];
   transitSegments?: TransitSegment[];
   onClick?: (lat: number, lng: number) => void;
@@ -157,6 +301,7 @@ interface MapQuestMapProps {
     west: number;
     maxZoom?: number;
     durationMs?: number;
+    fitKey?: number;
   };
   zoomToLocation?: { lat: number; lng: number; zoom?: number; key?: number | string };
   showTraffic?: boolean;
@@ -174,6 +319,8 @@ interface MapQuestMapProps {
   suppressRouteAutoFit?: boolean;
   flyToView?: { lat: number; lng: number; zoom: number; durationMs?: number; key?: number | string };
   lockBasemap?: 'road';
+  /** Hide the on-map MapQuest logo + Terms (use when footer branding is shown instead). */
+  hideMapAttribution?: boolean;
 }
 
 function swapBasemap(map: MaplibreMap, apiKey: string, tileType: MapQuestTileType) {
@@ -228,14 +375,15 @@ function createMarkerElement(
     iconSize = size as [number, number];
     iconAnchor = (marker.iconAnchor || [size[0] / 2, size[1] / 2]) as [number, number];
     const iconOp = typeof marker.iconOpacity === 'number' ? marker.iconOpacity : 1;
-    markerHtml = `
+    const imgHtml = `
           <img src="${marker.iconUrl}"
                width="${size[0]}"
                height="${size[1]}"
-               style="${iconCircular ? 'border-radius: 50%;' : ''} opacity: ${iconOp}; transition: opacity 0.15s ease;"
+               style="${iconCircular ? 'border-radius: 50%;' : ''} opacity: ${iconOp};"
                alt=""
           />
         `;
+    markerHtml = imgHtml;
   } else if (type === 'home') {
     iconSize = [40, 40];
     iconAnchor = [20, 20];
@@ -283,16 +431,27 @@ function createMarkerElement(
   // Anchor offset is applied through Marker({ anchor, offset }) so the pin keeps its size.
   const el = document.createElement('div');
   el.className = markerClassName;
-
   const body = document.createElement('div');
   body.className = 'modern-marker-body';
   body.innerHTML = markerHtml;
   el.appendChild(body);
 
-  if (marker.label) {
+  if (marker.clusterBreakdownTooltip) {
+    el.classList.add('cluster-marker-interactive');
+    const hitSize = marker.iconSize ?? [32, 32];
+    const hitDim = Math.round(Math.min(hitSize[0], hitSize[1]) * CLUSTER_HIT_SIZE_SCALE);
+    const hit = document.createElement('div');
+    hit.className = 'cluster-marker-hit';
+    hit.setAttribute('aria-hidden', 'true');
+    hit.style.width = `${hitDim}px`;
+    hit.style.height = `${hitDim}px`;
+    el.appendChild(hit);
+  }
+
+  if ((marker.tooltipHtml || marker.label) && !marker.clusterBreakdownTooltip) {
     const tooltip = document.createElement('div');
     tooltip.className = 'marker-tooltip-popup';
-    tooltip.innerHTML = markerTooltipHtml(marker.label);
+    tooltip.innerHTML = marker.tooltipHtml ?? markerTooltipHtml(marker.label!);
     el.appendChild(tooltip);
   }
 
@@ -307,6 +466,7 @@ function createMarkerElement(
             ? 0
             : 500;
   el.style.zIndex = String(zIndexOffset);
+  el.dataset.baseZIndex = String(zIndexOffset);
 
   return { el, iconAnchor };
 }
@@ -350,6 +510,7 @@ export default function MapQuestMap({
   routeType = 'fastest',
   routeColor,
   routePolyline,
+  routeLegIndexes,
   routeSegments,
   transitSegments,
   onClick,
@@ -378,6 +539,7 @@ export default function MapQuestMap({
   suppressRouteAutoFit = false,
   flyToView,
   lockBasemap,
+  hideMapAttribution = false,
 }: MapQuestMapProps) {
   const safeMarkers = markers ?? [];
   const safeCircles = circles ?? [];
@@ -402,11 +564,26 @@ export default function MapQuestMap({
   const polygonClickRef = useRef<MapPolygon[]>([]);
   const routePolylineRef = useRef(routePolyline);
   routePolylineRef.current = routePolyline;
+  const routeLegIndexesRef = useRef(routeLegIndexes);
+  routeLegIndexesRef.current = routeLegIndexes;
   const routeSegmentsRef = useRef(routeSegments);
   routeSegmentsRef.current = routeSegments;
   const [mapReady, setMapReady] = useState(false);
   const [viewRevision, setViewRevision] = useState(0);
   const basemapTypeRef = useRef<MapQuestTileType>('map');
+  const clusterTooltipRef = useRef<ClusterTooltipController>({
+    hideTimer: null,
+    card: null,
+    layer: null,
+    hoveredEl: null,
+    hoverKey: '',
+    anchorLat: 0,
+    anchorLng: 0,
+    iconAnchor: [14, 14],
+    iconSize: [32, 32],
+  });
+  const onBoundsChangeRef = useRef(onBoundsChange);
+  onBoundsChangeRef.current = onBoundsChange;
 
   const routeLocationKey = useMemo(() => {
     if (!routeStart || !routeEnd) return '';
@@ -494,7 +671,7 @@ export default function MapQuestMap({
 
     const handleReady = () => {
       if (!isMounted) return;
-      layoutMapQuestAttribution(map, darkMode);
+      layoutMapQuestAttribution(map, darkMode, { visible: !hideMapAttribution });
       setMapReady(true);
       if (!mapReadyNotifiedRef.current) {
         mapReadyNotifiedRef.current = true;
@@ -578,11 +755,13 @@ export default function MapQuestMap({
   }, [mapReady]);
 
   useEffect(() => {
-    if (!mapRef.current || !mapReady || !onBoundsChange) return;
+    if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
     const notifyBounds = () => {
+      const fn = onBoundsChangeRef.current;
+      if (!fn) return;
       const bounds = map.getBounds();
-      onBoundsChange({
+      fn({
         north: bounds.getNorth(),
         south: bounds.getSouth(),
         east: bounds.getEast(),
@@ -598,7 +777,7 @@ export default function MapQuestMap({
       map.off('moveend', notifyBounds);
       map.off('zoomend', notifyBounds);
     };
-  }, [mapReady, onBoundsChange]);
+  }, [mapReady]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -608,7 +787,7 @@ export default function MapQuestMap({
     if (tileType === basemapTypeRef.current && map.getSource('mapquest-raster')) {
       if (darkMode) container.classList.add('dark-map');
       else container.classList.remove('dark-map');
-      layoutMapQuestAttribution(map, darkMode);
+      layoutMapQuestAttribution(map, darkMode, { visible: !hideMapAttribution });
       return;
     }
     basemapTypeRef.current = tileType;
@@ -617,14 +796,14 @@ export default function MapQuestMap({
     swapBasemap(map, apiKey, tileType);
     window.setTimeout(() => {
       map.resize();
-      layoutMapQuestAttribution(map, darkMode);
+      layoutMapQuestAttribution(map, darkMode, { visible: !hideMapAttribution });
     }, 100);
-  }, [darkMode, mapReady, mapType, lockBasemap, apiKey]);
+  }, [darkMode, mapReady, mapType, lockBasemap, apiKey, hideMapAttribution]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
-    layoutMapQuestAttribution(mapRef.current, darkMode);
-  }, [mapReady, darkMode, mapType]);
+    layoutMapQuestAttribution(mapRef.current, darkMode, { visible: !hideMapAttribution });
+  }, [mapReady, darkMode, mapType, hideMapAttribution]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady || !flyToView) return;
@@ -649,7 +828,7 @@ export default function MapQuestMap({
       maxZoom: fitBounds.maxZoom,
       duration: fitBounds.durationMs ?? 1000,
     });
-  }, [fitBounds, mapReady]);
+  }, [fitBounds, fitBounds?.fitKey, mapReady]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady || !zoomToLocation) return;
@@ -662,9 +841,49 @@ export default function MapQuestMap({
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
     const map = mapRef.current;
+    const dismissClusterTooltip = () => {
+      const state = clusterTooltipRef.current;
+      if (state.hideTimer) {
+        clearTimeout(state.hideTimer);
+        state.hideTimer = null;
+      }
+      hideClusterOverlayTooltip(state);
+      if (state.hoveredEl) {
+        restoreClusterMarker(state.hoveredEl);
+        state.hoveredEl = null;
+      }
+      map.getContainer().querySelectorAll('.cluster-marker-raised').forEach((node) => {
+        restoreClusterMarker(node as HTMLElement);
+      });
+      map.getContainer().querySelectorAll('.cluster-tooltip-active').forEach((node) => {
+        node.classList.remove('cluster-tooltip-active');
+      });
+    };
+    map.on('movestart', dismissClusterTooltip);
+    map.on('zoomstart', dismissClusterTooltip);
+    map.on('dragstart', dismissClusterTooltip);
+    return () => {
+      map.off('movestart', dismissClusterTooltip);
+      map.off('zoomstart', dismissClusterTooltip);
+      map.off('dragstart', dismissClusterTooltip);
+    };
+  }, [mapReady]);
+
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    const map = mapRef.current;
+    const tooltipState = clusterTooltipRef.current;
+    if (tooltipState.hideTimer) {
+      clearTimeout(tooltipState.hideTimer);
+      tooltipState.hideTimer = null;
+    }
+    dismissClusterHover(tooltipState);
     clearMarkers(htmlMarkersRef.current);
 
     const sortedMarkers = [...safeMarkers].sort((a, b) => {
+      const za = a.zIndexOffset ?? 500;
+      const zb = b.zIndexOffset ?? 500;
+      if (za !== zb) return za - zb;
       const typeOrder = { poi: 0, default: 1, home: 2 };
       return (typeOrder[a.type || 'default'] || 1) - (typeOrder[b.type || 'default'] || 1);
     });
@@ -752,10 +971,69 @@ export default function MapQuestMap({
 
       const { el, iconAnchor } = createMarkerElement(marker, accentColor);
       const m = addHtmlMarker(map, marker.lat, marker.lng, el, iconAnchor, !!marker.draggable);
+      const iconSize = (marker.iconSize || [28, 28]) as [number, number];
+
+      if (marker.clusterBreakdownTooltip && !marker.touchTooltipFirst) {
+        const breakdown = marker.clusterBreakdownTooltip;
+        el.addEventListener('mouseenter', () => {
+          const state = clusterTooltipRef.current;
+          if (state.hoveredEl && state.hoveredEl !== el) {
+            restoreClusterMarker(state.hoveredEl);
+          }
+          state.hoveredEl = el;
+          raiseClusterMarker(el);
+          requestAnimationFrame(() => {
+            if (clusterTooltipRef.current.hoveredEl !== el) return;
+            showClusterOverlayTooltip(
+              map,
+              clusterTooltipRef.current,
+              breakdown,
+              marker.lat,
+              marker.lng,
+              iconAnchor,
+              iconSize,
+              el,
+            );
+          });
+        });
+        el.addEventListener('mouseleave', () => {
+          const state = clusterTooltipRef.current;
+          if (state.hoveredEl !== el) return;
+          dismissClusterHover(state);
+        });
+      }
 
       if (marker.onClick) {
         el.addEventListener('click', (e) => {
           e.stopPropagation();
+          if (marker.touchTooltipFirst) {
+            if (el.classList.contains('cluster-tooltip-active')) {
+              el.classList.remove('cluster-tooltip-active');
+              dismissClusterHover(clusterTooltipRef.current);
+              marker.onClick!();
+            } else {
+              map.getContainer().querySelectorAll('.cluster-tooltip-active').forEach((node) => {
+                node.classList.remove('cluster-tooltip-active');
+              });
+              el.classList.add('cluster-tooltip-active');
+              clusterTooltipRef.current.hoveredEl = el;
+              raiseClusterMarker(el);
+              if (marker.clusterBreakdownTooltip) {
+                showClusterOverlayTooltip(
+                  map,
+                  clusterTooltipRef.current,
+                  marker.clusterBreakdownTooltip,
+                  marker.lat,
+                  marker.lng,
+                  iconAnchor,
+                  iconSize,
+                  el,
+                );
+              }
+            }
+            return;
+          }
+          dismissClusterHover(clusterTooltipRef.current);
           marker.onClick!();
         });
       }
@@ -777,10 +1055,11 @@ export default function MapQuestMap({
 
       htmlMarkersRef.current.push(m);
     }
-  }, [safeMarkers, accentColor, mapReady, clusterMarkers, clusterRadiusPx, viewRevision]);
+
+  }, [safeMarkers, accentColor, mapReady, clusterMarkers, clusterRadiusPx, clusterMarkers ? viewRevision : 0]);
 
   useEffect(() => {
-    if (!mapRef.current || !mapReady) return;
+    if (!mapRef.current || !mapReady || !clusterMarkers) return;
     const map = mapRef.current;
     let raf = 0;
     const bump = () => {
@@ -794,7 +1073,7 @@ export default function MapQuestMap({
       map.off('zoomend', bump);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [mapReady]);
+  }, [mapReady, clusterMarkers]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -1095,6 +1374,11 @@ export default function MapQuestMap({
     if (highlightedSegment === null || safeStops.length < 2) return;
     if (highlightedSegment < 0 || highlightedSegment >= safeStops.length - 1) return;
 
+    // Precomputed multi-stop shape — polyline effect draws the leg slice locally.
+    const poly = routePolylineRef.current;
+    const legIdx = routeLegIndexesRef.current;
+    if (poly && poly.length >= 2 && legIdx && legIdx.length > 0) return;
+
     const segmentStart = safeStops[highlightedSegment];
     const segmentEnd = safeStops[highlightedSegment + 1];
 
@@ -1285,15 +1569,35 @@ export default function MapQuestMap({
 
     if (routePolyline && routePolyline.length >= 2) {
       clearAllRouteLayers(map);
+      removeLayersAndSource(map, 'mq-highlight-');
 
-      const latLngs = routePolyline
+      const legCount = safeStops.length >= 2 ? safeStops.length - 1 : 0;
+      const isLegHighlight =
+        highlightedSegment !== null &&
+        legCount > 0 &&
+        highlightedSegment >= 0 &&
+        highlightedSegment < legCount;
+      const showSingleLeg =
+        isLegHighlight && routeLegIndexes != null && routeLegIndexes.length > 0;
+
+      if (isLegHighlight && !showSingleLeg) {
+        // No leg index metadata — highlight effect fetches the segment route.
+        clearAllRouteLayers(map);
+        return;
+      }
+
+      const pointsToDraw = showSingleLeg
+        ? slicePolylineByLegIndex(routePolyline, routeLegIndexes!, highlightedSegment!, legCount)
+        : routePolyline;
+
+      const latLngs = pointsToDraw
         .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
         .map((p) => [p.lat, p.lng] as LatLngTuple);
       if (latLngs.length >= 2) {
         try {
           drawSimpleRoutePolyline(map, latLngs, {
-            showTraffic,
-            routeColor,
+            showTraffic: showSingleLeg ? false : showTraffic,
+            routeColor: showSingleLeg ? accentColor || routeColor : routeColor,
             accentColor,
             onRouteLineClick,
             onRouteLineDrag,
@@ -1301,7 +1605,10 @@ export default function MapQuestMap({
           });
 
           if (!suppressRouteAutoFit && !fitBounds) {
-            safeFitBounds(map, coordsToBounds(latLngs), { padding: 50 });
+            safeFitBounds(map, coordsToBounds(latLngs), {
+              padding: showSingleLeg ? 80 : 50,
+              maxZoom: showSingleLeg ? 15 : undefined,
+            });
           }
         } catch (error) {
           console.error('[MapQuestMap] failed drawing route polyline:', error);
@@ -1313,6 +1620,7 @@ export default function MapQuestMap({
     clearAllRouteLayers(map);
   }, [
     routePolyline,
+    routeLegIndexes,
     routeSegments,
     transitSegments,
     routeColor,
@@ -1327,6 +1635,8 @@ export default function MapQuestMap({
     animateRouteReveal,
     suppressRouteAutoFit,
     fitBounds,
+    highlightedSegment,
+    safeStops.length,
   ]);
 
   useEffect(() => {

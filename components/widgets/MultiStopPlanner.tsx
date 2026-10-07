@@ -88,6 +88,7 @@ interface RouteResult {
   totalTime: number;
   legs: LegInfo[];
   shapePoints?: { lat: number; lng: number }[];
+  legIndexes?: number[];
 }
 
 function buildLegInfos(validStops: Stop[], apiLegs: { distance?: number; time?: number }[]): LegInfo[] {
@@ -135,6 +136,7 @@ async function fetchRouteForStops(
     totalTime: directions.time,
     legs,
     shapePoints: directions.shapePoints,
+    legIndexes: directions.legIndexes,
   };
 }
 
@@ -773,6 +775,7 @@ export default function MultiStopPlanner({
           totalTime: optimized!.time,
           legs: buildLegInfos(optimizedStops, optimized!.legs || []),
           shapePoints: optimized!.shapePoints,
+          legIndexes: optimized!.legIndexes,
         };
       } else {
         console.log('🔄 Optimizing stop order using local search...');
@@ -1035,6 +1038,7 @@ export default function MultiStopPlanner({
             markers={markers}
             showRoute={!!routeResult && validStops.length >= 2}
             routePolyline={routePolyline}
+            routeLegIndexes={routeResult?.legIndexes}
             routeStart={mapRouteStart}
             routeEnd={mapRouteEnd}
             waypoints={mapWaypoints}

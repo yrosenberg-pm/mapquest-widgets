@@ -84,7 +84,7 @@ type WidgetId =
   | 'comp-sales'
   | 'streetview-showcase';
 
-const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike']);
+const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner']);
 const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner']);
 
 type MenuSection = 'routing' | 'other' | 'branded';
@@ -96,7 +96,6 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'multistop' as WidgetId, name: 'Multi-Stop Planner', description: 'Optimize routes with multiple destinations', section: 'routing', menuLucide: Route },
   { id: 'listing-tour' as WidgetId, name: 'Listing Tour Planner', description: 'Multi-day open house routing for listing agents', section: 'routing', menuLucide: House },
   { id: 'truck' as WidgetId, name: 'Truck Safe Routing', description: 'Commercial vehicle route planning with restrictions', section: 'routing', menuLucide: Truck },
-  { id: 'truck-route-planner' as WidgetId, name: 'Zonar Route Planner', description: 'School-bus truck routing demo for Zonar × MapQuest', section: 'routing', menuLucide: Truck, menuIcon: '/brand/zonar-logo.png?v=5' },
   { id: 'traffic' as WidgetId, name: 'Live Traffic', description: 'Real-time incidents and congestion', section: 'routing', menuLucide: AlertTriangle },
   { id: 'route-weather' as WidgetId, name: 'Route Weather Alerts', description: 'Forecast + severe alerts along a route', section: 'routing', menuLucide: CloudSun },
   { id: 'transit' as WidgetId, name: 'Public Transit Departures', description: 'Real-time station boards & departure times', section: 'routing', menuLucide: Train },
@@ -122,6 +121,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'starbucks' as WidgetId, name: 'Starbucks Finder', description: 'Find nearby Starbucks locations', section: 'branded', menuLucide: Coffee },
   { id: 'instacart' as WidgetId, name: 'Instacart Delivery', description: 'Grocery delivery tracking with Instacart branding', section: 'branded', menuIcon: '/brand/instacart-carrot.svg' },
   { id: 'citibike' as WidgetId, name: 'Citi Bike Finder', description: 'Find available bikes and docking stations', section: 'branded', menuIcon: '/brand/citibike-logo.svg' },
+  { id: 'truck-route-planner' as WidgetId, name: 'Zonar Route Planner', description: 'School-bus truck routing demo for Zonar × MapQuest', section: 'branded', isCustom: true, menuIcon: '/brand/zonar-logo.png?v=5' },
 ];
 
 const SECTION_LABELS: Record<MenuSection, string> = {

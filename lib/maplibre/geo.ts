@@ -104,6 +104,28 @@ export function haversineMi(lat1: number, lng1: number, lat2: number, lng2: numb
 }
 
 /** Trim a polyline to a fraction of its path length (0–1). Coords are [lat, lng]. */
+/** Slice a decoded route shape to one leg using MapQuest `legIndexes` (shape point indices). */
+export function slicePolylineByLegIndex(
+  polyline: LatLng[],
+  legIndexes: number[],
+  legIndex: number,
+  legCount: number,
+): LatLng[] {
+  if (polyline.length < 2 || legCount < 1 || legIndex < 0 || legIndex >= legCount) return polyline;
+  if (legIndexes.length < 1) return polyline;
+
+  const start = Math.max(0, Math.min(polyline.length - 1, legIndexes[legIndex] ?? 0));
+  const end =
+    legIndex === legCount - 1
+      ? polyline.length - 1
+      : Math.max(
+          start + 1,
+          Math.min(polyline.length - 1, legIndexes[legIndex + 1] ?? polyline.length - 1),
+        );
+
+  return polyline.slice(start, end + 1);
+}
+
 export function trimPolylineByFraction(latLngs: LatLngTuple[], fraction: number): LatLngTuple[] {
   if (latLngs.length === 0) return [];
   if (fraction <= 0) return [latLngs[0]];

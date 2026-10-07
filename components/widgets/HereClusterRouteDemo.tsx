@@ -26,31 +26,28 @@ import {
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import { markerPinColorForIndex } from '@/lib/mapMarkerIcons';
 import {
-  boundsForExpandedCluster,
   boundsForRouteWithSurroundingPins,
   boundsFromPoints,
   buildClusterMapMarkers,
+  DEMO_CLUSTER_MARKER_Z,
   largeNumberedPinIconUrl,
   type ClusterMapMarker,
+  type ClusterStyleMode,
 } from '@/lib/clusterMapMarkers';
 
 const mapQuestApiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
-const POINT_COUNTS = [250, 1000, 5000, 20000] as const;
+const POINT_COUNTS = [250, 1000, 2000, 5000] as const;
 const METRO_ZOOM = 11;
 const REGIONAL_ZOOM = 6;
 const NATIONWIDE_CENTER = { lat: 39.5, lng: -98.35 };
 const NATIONWIDE_ZOOM = 4;
 const CLUSTER_EXPAND_MIN_ZOOM = 9;
-/** Clusters this size or smaller dissolve into individual/spider pins on click. */
-const CLUSTER_FULL_EXPAND_MAX = 10;
-/** Clusters at or above this size zoom in steps so sub-clusters can unfold. */
-const CLUSTER_INCREMENTAL_MIN = 25;
 const CLUSTER_MAX_ZOOM = 18;
-const CLUSTER_ZOOM_STEP = 2;
+const CLUSTER_CLICK_FIT_PADDING_DEG = 0.0012;
 const MAP_ZOOM_DURATION_MS = 400;
 const DEFAULT_CLUSTER_RADIUS_PX = 40;
-const DEFAULT_MIN_CLUSTER_SIZE = 5;
+const DEFAULT_MIN_CLUSTER_SIZE = 3;
 const MAX_CLUSTER_ZOOM_MOBILE = 12;
 const MAX_CLUSTER_ZOOM_DESKTOP = 12;
 const CLUSTER_REBUILD_DEBOUNCE_MS = 80;
@@ -87,13 +84,14 @@ export default function HereClusterRouteDemo({
   companyLogo,
   fontFamily,
 }: HereClusterRouteDemoProps) {
-  const [pointCount, setPointCount] = useState<number>(1000);
+  const [pointCount, setPointCount] = useState<number>(2000);
   const [eps, setEps] = useState(DEFAULT_CLUSTER_RADIUS_PX);
   const [minWeight, setMinWeight] = useState(DEFAULT_MIN_CLUSTER_SIZE);
   const [routeStopCount, setRouteStopCount] = useState(10);
   const [viewMetroId, setViewMetroId] = useState(DEFAULT_CLUSTER_METRO.id);
   const [devicePreview, setDevicePreview] = useState<DevicePreviewMode>('desktop');
   const [mapViewPreset, setMapViewPreset] = useState<MapViewPreset>('metro');
+  const [clusterStyle, setClusterStyle] = useState<ClusterStyleMode>('all-pins');
   const [zoomLevel, setZoomLevel] = useState(METRO_ZOOM);
   const [mapBounds, setMapBounds] = useState<{
     north: number;
@@ -126,6 +124,7 @@ export default function HereClusterRouteDemo({
         west: number;
         maxZoom?: number;
         durationMs?: number;
+        fitKey?: number;
       }
     | undefined
   >();
@@ -166,40 +165,39 @@ export default function HereClusterRouteDemo({
     });
   }, []);
 
-  const expandClusterFully = useCallback(
-    (members: ClusterDemoStop[]) => {
-      setExpandedSpiderGroups((prev) => {
-        const expandedIds = new Set(prev.flatMap((g) => g.map((s) => s.id)));
-        if (members.every((m) => expandedIds.has(m.id))) return prev;
-        return [...prev, members];
-      });
-      setFitBounds({
-        ...boundsForExpandedCluster(members, Math.max(zoomLevel, 16)),
-        maxZoom: CLUSTER_MAX_ZOOM,
-        durationMs: MAP_ZOOM_DURATION_MS,
+  const handleMapBoundsChange = useCallback(
+    (b: { north: number; south: number; east: number; west: number; zoom: number }) => {
+      setZoomLevel((prev) => (Math.abs(prev - b.zoom) > 0.001 ? b.zoom : prev));
+      setMapBounds((prev) => {
+        if (
+          prev &&
+          Math.abs(prev.north - b.north) < 1e-7 &&
+          Math.abs(prev.south - b.south) < 1e-7 &&
+          Math.abs(prev.east - b.east) < 1e-7 &&
+          Math.abs(prev.west - b.west) < 1e-7
+        ) {
+          return prev;
+        }
+        return { north: b.north, south: b.south, east: b.east, west: b.west };
       });
     },
-    [zoomLevel],
+    [],
   );
 
   const handleClusterTap = useCallback(
-    (weight: number, lat: number, lng: number, members: ClusterDemoStop[]) => {
+    (_weight: number, _lat: number, _lng: number, members: ClusterDemoStop[]) => {
+      if (members.length === 0) return;
       setFitBounds(undefined);
-
-      const atMaxZoom = zoomLevel >= CLUSTER_MAX_ZOOM - 0.5;
-      const shouldFullyExpand =
-        weight <= CLUSTER_FULL_EXPAND_MAX ||
-        (atMaxZoom && weight < CLUSTER_INCREMENTAL_MIN);
-
-      if (shouldFullyExpand) {
-        expandClusterFully(members);
-        return;
-      }
-
-      const nextZoom = Math.min(CLUSTER_MAX_ZOOM, Math.floor(zoomLevel) + CLUSTER_ZOOM_STEP);
-      flyTo(lat, lng, nextZoom);
+      requestAnimationFrame(() => {
+        setFitBounds({
+          ...boundsFromPoints(members, CLUSTER_CLICK_FIT_PADDING_DEG),
+          maxZoom: CLUSTER_MAX_ZOOM,
+          durationMs: MAP_ZOOM_DURATION_MS,
+          fitKey: Date.now(),
+        });
+      });
     },
-    [zoomLevel, expandClusterFully, flyTo],
+    [],
   );
 
   const goToViewPreset = useCallback(
@@ -271,6 +269,8 @@ export default function HereClusterRouteDemo({
         eps,
         minWeight,
         accentColor,
+        clusterStyle,
+        touchTooltipFirst: clusterStyle === 'all-pins' && isMobilePreview,
         onClusterTap: handleClusterTap,
         spiderGroups: expandedSpiderGroups,
         maxClusterZoom,
@@ -293,6 +293,8 @@ export default function HereClusterRouteDemo({
     expandedSpiderGroups,
     maxClusterZoom,
     mapBounds,
+    clusterStyle,
+    isMobilePreview,
   ]);
 
   const mapMarkers = useMemo(() => {
@@ -302,7 +304,7 @@ export default function HereClusterRouteDemo({
       ? clusterMarkers.map((m) => ({
           ...m,
           iconOpacity: 0.92,
-          zIndexOffset: 350,
+          zIndexOffset: DEMO_CLUSTER_MARKER_Z,
         }))
       : [];
 
@@ -553,9 +555,45 @@ export default function HereClusterRouteDemo({
         </div>
         {!isDevicePreview && (
           <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
-            Small clusters (≤10) expand fully on click; larger ones zoom in two levels at a time.
+            Hover a cluster to see its breakdown in the bottom-right panel; click to zoom in on its pins.
           </p>
         )}
+      </div>
+
+      <div className="mb-3">
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-muted)' }}>
+          Cluster style
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              { id: 'by-color' as const, label: 'By color' },
+              { id: 'all-pins' as const, label: 'All pins' },
+              { id: 'off' as const, label: 'Off' },
+            ] as const
+          ).map(({ id, label }) => {
+            const active = clusterStyle === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                disabled={controlsDisabled}
+                onClick={() => {
+                  setClusterStyle(id);
+                  setExpandedSpiderGroups([]);
+                }}
+                className="flex-1 min-w-[4.5rem] px-2 py-1.5 rounded-lg text-xs font-medium transition-colors hover:opacity-80 disabled:opacity-40"
+                style={{
+                  background: active ? accentColor : 'var(--bg-panel)',
+                  color: active ? 'white' : 'var(--text-muted)',
+                  border: `2px solid ${active ? accentColor : 'var(--border-subtle)'}`,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="mb-3">
@@ -623,6 +661,10 @@ export default function HereClusterRouteDemo({
       >
         <div>Pins loaded: {stops.length.toLocaleString()}</div>
         <div>Map markers: {clusterMarkers.length.toLocaleString()}</div>
+        <div>
+          Cluster style:{' '}
+          {clusterStyle === 'by-color' ? 'By color' : clusterStyle === 'all-pins' ? 'All pins' : 'Off'}
+        </div>
         <div>Zoom: {zoomLevel.toFixed(1)}</div>
         {rebuildMs != null && <div>Last rebuild: {rebuildMs} ms</div>}
         {routeMetrics && (
@@ -775,15 +817,7 @@ export default function HereClusterRouteDemo({
         routeColor={accentColor}
         fitBounds={fitBounds}
         flyToView={flyToView}
-        onBoundsChange={(b) => {
-          setZoomLevel(b.zoom);
-          setMapBounds({
-            north: b.north,
-            south: b.south,
-            east: b.east,
-            west: b.west,
-          });
-        }}
+        onBoundsChange={handleMapBoundsChange}
       />
 
       {routeActive && (
@@ -896,7 +930,7 @@ export default function HereClusterRouteDemo({
       {!isDevicePreview && (
         <WidgetHeader
           title="Cluster & Route Demo"
-          subtitle="Zoom in to split clusters, zoom out to merge — or click a cluster to drill in."
+          subtitle="Hover clusters for a bottom-right breakdown panel; click to zoom in. Zoom in/out to split or merge clusters."
           variant="impressive"
           layout="inline"
           icon={<Layers className="w-4 h-4" />}

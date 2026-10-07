@@ -3,6 +3,7 @@ export const MAPQUEST_MAP_STYLE_ID = 'mapquest-modern-styles-v6';
 export function getMapQuestMapInjectedCss(): string {
   return `
       .maplibregl-map {
+        position: relative !important;
         font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
       }
 
@@ -114,6 +115,12 @@ export function getMapQuestMapInjectedCss(): string {
       .maplibregl-marker {
         overflow: visible !important;
       }
+      .maplibregl-marker:has(.cluster-marker-interactive) {
+        pointer-events: auto !important;
+      }
+      .maplibregl-marker.cluster-marker-raised {
+        z-index: 100000 !important;
+      }
       .modern-marker {
         cursor: pointer;
         line-height: 0;
@@ -172,8 +179,103 @@ export function getMapQuestMapInjectedCss(): string {
         z-index: 1;
       }
       .modern-marker:hover .marker-tooltip-popup,
-      .modern-marker:focus-within .marker-tooltip-popup {
+      .modern-marker:focus-within .marker-tooltip-popup,
+      .modern-marker.cluster-tooltip-active .marker-tooltip-popup {
         opacity: 1;
+      }
+
+      .modern-marker.cluster-marker-interactive {
+        position: relative;
+        pointer-events: auto;
+        cursor: pointer;
+      }
+      .cluster-marker-hit {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 2;
+        background: transparent;
+        border-radius: 50%;
+        box-sizing: border-box;
+      }
+      .modern-marker.cluster-marker-interactive .modern-marker-body {
+        position: relative;
+        z-index: 1;
+        pointer-events: none;
+      }
+      .modern-marker.cluster-marker-interactive .modern-marker-body img {
+        pointer-events: none;
+        user-select: none;
+      }
+
+      .map-cluster-tooltip-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 100001 !important;
+        overflow: visible;
+      }
+      .map-cluster-tooltip-dock {
+        position: absolute;
+        bottom: 36px;
+        right: 14px;
+        pointer-events: none;
+        z-index: 100002 !important;
+        max-width: min(320px, calc(100% - 28px));
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.12s ease;
+      }
+      .map-cluster-tooltip-dock.is-visible {
+        opacity: 1;
+        visibility: visible;
+      }
+      .map-cluster-tooltip-card {
+        position: relative;
+        pointer-events: none;
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 14px 16px;
+        border: 1px solid rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12), 0 12px 28px rgba(0, 0, 0, 0.08);
+        color: #111827;
+        min-width: 160px;
+        width: max-content;
+        max-width: min(320px, calc(100vw - 48px));
+      }
+      .dark-map .map-cluster-tooltip-card {
+        background: #1f2937;
+        color: #f9fafb;
+        border-color: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 12px 28px rgba(0, 0, 0, 0.25);
+      }
+      .map-cluster-tooltip-card.is-visible {
+        opacity: 1;
+      }
+      .map-cluster-tooltip-title {
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.25;
+        margin-bottom: 10px;
+      }
+      .map-cluster-tooltip-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 15px;
+        font-weight: 400;
+        line-height: 1.3;
+      }
+      .map-cluster-tooltip-row + .map-cluster-tooltip-row {
+        margin-top: 8px;
+      }
+      .map-cluster-tooltip-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
       }
 
       .marker-click-popup {
