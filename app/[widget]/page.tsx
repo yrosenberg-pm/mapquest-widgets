@@ -2,7 +2,9 @@
 'use client';
 
 import { useParams, useSearchParams } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import MapStylesGetStylePanel from '@/components/gallery/MapStylesGetStylePanel';
+import type { MapStyleConfigEntry } from '@/lib/mapStyles/config';
 import { Loader2 } from 'lucide-react';
 import { setApiKey, setSearchContext } from '@/lib/mapquest';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
@@ -40,6 +42,7 @@ import {
   NeighborhoodProfile,
   ComparableSalesMap,
   MapillaryStreetViewShowcase,
+  MapStylesWidget,
 } from '@/components/widgets';
 
 const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
@@ -75,6 +78,7 @@ const VALID_WIDGETS = [
   'neighborhood-profile',
   'comp-sales',
   'streetview-showcase',
+  'map-styles',
 ] as const;
 
 type WidgetId = typeof VALID_WIDGETS[number];
@@ -94,6 +98,10 @@ export default function WidgetPage() {
   const [demoRegionId, setDemoRegionId] = useState(DEFAULT_DEMO_REGION_ID);
   const [effectiveApiKey, setEffectiveApiKey] = useState(ENV_API_KEY);
   const [mounted, setMounted] = useState(false);
+  const [mapStylesSelection, setMapStylesSelection] = useState<MapStyleConfigEntry | null>(null);
+  const handleMapStyleSelection = useCallback((entry: MapStyleConfigEntry) => {
+    setMapStylesSelection(entry);
+  }, []);
 
   // Auto-scale widgets to fit on iPad/tablet (prevents horizontal clipping for wide widgets).
   const widgetViewportRef = useRef<HTMLDivElement | null>(null);
@@ -178,7 +186,12 @@ export default function WidgetPage() {
       const isLargeDesktop = window.matchMedia?.('(min-width: 1025px)').matches ?? true;
       const isBigWidget = false; // All widgets now render at 1:1 scale
       const cap = isTablet ? 0.56 : isLargeDesktop && isBigWidget ? 0.9 : 1;
-      const nextScale = Math.min(cap, availableWidth / naturalWidth);
+      let nextScale = Math.min(cap, availableWidth / naturalWidth);
+      if (widgetId === 'map-styles') {
+        setWidgetScale(1);
+        setScaledHeight(null);
+        return;
+      }
       setWidgetScale(nextScale);
     };
 
@@ -366,6 +379,14 @@ export default function WidgetPage() {
         return <NeighborhoodProfile key={widgetKey} {...commonProps} {...loc} />;
       case 'comp-sales':
         return <ComparableSalesMap key={widgetKey} {...commonProps} {...loc} />;
+      case 'map-styles':
+        return (
+          <MapStylesWidget
+            key={widgetKey}
+            {...commonProps}
+            onStyleSelectionChange={handleMapStyleSelection}
+          />
+        );
       case 'streetview-showcase':
         return (
           <MapillaryStreetViewShowcase
@@ -387,6 +408,18 @@ export default function WidgetPage() {
   };
 
   const isStreetViewRoute = widgetId === 'streetview-showcase';
+  const isMapStylesRoute = widgetId === 'map-styles';
+
+  const measureBoxStyle = {
+    position: 'absolute' as const,
+    top: 0,
+    left: '50%',
+    transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
+    transformOrigin: 'top center',
+    transition: 'transform 180ms ease',
+    width: isStreetViewRoute ? '100%' : 'fit-content',
+    maxWidth: isStreetViewRoute ? undefined : '100%',
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-2 md:p-4">
@@ -394,33 +427,51 @@ export default function WidgetPage() {
         <div
           className="w-full relative"
           style={{
-            height: scaledHeight != null ? `${scaledHeight}px` : undefined,
+            height: !isMapStylesRoute && scaledHeight != null ? `${scaledHeight}px` : undefined,
             transition: 'height 180ms ease',
           }}
         >
-          <div
-            className={
-              isStreetViewRoute
-                ? 'w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]'
-                : 'w-full md:w-auto'
-            }
-            ref={widgetMeasureRef}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: '50%',
-              transform: widgetScale < 1 ? `translateX(-50%) scale(${widgetScale})` : 'translateX(-50%)',
-              transformOrigin: 'top center',
-              transition: 'transform 180ms ease',
-              borderRadius: isStreetViewRoute ? streetViewBorderRadius(borderRadius) : borderRadius,
-              boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-              overflow: 'hidden',
-              width: isStreetViewRoute ? '100%' : 'fit-content',
-              maxWidth: isStreetViewRoute ? undefined : '100%',
-            }}
-          >
-            {renderWidget()}
-          </div>
+          {isMapStylesRoute ? (
+            <div
+              ref={widgetMeasureRef}
+              className="mx-auto flex w-full min-w-0 max-w-[1560px] flex-col gap-4 xl:flex-row xl:items-start xl:justify-center"
+            >
+              <div
+                className="w-full min-w-0 xl:flex-1 xl:max-w-[1120px]"
+                style={{
+                  borderRadius,
+                  boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                  overflow: 'hidden',
+                }}
+              >
+                {renderWidget()}
+              </div>
+              <MapStylesGetStylePanel
+                selection={mapStylesSelection}
+                darkMode={darkMode}
+                accentColor={accentColor}
+                borderRadius={borderRadius}
+                className="w-full min-w-0 xl:w-[380px] xl:flex-shrink-0"
+              />
+            </div>
+          ) : (
+            <div
+              className={
+                isStreetViewRoute
+                  ? 'w-full max-w-full overflow-hidden md:max-w-[min(2400px,calc(75%_-_225px))]'
+                  : 'w-full md:w-auto'
+              }
+              ref={widgetMeasureRef}
+              style={{
+                ...measureBoxStyle,
+                borderRadius: isStreetViewRoute ? streetViewBorderRadius(borderRadius) : borderRadius,
+                boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                overflow: 'hidden',
+              }}
+            >
+              {renderWidget()}
+            </div>
+          )}
         </div>
       </div>
     </div>

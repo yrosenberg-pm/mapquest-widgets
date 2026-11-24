@@ -34,6 +34,7 @@ export { default as MultiZoneCoverage } from './MultiZoneCoverage';
 export { default as PropertyIntelligence } from './PropertyIntelligence';
 export { default as NeighborhoodProfile } from './NeighborhoodProfile';
 export { default as ComparableSalesMap } from './ComparableSalesMap';
+export { default as MapStylesWidget } from './MapStylesWidget';
 
 // Prism Design System Components
 export { default as WidgetShell } from './WidgetShell';

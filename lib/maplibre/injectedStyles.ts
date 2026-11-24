@@ -38,6 +38,13 @@ export function getMapQuestMapInjectedCss(): string {
       .dark-map .maplibregl-ctrl-group button:hover {
         background: #374151 !important;
       }
+      .dark-map .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+        filter: brightness(0) invert(1) !important;
+        opacity: 0.92 !important;
+      }
+      .dark-map .maplibregl-ctrl-group button:disabled .maplibregl-ctrl-icon {
+        opacity: 0.35 !important;
+      }
 
       .maplibregl-ctrl-attrib {
         background: rgba(255,255,255,0.85) !important;

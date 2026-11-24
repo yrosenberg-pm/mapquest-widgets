@@ -36,9 +36,12 @@ import {
   NeighborhoodProfile,
   ComparableSalesMap,
   MapillaryStreetViewShowcase,
+  MapStylesWidget,
 } from '@/components/widgets';
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 import TruckRoutePlannerApiPanel from '@/components/gallery/TruckRoutePlannerApiPanel';
+import MapStylesGetStylePanel from '@/components/gallery/MapStylesGetStylePanel';
+import type { MapStyleConfigEntry } from '@/lib/mapStyles/config';
 import { ZONAR_BRAND, type TruckRouteTraceState } from '@/lib/truckRoutePlannerTrace';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 import { DEMO_REGIONS, DEFAULT_DEMO_REGION_ID, getDemoRegion, REGION_LOCKED_WIDGETS } from '@/lib/demo/demoRegions';
@@ -82,7 +85,8 @@ type WidgetId =
   | 'property-intel'
   | 'neighborhood-profile'
   | 'comp-sales'
-  | 'streetview-showcase';
+  | 'streetview-showcase'
+  | 'map-styles';
 
 const BRANDED_IDS: ReadonlySet<WidgetId> = new Set(['nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner']);
 const INTERNAL_IDS: ReadonlySet<WidgetId> = new Set(['construction', 'contractor-finder', 'property-intel', 'neighborhood-profile', 'comp-sales', 'nhl', 'starbucks', 'instacart', 'citibike', 'truck-route-planner']);
@@ -102,6 +106,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
   { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
+  { id: 'map-styles' as WidgetId, name: 'Map Styles', description: 'Switch between MapQuest vector basemap styles on a live map', section: 'other', menuLucide: Layers },
   { id: 'here-cluster-route' as WidgetId, name: 'Cluster & Route Demo', description: 'Marker clustering with multi-stop routing', section: 'other', menuLucide: Layers },
   { id: 'zone-coverage' as WidgetId, name: 'Coverage Zone Builder', description: 'Multi-zone boundary visualization tool', section: 'other', menuLucide: Layers },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
@@ -250,6 +255,10 @@ function HomeContent() {
     result: null,
     error: null,
   });
+  const [mapStylesSelection, setMapStylesSelection] = useState<MapStyleConfigEntry | null>(null);
+  const handleMapStyleSelection = useCallback((entry: MapStyleConfigEntry) => {
+    setMapStylesSelection(entry);
+  }, []);
 
   // Load preferences from localStorage on mount
   useEffect(() => {
@@ -344,7 +353,12 @@ function HomeContent() {
       const isTablet = window.matchMedia?.('(min-width: 768px) and (max-width: 1024px)').matches ?? false;
       const isLargeDesktop = window.matchMedia?.('(min-width: 1025px)').matches ?? true;
       const cap = isTablet ? 0.56 : isLargeDesktop ? 0.9 : 1;
-      const nextScale = Math.min(cap, availableWidth / naturalWidth);
+      let nextScale = Math.min(cap, availableWidth / naturalWidth);
+      if (activeWidget === 'map-styles') {
+        setWidgetScale(1);
+        setScaledHeight(null);
+        return;
+      }
       setWidgetScale(nextScale);
       setScaledHeight(Math.round(naturalHeight * nextScale));
     };
@@ -473,7 +487,9 @@ function HomeContent() {
             ? 840
             : activeWidget === 'truck-route-planner'
               ? 920
-              : 640;
+              : activeWidget === 'map-styles'
+                ? 820
+                : 640;
 
       return {
         src: url.toString(),
@@ -723,6 +739,14 @@ function HomeContent() {
         return <NeighborhoodProfile key={widgetKey} {...commonProps} {...loc} />;
       case 'comp-sales':
         return <ComparableSalesMap key={widgetKey} {...commonProps} {...loc} />;
+      case 'map-styles':
+        return (
+          <MapStylesWidget
+            key={widgetKey}
+            {...commonProps}
+            onStyleSelectionChange={handleMapStyleSelection}
+          />
+        );
       default:
         return null;
     }
@@ -730,6 +754,7 @@ function HomeContent() {
 
   // Street View is the only widget that should use a full-width measure box; others keep fit-content (intrinsic size).
   const isTruckRouteDemo = activeWidget === 'truck-route-planner';
+  const isMapStylesDemo = activeWidget === 'map-styles';
   const isStreetViewPlayground = activeWidget === 'streetview-showcase';
 
   // Embed mode: show only the widget without header/menu
@@ -1024,19 +1049,42 @@ function HomeContent() {
 
             {/* Widget Display (auto-scales on iPad/tablet to prevent clipping) */}
             <div
-              className={`relative z-10 flex w-full justify-center ${isTruckRouteDemo ? 'px-2' : ''} ${showSettings ? 'invisible pointer-events-none' : ''}`}
+              className={`relative z-10 flex w-full justify-center ${isTruckRouteDemo ? 'px-2' : ''} ${isMapStylesDemo ? 'px-1' : ''} ${showSettings ? 'invisible pointer-events-none' : ''}`}
               aria-hidden={showSettings}
               ref={widgetViewportRef}
             >
               <div
                 className="relative w-full"
                 style={{
-                  height: scaledHeight != null ? `${scaledHeight}px` : undefined,
-                  minHeight: scaledHeight != null ? `${scaledHeight}px` : undefined,
+                  height: !isMapStylesDemo && scaledHeight != null ? `${scaledHeight}px` : undefined,
+                  minHeight: !isMapStylesDemo && scaledHeight != null ? `${scaledHeight}px` : undefined,
                   transition: 'height 180ms ease',
                 }}
               >
-                {isTruckRouteDemo ? (
+                {isMapStylesDemo ? (
+                  <div
+                    ref={widgetMeasureRef}
+                    className="mx-auto flex w-full min-w-0 max-w-[1560px] flex-col gap-5 xl:flex-row xl:items-start xl:justify-center"
+                  >
+                    <div
+                      className="w-full min-w-0 xl:flex-1 xl:max-w-[1120px]"
+                      style={{
+                        borderRadius,
+                        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {renderWidget()}
+                    </div>
+                    <MapStylesGetStylePanel
+                      selection={mapStylesSelection}
+                      darkMode={darkMode}
+                      accentColor={accentColor}
+                      borderRadius={borderRadius}
+                      className="w-full min-w-0 xl:w-[380px] xl:flex-shrink-0 xl:sticky xl:top-20 xl:self-start"
+                    />
+                  </div>
+                ) : isTruckRouteDemo ? (
                   <div
                     ref={widgetMeasureRef}
                     className="flex flex-col xl:flex-row gap-5 items-stretch xl:items-start"
