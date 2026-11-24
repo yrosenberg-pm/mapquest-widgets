@@ -1,4 +1,5 @@
 import type { StyleSpecification } from 'maplibre-gl';
+import { mapQuestMapsProxyEnabled, mapQuestResourceProxyUrl } from '@/lib/mapquestResourceProxy';
 
 export const MAPQUEST_RASTER_LAYER_ID = 'mapquest-raster';
 export const MAPQUEST_RASTER_SOURCE_ID = 'mapquest-raster';
@@ -20,7 +21,11 @@ export function vectorThemeForBasemap(tileType: MapQuestTileType): MapQuestVecto
 }
 
 export function resolveMapQuestVectorStyleUrl(apiKey: string, theme: MapQuestVectorTheme): string {
-  return `https://www.mapquestapi.com/styles/v1/${theme}?key=${encodeURIComponent(apiKey)}`;
+  const base = `https://www.mapquestapi.com/styles/v1/${theme}`;
+  if (mapQuestMapsProxyEnabled()) {
+    return mapQuestResourceProxyUrl(base, apiKey || null);
+  }
+  return `${base}?key=${encodeURIComponent(apiKey)}`;
 }
 
 /** Map style for MapLibre init or full style replacement (vector URL or raster StyleSpec). */
@@ -46,10 +51,13 @@ const TILE_STYLE_PATH: Record<MapQuestTileType, string> = {
 const SUBDOMAINS = ['a', 'b', 'c', 'd'];
 
 function mapQuestTileUrls(apiKey: string, stylePath: string): string[] {
-  return SUBDOMAINS.map(
-    (sub) =>
-      `https://${sub}.tiles.mapquest.com/render/latest/${stylePath}/{z}/{x}/{y}/256/png?key=${apiKey}`,
-  );
+  return SUBDOMAINS.map((sub) => {
+    const raw = `https://${sub}.tiles.mapquest.com/render/latest/${stylePath}/{z}/{x}/{y}/256/png`;
+    if (mapQuestMapsProxyEnabled()) {
+      return mapQuestResourceProxyUrl(raw, apiKey || null);
+    }
+    return `${raw}?key=${encodeURIComponent(apiKey)}`;
+  });
 }
 
 /** Resolve basemap tile type from MapQuestMap props (matches legacy Leaflet logic). */

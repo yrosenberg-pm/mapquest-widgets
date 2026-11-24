@@ -24,10 +24,12 @@ import {
   drawRibbonRoute,
   drawSimpleRoutePolyline,
 } from '@/lib/maplibre/routeDraw';
+import { createMapQuestTransformRequest } from '@/lib/mapStyles/styleLoader';
 import {
   applyMapQuestBasemapChange,
   mapQuestVectorBasemapEnabled,
 } from '@/lib/mapquestBasemapEngine';
+import { mapQuestMapsReady } from '@/lib/mapquestResourceProxy';
 import {
   MAPQUEST_RASTER_SOURCE_ID,
   resolveMapQuestBasemapType,
@@ -612,7 +614,7 @@ export default function MapQuestMap({
   }, [mapReady]);
 
   useEffect(() => {
-    if (!containerRef.current || !apiKey) return;
+    if (!containerRef.current || !mapQuestMapsReady(apiKey)) return;
 
     registerMaplibreWorker();
 
@@ -644,6 +646,7 @@ export default function MapQuestMap({
       touchZoomRotate: interactive,
       refreshExpiredTiles: true,
       maxTileCacheSize: null,
+      transformRequest: createMapQuestTransformRequest(apiKey),
     });
 
     if (showZoomControls) {
@@ -1380,7 +1383,9 @@ export default function MapQuestMap({
 
     const fetchSegmentRoute = async () => {
       try {
-        const response = await fetch(`https://www.mapquestapi.com/directions/v2/route?key=${apiKey}`, {
+        const qs = new URLSearchParams({ endpoint: 'directions' });
+        if (apiKey?.trim()) qs.set('apiKey', apiKey);
+        const response = await fetch(`/api/mapquest?${qs}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

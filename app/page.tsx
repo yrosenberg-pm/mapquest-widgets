@@ -51,7 +51,12 @@ import { DEMO_REGIONS, DEFAULT_DEMO_REGION_ID, getDemoRegion, REGION_LOCKED_WIDG
 import { getWidgetLocationProps } from '@/lib/demo/widgetLocationProps';
 import type { DemoMapProps } from '@/lib/demo/mapDefaults';
 import { setSearchContext } from '@/lib/mapquest';
-const API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
+import { mapQuestMapsProxyEnabled } from '@/lib/mapquestResourceProxy';
+
+const PUBLIC_MAPQUEST_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
+/** Gallery map tiles/styles: server key via proxy when enabled (not exposed in Network). */
+const GALLERY_MAP_API_KEY = mapQuestMapsProxyEnabled() ? '' : PUBLIC_MAPQUEST_KEY;
+const API_KEY = PUBLIC_MAPQUEST_KEY;
 
 /** Zonar co-branding is scoped to the truck route planner widget only. */
 function isZonarCompanyLogo(logo: string): boolean {
@@ -598,7 +603,7 @@ function HomeContent() {
     companyName: string | undefined;
     companyLogo: string | undefined;
   } = {
-    apiKey: API_KEY,
+    apiKey: GALLERY_MAP_API_KEY,
     darkMode,
     accentColor,
     fontFamily,

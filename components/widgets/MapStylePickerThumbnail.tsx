@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Layers } from 'lucide-react';
 import type { MapStyleConfigEntry } from '@/lib/mapStyles/config';
+import { mapQuestMapsReady } from '@/lib/mapquestResourceProxy';
 import { createMapQuestTransformRequest, resolveStyleLoadTarget } from '@/lib/mapStyles/styleLoader';
 import { registerMaplibreWorker } from '@/lib/maplibre/registerWorker';
 import { Map as MaplibreMap } from 'maplibre-gl';
@@ -36,7 +37,7 @@ export default function MapStylePickerThumbnail({ entry, apiKey, active, accentC
 
   useEffect(() => {
     const host = hostRef.current;
-    if (!visible || !host || !apiKey?.trim()) return;
+    if (!visible || !host || !mapQuestMapsReady(apiKey)) return;
 
     let disposed = false;
     registerMaplibreWorker();

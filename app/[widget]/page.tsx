@@ -48,7 +48,11 @@ import {
   MapStylesWidget,
 } from '@/components/widgets';
 
-const ENV_API_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
+import { mapQuestMapsProxyEnabled } from '@/lib/mapquestResourceProxy';
+
+const ENV_API_KEY = mapQuestMapsProxyEnabled()
+  ? ''
+  : process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
 // Valid widget IDs
 const VALID_WIDGETS = [

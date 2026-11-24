@@ -1,3 +1,9 @@
+import {
+  isMapQuestUpstreamResourceUrl,
+  mapQuestMapsProxyEnabled,
+  mapQuestResourceProxyUrl,
+  stripMapQuestKeyFromUrl,
+} from '@/lib/mapquestResourceProxy';
 import { resolveMapQuestVectorStyleUrl } from '@/lib/mapquestMaplibreStyle';
 import type { StyleSpecification } from 'maplibre-gl';
 import {
@@ -54,6 +60,9 @@ export function resolveStyleLoadTarget(
   apiKey: string,
 ): string {
   if (entry.styleRef.kind === 'hosted') {
+    if (mapQuestMapsProxyEnabled()) {
+      return resolveMapQuestVectorStyleUrl(apiKey, entry.styleRef.theme);
+    }
     if (!apiKey) return resolveMapQuestVectorStyleUrl('YOUR_MAPQUEST_API_KEY', entry.styleRef.theme);
     return resolveMapQuestVectorStyleUrl(apiKey, entry.styleRef.theme);
   }
@@ -64,14 +73,14 @@ export function resolveStyleLoadTarget(
 /** Append MapQuest API key to MapQuest-hosted tile/style requests (never inject into unrelated URLs). */
 export function createMapQuestTransformRequest(apiKey: string) {
   return (url: string): { url: string } => {
+    if (mapQuestMapsProxyEnabled() && isMapQuestUpstreamResourceUrl(url)) {
+      const cleaned = /\bkey=/.test(url) ? stripMapQuestKeyFromUrl(url) : url;
+      return { url: mapQuestResourceProxyUrl(cleaned, apiKey) };
+    }
     if (!apiKey || apiKey === 'YOUR_MAPQUEST_API_KEY' || /\bkey=/.test(url)) {
       return { url };
     }
-    if (
-      url.includes('mapquestapi.com') ||
-      url.includes('tiles.mapquest.com') ||
-      url.includes('.aws.mapquest.com')
-    ) {
+    if (isMapQuestUpstreamResourceUrl(url)) {
       const sep = url.includes('?') ? '&' : '?';
       return { url: `${url}${sep}key=${encodeURIComponent(apiKey)}` };
     }

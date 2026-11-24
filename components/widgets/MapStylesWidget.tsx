@@ -25,6 +25,7 @@ import {
   type MapStyleConfigEntry,
 } from '@/lib/mapStyles/config';
 import { enhanceBuildingExtrusionVisibility } from '@/lib/mapStyles/buildingExtrusion';
+import { mapQuestMapsReady } from '@/lib/mapquestResourceProxy';
 import {
   auditStyleJson,
   createMapQuestTransformRequest,
@@ -212,7 +213,7 @@ export default function MapStylesWidget({
   const applyStyle = useCallback(
     (map: MaplibreMap, styleId: string) => {
       const entry = getMapStyleEntry(styleId) ?? MAP_STYLE_ENTRIES[0];
-      if (entry.styleRef.kind === 'hosted' && !apiKey) {
+      if (entry.styleRef.kind === 'hosted' && !mapQuestMapsReady(apiKey)) {
         setStyleError('Add a MapQuest API key to load hosted vector styles.');
         setStyleLoading(false);
         return;
@@ -244,7 +245,7 @@ export default function MapStylesWidget({
     const host = mapHostRef.current;
     if (!host) return;
 
-    if (!apiKey?.trim()) {
+    if (!mapQuestMapsReady(apiKey)) {
       setStyleError('MapQuest API key is required to load hosted vector styles.');
       setMapReady(false);
       setStyleLoading(false);
@@ -462,7 +463,7 @@ export default function MapStylesWidget({
               </div>
             )}
 
-            {!apiKey?.trim() && (
+            {!mapQuestMapsReady(apiKey) && (
               <div
                 className="pointer-events-auto absolute inset-0 flex items-center justify-center p-6 text-center text-sm"
                 style={{ color: 'var(--text-muted)', background: 'var(--bg-panel)' }}
