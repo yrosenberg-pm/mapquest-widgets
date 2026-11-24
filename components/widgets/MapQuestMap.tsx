@@ -27,7 +27,6 @@ import {
 import {
   applyMapQuestBasemapChange,
   mapQuestVectorBasemapEnabled,
-  usesVectorRoadStyle,
 } from '@/lib/mapquestBasemapEngine';
 import {
   MAPQUEST_RASTER_SOURCE_ID,
@@ -681,7 +680,10 @@ export default function MapQuestMap({
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [apiKey, vectorBasemap, darkMode, lockBasemap, mapType]);
+    // Basemap light/dark and mapType are applied in the dedicated basemap effect below.
+    // Do not list darkMode/mapType here — recreating the map on theme toggle leaves mapReady
+    // true for one effect flush and overlay effects throw against an unloaded map instance.
+  }, [apiKey, vectorBasemap]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -768,9 +770,7 @@ export default function MapQuestMap({
     const map = mapRef.current;
     const container = map.getContainer();
     const tileType = resolveMapQuestBasemapType({ mapType, darkMode, lockBasemap });
-    const onVectorRoad = usesVectorRoadStyle(tileType, vectorBasemap);
-    const hasLegacyRaster = !!map.getSource(MAPQUEST_RASTER_SOURCE_ID);
-    if (tileType === basemapTypeRef.current && (onVectorRoad || hasLegacyRaster)) {
+    if (tileType === basemapTypeRef.current) {
       if (darkMode) container.classList.add('dark-map');
       else container.classList.remove('dark-map');
       layoutMapQuestAttribution(map, darkMode, { visible: !hideMapAttribution });
