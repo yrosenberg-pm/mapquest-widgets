@@ -23,6 +23,7 @@ import {
   type MapStyleCamera,
   type MapStyleConfigEntry,
 } from '@/lib/mapStyles/config';
+import { enhanceBuildingExtrusionVisibility } from '@/lib/mapStyles/buildingExtrusion';
 import {
   auditStyleJson,
   createMapQuestTransformRequest,
@@ -185,6 +186,7 @@ export default function MapStylesWidget({
     ) => {
       setStyleLoading(false);
       layoutMapQuestAttribution(map, attributionDarkRef.current, { visible: showBrandingRef.current });
+      enhanceBuildingExtrusionVisibility(map);
       enableMapInteractions(map);
       map.resize();
       if (entry.styleRef.kind === 'file') {
@@ -273,7 +275,10 @@ export default function MapStylesWidget({
 
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
     enableMapInteractions(map);
-    const onStyleLoad = () => enableMapInteractions(map);
+    const onStyleLoad = () => {
+      enableMapInteractions(map);
+      enhanceBuildingExtrusionVisibility(map);
+    };
     map.on('style.load', onStyleLoad);
 
     mapRef.current = map;
@@ -292,6 +297,7 @@ export default function MapStylesWidget({
     const onLoad = () => {
       if (disposed) return;
       layoutMapQuestAttribution(map, attributionDarkRef.current, { visible: showBrandingRef.current });
+      enhanceBuildingExtrusionVisibility(map);
       enableMapInteractions(map);
       setStyleLoading(false);
       setStyleError(null);

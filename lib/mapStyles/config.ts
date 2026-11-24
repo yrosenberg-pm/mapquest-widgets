@@ -22,6 +22,9 @@ export type MapStyleConfigEntry = {
   showcase: MapStyleCamera;
 };
 
+/** Earliest zoom for 3D building extrusions in the Map Styles widget (styles often default to 14). */
+export const MAP_STYLE_BUILDING_3D_MIN_ZOOM = 12;
+
 /** Shared demo view (Las Vegas Strip) so every style shows the same geography. */
 export const MAP_STYLE_SHOWCASE: MapStyleCamera = {
   lng: -115.1728,
