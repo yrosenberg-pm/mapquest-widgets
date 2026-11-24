@@ -4,7 +4,10 @@
 import { useParams, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import MapStylesGetStylePanel from '@/components/gallery/MapStylesGetStylePanel';
-import type { MapStyleConfigEntry } from '@/lib/mapStyles/config';
+import {
+  type MapStyleConfigEntry,
+  isMapStyleBasemapDark,
+} from '@/lib/mapStyles/config';
 import { Loader2 } from 'lucide-react';
 import { setApiKey, setSearchContext } from '@/lib/mapquest';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
@@ -384,6 +387,8 @@ export default function WidgetPage() {
           <MapStylesWidget
             key={widgetKey}
             {...commonProps}
+            darkMode={mapStylesShellDark}
+            styleDemoMode
             onStyleSelectionChange={handleMapStyleSelection}
           />
         );
@@ -409,6 +414,7 @@ export default function WidgetPage() {
 
   const isStreetViewRoute = widgetId === 'streetview-showcase';
   const isMapStylesRoute = widgetId === 'map-styles';
+  const mapStylesShellDark = isMapStylesRoute && isMapStyleBasemapDark(mapStylesSelection);
 
   const measureBoxStyle = {
     position: 'absolute' as const,
@@ -448,7 +454,7 @@ export default function WidgetPage() {
               </div>
               <MapStylesGetStylePanel
                 selection={mapStylesSelection}
-                darkMode={darkMode}
+                darkMode={mapStylesShellDark}
                 accentColor={accentColor}
                 borderRadius={borderRadius}
                 className="w-full min-w-0 xl:w-[380px] xl:flex-shrink-0"

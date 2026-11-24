@@ -3928,7 +3928,7 @@
       "type": "fill-extrusion",
       "source": "omv",
       "source-layer": "buildings",
-      "minzoom": 14,
+      "minzoom": 8,
       "filter": ["==", ["geometry-type"], "Polygon"],
       "paint": {
         "fill-extrusion-color": [

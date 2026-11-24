@@ -41,7 +41,10 @@ import {
 import { encodeEmbedConfig } from '@/components/widgets/CustomRouteWidget';
 import TruckRoutePlannerApiPanel from '@/components/gallery/TruckRoutePlannerApiPanel';
 import MapStylesGetStylePanel from '@/components/gallery/MapStylesGetStylePanel';
-import type { MapStyleConfigEntry } from '@/lib/mapStyles/config';
+import {
+  type MapStyleConfigEntry,
+  isMapStyleBasemapDark,
+} from '@/lib/mapStyles/config';
 import { ZONAR_BRAND, type TruckRouteTraceState } from '@/lib/truckRoutePlannerTrace';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
 import { DEMO_REGIONS, DEFAULT_DEMO_REGION_ID, getDemoRegion, REGION_LOCKED_WIDGETS } from '@/lib/demo/demoRegions';
@@ -744,6 +747,8 @@ function HomeContent() {
           <MapStylesWidget
             key={widgetKey}
             {...commonProps}
+            darkMode={mapStylesShellDark}
+            styleDemoMode
             onStyleSelectionChange={handleMapStyleSelection}
           />
         );
@@ -756,6 +761,7 @@ function HomeContent() {
   const isTruckRouteDemo = activeWidget === 'truck-route-planner';
   const isMapStylesDemo = activeWidget === 'map-styles';
   const isStreetViewPlayground = activeWidget === 'streetview-showcase';
+  const mapStylesShellDark = isMapStylesDemo && isMapStyleBasemapDark(mapStylesSelection);
 
   // Embed mode: show only the widget without header/menu
   if (embedMode) {
@@ -1003,15 +1009,17 @@ function HomeContent() {
         <div className="p-2 md:p-6">
           <div className="max-w-[min(100%,2400px)] mx-auto">
             {/* Header: toolbar only (no widget title in the canvas) */}
-            <div className="mb-6 flex w-full items-center justify-end gap-2">
-              <button
-                className="mr-auto md:hidden p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
-                onClick={() => setSidebarMobileOpen(true)}
-                title="Open widget menu"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-              <div className="flex items-center gap-2">
+            <div className="mb-6 flex w-full items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  className="md:hidden p-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
+                  onClick={() => setSidebarMobileOpen(true)}
+                  title="Open widget menu"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={copyPermalink}
                   className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white text-gray-600 shadow-lg shadow-gray-200/80 hover:shadow-xl hover:bg-gray-50 transition-all"
@@ -1078,7 +1086,7 @@ function HomeContent() {
                     </div>
                     <MapStylesGetStylePanel
                       selection={mapStylesSelection}
-                      darkMode={darkMode}
+                      darkMode={mapStylesShellDark}
                       accentColor={accentColor}
                       borderRadius={borderRadius}
                       className="w-full min-w-0 xl:w-[380px] xl:flex-shrink-0 xl:sticky xl:top-20 xl:self-start"

@@ -1,7 +1,8 @@
 import type { ExpressionSpecification, LayerSpecification, Map } from 'maplibre-gl';
-import { MAP_STYLE_BUILDING_3D_MIN_ZOOM } from '@/lib/mapStyles/config';
-
-const BUILDING_HEIGHT_RAMP_END = MAP_STYLE_BUILDING_3D_MIN_ZOOM + 1.25;
+import {
+  MAP_STYLE_BUILDING_3D_FULL_ZOOM,
+  MAP_STYLE_BUILDING_3D_MIN_ZOOM,
+} from '@/lib/mapStyles/config';
 
 function isBuildingExtrusionLayer(layer: LayerSpecification): boolean {
   if (layer.type !== 'fill-extrusion') return false;
@@ -49,7 +50,7 @@ export function enhanceBuildingExtrusionVisibility(map: Map) {
         ['zoom'],
         MAP_STYLE_BUILDING_3D_MIN_ZOOM,
         0,
-        BUILDING_HEIGHT_RAMP_END,
+        MAP_STYLE_BUILDING_3D_FULL_ZOOM,
         fullHeight,
       ]);
 
@@ -62,16 +63,26 @@ export function enhanceBuildingExtrusionVisibility(map: Map) {
           ['zoom'],
           MAP_STYLE_BUILDING_3D_MIN_ZOOM,
           0,
-          BUILDING_HEIGHT_RAMP_END,
+          MAP_STYLE_BUILDING_3D_FULL_ZOOM,
           fullBase,
         ]);
       }
+
+      map.setPaintProperty(id, 'fill-extrusion-opacity', [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        MAP_STYLE_BUILDING_3D_MIN_ZOOM,
+        0.55,
+        MAP_STYLE_BUILDING_3D_FULL_ZOOM,
+        1,
+      ]);
     } catch {
       /* style may still be applying */
     }
   }
 
-  const footprintMin = Math.max(MAP_STYLE_BUILDING_3D_MIN_ZOOM - 1, 10);
+  const footprintMin = Math.max(MAP_STYLE_BUILDING_3D_MIN_ZOOM - 1, 7);
   for (const layer of layers) {
     if (layer.type === 'fill-extrusion' || !/building/i.test(layer.id)) continue;
     try {

@@ -18,6 +18,7 @@ import { WidgetButton } from './WidgetShell';
 import {
   DEFAULT_MAP_STYLE_ID,
   getMapStyleEntry,
+  getMapStyleFlyCamera,
   mapStyleUsesLightBackground,
   MAP_STYLE_ENTRIES,
   type MapStyleCamera,
@@ -30,7 +31,7 @@ import {
   fetchFileStyleForAudit,
   resolveStyleLoadTarget,
 } from '@/lib/mapStyles/styleLoader';
-import { layoutMapQuestAttribution } from '@/lib/maplibre/attribution';
+import { syncMapBasemapChrome } from '@/lib/maplibre/attribution';
 import { injectMapQuestMapStyles } from '@/lib/maplibre/injectedStyles';
 import { registerMaplibreWorker } from '@/lib/maplibre/registerWorker';
 import { geocode } from '@/lib/mapquest';
@@ -49,6 +50,8 @@ interface MapStylesWidgetProps extends DemoMapProps {
   fontFamily?: string;
   borderRadius?: string;
   onStyleSelectionChange?: (entry: MapStyleConfigEntry) => void;
+  /** Gallery demo: fly to each style’s curated demoShowcase when picking a style. */
+  styleDemoMode?: boolean;
 }
 
 const STYLE_STRIP_SCROLL_PX = 172;
@@ -58,7 +61,7 @@ function flyToShowcase(map: MaplibreMap, camera: MapStyleCamera) {
     center: [camera.lng, camera.lat],
     zoom: camera.zoom,
     pitch: camera.pitch ?? 0,
-    bearing: camera.bearing ?? 0,
+    bearing: 0,
     duration: 1200,
     essential: false,
   });
@@ -73,6 +76,7 @@ export default function MapStylesWidget({
   companyLogo,
   fontFamily,
   onStyleSelectionChange,
+  styleDemoMode = false,
 }: MapStylesWidgetProps) {
   const mapHostRef = useRef<HTMLDivElement>(null);
   const styleStripRef = useRef<HTMLDivElement>(null);
@@ -84,8 +88,10 @@ export default function MapStylesWidget({
   const attributionDarkRef = useRef(false);
   const lastStyleUrlRef = useRef<string | null>(null);
   const skipNextStyleApplyRef = useRef(true);
+  const styleDemoModeRef = useRef(styleDemoMode);
   darkModeRef.current = darkMode;
   showBrandingRef.current = showBranding;
+  styleDemoModeRef.current = styleDemoMode;
 
   const [selectedId, setSelectedId] = useState(DEFAULT_MAP_STYLE_ID);
   const [keepView, setKeepView] = useState(true);
@@ -185,7 +191,7 @@ export default function MapStylesWidget({
       opts?: { flyToShowcase?: boolean },
     ) => {
       setStyleLoading(false);
-      layoutMapQuestAttribution(map, attributionDarkRef.current, { visible: showBrandingRef.current });
+      syncMapBasemapChrome(map, entry, { visible: showBrandingRef.current });
       enhanceBuildingExtrusionVisibility(map);
       enableMapInteractions(map);
       map.resize();
@@ -193,9 +199,11 @@ export default function MapStylesWidget({
         const json = await fetchFileStyleForAudit(styleUrl);
         if (json) auditStyleJson(json, entry.name);
       }
-      const shouldFly = opts?.flyToShowcase !== false && !keepViewRef.current;
+      const shouldFly =
+        opts?.flyToShowcase !== false &&
+        (styleDemoModeRef.current || !keepViewRef.current);
       if (shouldFly) {
-        flyToShowcase(map, entry.showcase);
+        flyToShowcase(map, getMapStyleFlyCamera(entry, styleDemoModeRef.current));
       }
     },
     [enableMapInteractions],
@@ -214,7 +222,8 @@ export default function MapStylesWidget({
       const styleUrl = resolveStyleLoadTarget(entry, apiKey);
 
       if (lastStyleUrlRef.current === styleUrl) {
-        void finishStyleApply(map, entry, styleUrl, { flyToShowcase: false });
+        const shouldFly = styleDemoModeRef.current || !keepViewRef.current;
+        void finishStyleApply(map, entry, styleUrl, { flyToShowcase: shouldFly });
         return;
       }
       lastStyleUrlRef.current = styleUrl;
@@ -276,6 +285,8 @@ export default function MapStylesWidget({
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
     enableMapInteractions(map);
     const onStyleLoad = () => {
+      const entry = getMapStyleEntry(pendingStyleIdRef.current) ?? MAP_STYLE_ENTRIES[0];
+      syncMapBasemapChrome(map, entry, { visible: showBrandingRef.current });
       enableMapInteractions(map);
       enhanceBuildingExtrusionVisibility(map);
     };
@@ -296,7 +307,7 @@ export default function MapStylesWidget({
 
     const onLoad = () => {
       if (disposed) return;
-      layoutMapQuestAttribution(map, attributionDarkRef.current, { visible: showBrandingRef.current });
+      syncMapBasemapChrome(map, initial, { visible: showBrandingRef.current });
       enhanceBuildingExtrusionVisibility(map);
       enableMapInteractions(map);
       setStyleLoading(false);
@@ -371,10 +382,16 @@ export default function MapStylesWidget({
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
-    const attributionDark = !mapStyleUsesLightBackground(selectedEntry);
-    attributionDarkRef.current = attributionDark;
-    layoutMapQuestAttribution(mapRef.current, attributionDark, { visible: showBranding });
+    attributionDarkRef.current = !mapStyleUsesLightBackground(selectedEntry);
+    syncMapBasemapChrome(mapRef.current, selectedEntry, { visible: showBranding });
+    mapHostRef.current?.setAttribute('data-map-basemap', selectedEntry.basemapTone);
   }, [selectedEntry, mapReady, showBranding]);
+
+  useEffect(() => {
+    if (!mapRef.current || !mapReady || !styleDemoMode) return;
+    const entry = getMapStyleEntry(selectedId) ?? MAP_STYLE_ENTRIES[0];
+    flyToShowcase(mapRef.current, getMapStyleFlyCamera(entry, true));
+  }, [styleDemoMode, mapReady, selectedId]);
 
   const handleSearch = useCallback(async () => {
     const q = searchQuery.trim();
@@ -421,9 +438,10 @@ export default function MapStylesWidget({
         <div className="relative flex-1 min-h-[260px] w-full overflow-hidden isolate">
           <div
             ref={mapHostRef}
+            data-map-basemap={selectedEntry.basemapTone}
             className="absolute inset-0 z-0 h-full w-full [&_.maplibregl-map]:!h-full [&_.maplibregl-map]:!w-full [&_.maplibregl-canvas-container.maplibregl-interactive]:!cursor-grab active:[&_.maplibregl-canvas-container.maplibregl-interactive]:!cursor-grabbing"
             style={{
-              background: darkMode ? '#1a1a2e' : '#e8eaed',
+              background: mapAttributionDark ? '#1a1a2e' : '#e8eaed',
               touchAction: 'none',
             }}
             aria-label="Map preview"
@@ -505,6 +523,7 @@ export default function MapStylesWidget({
 
             {/* Keep view — top-right, left of MapLibre zoom (~10px + 32px control) */}
             <div className="pointer-events-auto absolute top-3 right-14 flex flex-col items-end gap-2 max-w-[min(240px,calc(100%-6rem))]">
+          {!styleDemoMode ? (
           <label
             className="prism-panel-floating flex items-center gap-2 text-xs cursor-pointer select-none"
             style={{ padding: '8px 12px', color: 'var(--text-main)' }}
@@ -518,6 +537,7 @@ export default function MapStylesWidget({
             />
             Keep my view
           </label>
+          ) : null}
           {styleError && (
             <div
               className="flex items-start gap-2 p-2 rounded-lg text-xs max-w-full"

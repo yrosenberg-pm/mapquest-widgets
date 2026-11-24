@@ -28,21 +28,26 @@ export function getMapQuestMapInjectedCss(): string {
       .maplibregl-ctrl-group button:hover {
         background: #f3f4f6 !important;
       }
-      .dark-map .maplibregl-ctrl-group {
+      .dark-map .maplibregl-ctrl-group,
+      [data-map-basemap='dark'] .maplibregl-ctrl-group {
         box-shadow: 0 1px 4px rgba(0,0,0,0.3) !important;
       }
-      .dark-map .maplibregl-ctrl-group button {
+      .dark-map .maplibregl-ctrl-group button,
+      [data-map-basemap='dark'] .maplibregl-ctrl-group button {
         background: #1f2937 !important;
         color: #d1d5db !important;
       }
-      .dark-map .maplibregl-ctrl-group button:hover {
+      .dark-map .maplibregl-ctrl-group button:hover,
+      [data-map-basemap='dark'] .maplibregl-ctrl-group button:hover {
         background: #374151 !important;
       }
-      .dark-map .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+      .dark-map .maplibregl-ctrl-group button .maplibregl-ctrl-icon,
+      [data-map-basemap='dark'] .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
         filter: brightness(0) invert(1) !important;
         opacity: 0.92 !important;
       }
-      .dark-map .maplibregl-ctrl-group button:disabled .maplibregl-ctrl-icon {
+      .dark-map .maplibregl-ctrl-group button:disabled .maplibregl-ctrl-icon,
+      [data-map-basemap='dark'] .maplibregl-ctrl-group button:disabled .maplibregl-ctrl-icon {
         opacity: 0.35 !important;
       }
 

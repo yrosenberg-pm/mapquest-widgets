@@ -1,4 +1,5 @@
 import type { Map } from 'maplibre-gl';
+import type { MapStyleConfigEntry } from '@/lib/mapStyles/config';
 
 const TERMS_URL = 'https://www.mapquest.com/terms-of-use';
 
@@ -55,4 +56,19 @@ export function layoutMapQuestAttribution(
 
   logo.style.display = visible ? '' : 'none';
   terms.style.display = visible ? '' : 'none';
+}
+
+/** Logo, terms, and map chrome (e.g. zoom +/-) follow the active basemap, not the widget shell theme. */
+export function syncMapBasemapChrome(
+  map: Map,
+  entry: MapStyleConfigEntry,
+  options: MapQuestAttributionOptions = {},
+) {
+  const attributionDark = entry.basemapTone === 'dark';
+  const container = map.getContainer();
+  container.classList.toggle('dark-map', attributionDark);
+  container.dataset.basemapTone = entry.basemapTone;
+  const host = container.parentElement;
+  if (host) host.setAttribute('data-map-basemap', entry.basemapTone);
+  layoutMapQuestAttribution(map, attributionDark, options);
 }
