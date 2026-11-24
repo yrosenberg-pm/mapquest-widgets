@@ -18,6 +18,7 @@ import { WidgetButton } from './WidgetShell';
 import {
   DEFAULT_MAP_STYLE_ID,
   getMapStyleEntry,
+  mapStyleUsesLightBackground,
   MAP_STYLE_ENTRIES,
   type MapStyleCamera,
   type MapStyleConfigEntry,
@@ -79,6 +80,7 @@ export default function MapStylesWidget({
   const keepViewRef = useRef(false);
   const darkModeRef = useRef(darkMode);
   const showBrandingRef = useRef(showBranding);
+  const attributionDarkRef = useRef(false);
   const lastStyleUrlRef = useRef<string | null>(null);
   const skipNextStyleApplyRef = useRef(true);
   darkModeRef.current = darkMode;
@@ -146,6 +148,9 @@ export default function MapStylesWidget({
     [selectedId],
   );
 
+  attributionDarkRef.current = !mapStyleUsesLightBackground(selectedEntry);
+  const mapAttributionDark = !mapStyleUsesLightBackground(selectedEntry);
+
   useEffect(() => {
     onStyleSelectionChange?.(selectedEntry);
   }, [selectedEntry, onStyleSelectionChange]);
@@ -158,7 +163,7 @@ export default function MapStylesWidget({
       map.doubleClickZoom.enable();
       map.touchZoomRotate.enable();
       map.keyboard.enable();
-      map.dragRotate.disable();
+      map.dragRotate.enable();
       const container = map.getCanvasContainer();
       if (container) {
         container.style.pointerEvents = 'auto';
@@ -179,7 +184,7 @@ export default function MapStylesWidget({
       opts?: { flyToShowcase?: boolean },
     ) => {
       setStyleLoading(false);
-      layoutMapQuestAttribution(map, darkModeRef.current, { visible: showBrandingRef.current });
+      layoutMapQuestAttribution(map, attributionDarkRef.current, { visible: showBrandingRef.current });
       enableMapInteractions(map);
       map.resize();
       if (entry.styleRef.kind === 'file') {
@@ -259,7 +264,10 @@ export default function MapStylesWidget({
       boxZoom: true,
       doubleClickZoom: true,
       touchZoomRotate: true,
-      dragRotate: false,
+      dragRotate: true,
+      pitchWithRotate: true,
+      rollEnabled: false,
+      maxPitch: 70,
       transformRequest: createMapQuestTransformRequest(apiKey),
     });
 
@@ -283,7 +291,7 @@ export default function MapStylesWidget({
 
     const onLoad = () => {
       if (disposed) return;
-      layoutMapQuestAttribution(map, darkModeRef.current, { visible: showBrandingRef.current });
+      layoutMapQuestAttribution(map, attributionDarkRef.current, { visible: showBrandingRef.current });
       enableMapInteractions(map);
       setStyleLoading(false);
       setStyleError(null);
@@ -357,11 +365,10 @@ export default function MapStylesWidget({
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
-    layoutMapQuestAttribution(mapRef.current, darkMode, { visible: showBranding });
-    const container = mapRef.current.getContainer();
-    if (darkMode) container.classList.add('dark-map');
-    else container.classList.remove('dark-map');
-  }, [darkMode, mapReady, showBranding]);
+    const attributionDark = !mapStyleUsesLightBackground(selectedEntry);
+    attributionDarkRef.current = attributionDark;
+    layoutMapQuestAttribution(mapRef.current, attributionDark, { visible: showBranding });
+  }, [selectedEntry, mapReady, showBranding]);
 
   const handleSearch = useCallback(async () => {
     const q = searchQuery.trim();
@@ -516,6 +523,18 @@ export default function MapStylesWidget({
             </div>
           )}
             </div>
+
+            <p
+              className="absolute bottom-10 right-2 max-w-[200px] text-right text-[10px] leading-snug pointer-events-none select-none"
+              style={{
+                color: mapAttributionDark ? 'rgba(255,255,255,0.72)' : 'rgba(31,41,55,0.65)',
+                textShadow: mapAttributionDark
+                  ? '0 1px 2px rgba(0,0,0,0.45)'
+                  : '0 1px 2px rgba(255,255,255,0.8)',
+              }}
+            >
+              Tilt: Ctrl or ⌘ + right‑click drag
+            </p>
           </div>
         </div>
 
