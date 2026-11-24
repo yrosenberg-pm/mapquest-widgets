@@ -3,7 +3,7 @@ export function mapQuestMapsProxyEnabled(): boolean {
   const v = process.env.NEXT_PUBLIC_MAPQUEST_PROXY_MAPS?.trim().toLowerCase();
   if (v === '0' || v === 'false' || v === 'off' || v === 'no') return false;
   if (v === '1' || v === 'true' || v === 'on' || v === 'yes') return true;
-  return false;
+  return process.env.NODE_ENV === 'production';
 }
 
 export function mapQuestMapsReady(apiKey: string | undefined | null): boolean {

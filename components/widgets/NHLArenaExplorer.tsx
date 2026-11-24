@@ -8,6 +8,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { geocode, getDirections as fetchMqDirections, searchPlaces } from '@/lib/mapquest';
 import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 const NHL_STADIUMS = [
@@ -207,16 +208,8 @@ export default function NHLArenaExplorer({
   const fetchPlaces = async (stadium: typeof NHL_STADIUMS[0]) => {
     setLoading(true);
     try {
-      const MQ_KEY = '78TTOXc0cKtnj1pSD71bHAaFrdU4EvHw';
-      const radiusMeters = searchRadius * 1609.34; // Convert miles to meters
-      
-      const fetchCategory = async (query: string) => {
-        // Use circle filter with configurable radius and fetch more results
-        const url = `https://www.mapquestapi.com/search/v4/place?key=${MQ_KEY}&location=${stadium.lng},${stadium.lat}&sort=distance&q=${encodeURIComponent(query)}&limit=20&circle=${stadium.lng},${stadium.lat},${radiusMeters}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        return data.results || [];
-      };
+      const fetchCategory = async (query: string) =>
+        searchPlaces(stadium.lat, stadium.lng, `q:${query}`, searchRadius, 20);
 
       const [parkingResults, foodResults, hotelResults] = await Promise.all([
         fetchCategory('parking'),
@@ -224,10 +217,9 @@ export default function NHLArenaExplorer({
         fetchCategory('hotel'),
       ]);
       
-      const formatResults = (results: any[]) => results
+      const formatResults = (results: Awaited<ReturnType<typeof searchPlaces>>) => results
         .map(r => {
-          const distanceMeters = r.distance || 0;
-          const distanceMiles = distanceMeters * 0.000621371;
+          const distanceMiles = typeof r.distance === 'number' ? r.distance : 0;
           return {
             name: r.name,
             address: r.place?.properties?.street || r.displayString || 'Nearby',
@@ -264,13 +256,9 @@ export default function NHLArenaExplorer({
     setTransitSegments([]);
     
     try {
-      const MQ_KEY = '78TTOXc0cKtnj1pSD71bHAaFrdU4EvHw';
-      
-      // First geocode the from address using MapQuest
-      const geocodeUrl = 'https://www.mapquestapi.com/geocoding/v1/address?key=' + MQ_KEY + '&location=' + encodeURIComponent(fromAddress);
-      const geoRes = await fetch(geocodeUrl);
-      const geoData = await geoRes.json();
-      const fromLocation = geoData.results?.[0]?.locations?.[0]?.latLng;
+      const geo = await geocode(fromAddress, 1);
+      const fromLocation =
+        geo?.latLng ?? (geo?.lat != null && geo?.lng != null ? { lat: geo.lat, lng: geo.lng } : null);
       
       if (!fromLocation) {
         console.error('Could not geocode address');
@@ -463,23 +451,26 @@ export default function NHLArenaExplorer({
           });
         }
       } else {
-        // Use MapQuest for other modes
-        const dirUrl = 'https://www.mapquestapi.com/directions/v2/route?key=' + MQ_KEY + '&from=' + fromLocation.lat + ',' + fromLocation.lng + '&to=' + selectedStadium.lat + ',' + selectedStadium.lng + '&routeType=' + routeType;
-        const dirRes = await fetch(dirUrl);
-        const dirData = await dirRes.json();
-        
-        if (dirData.route && dirData.route.distance) {
-          const hours = Math.floor(dirData.route.time / 3600);
-          const mins = Math.floor((dirData.route.time % 3600) / 60);
+        const mqRouteType =
+          routeType === 'pedestrian' || routeType === 'bicycle' ? routeType : 'fastest';
+        const dir = await fetchMqDirections(
+          `${fromLocation.lat},${fromLocation.lng}`,
+          `${selectedStadium.lat},${selectedStadium.lng}`,
+          mqRouteType,
+        );
+        if (dir?.distance != null) {
+          const totalMins = Math.round(dir.time ?? 0);
+          const hours = Math.floor(totalMins / 60);
+          const mins = totalMins % 60;
           const modeLabels: Record<string, string> = {
-            'fastest': 'Driving',
-            'pedestrian': 'Walking',
-            'bicycle': 'Biking'
+            fastest: 'Driving',
+            pedestrian: 'Walking',
+            bicycle: 'Biking',
           };
           setRouteInfo({
-            distance: dirData.route.distance.toFixed(1) + ' miles',
-            duration: hours > 0 ? hours + 'h ' + mins + 'm' : mins + ' min',
-            mode: modeLabels[routeType] || 'Driving'
+            distance: `${Number(dir.distance).toFixed(1)} miles`,
+            duration: hours > 0 ? `${hours}h ${mins}m` : `${mins} min`,
+            mode: modeLabels[mqRouteType] || 'Driving',
           });
         }
       }

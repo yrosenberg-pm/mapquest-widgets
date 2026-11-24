@@ -296,10 +296,14 @@ async function fetchIncidentsByBbox(opts: {
     return { incidents: cached.incidents, ts: cached.ts };
   }
 
-  const url = new URL('https://www.mapquestapi.com/traffic/v2/incidents');
-  url.searchParams.set('key', opts.apiKey);
-  url.searchParams.set('boundingBox', `${opts.bbox.lat1},${opts.bbox.lng1},${opts.bbox.lat2},${opts.bbox.lng2}`);
+  const url = new URL('/api/mapquest', window.location.origin);
+  url.searchParams.set('endpoint', 'traffic');
+  url.searchParams.set(
+    'boundingBox',
+    `${opts.bbox.lat1},${opts.bbox.lng1},${opts.bbox.lat2},${opts.bbox.lng2}`,
+  );
   url.searchParams.set('filters', opts.filters.join(','));
+  if (opts.apiKey?.trim()) url.searchParams.set('apiKey', opts.apiKey);
 
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`Traffic incidents request failed (${res.status})`);

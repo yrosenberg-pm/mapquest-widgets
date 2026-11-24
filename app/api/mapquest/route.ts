@@ -557,6 +557,30 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (endpoint === 'directions') {
+    try {
+      const apiKey = searchParams.get('apiKey') || MAPQUEST_KEY;
+      if (!apiKey) {
+        return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
+      }
+      const body = await request.json();
+      const url = `${ENDPOINTS.directions}?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      return NextResponse.json(data, { status: response.status, headers: { 'Cache-Control': 'no-store' } });
+    } catch (error) {
+      console.error('Directions POST proxy error:', error);
+      return NextResponse.json(
+        { error: 'Failed to proxy directions request', details: error instanceof Error ? error.message : 'Unknown error' },
+        { status: 500 },
+      );
+    }
+  }
+
   if (endpoint === 'routematrix') {
     try {
       const apiKey = searchParams.get('apiKey') || MAPQUEST_KEY;

@@ -317,11 +317,10 @@ function parseLatLng(input: string): { lat: number; lng: number } | null {
 }
 
 async function reverseGeocodeLabel(apiKey: string, lat: number, lng: number) {
-  const url = new URL('https://www.mapquestapi.com/geocoding/v1/reverse');
-  url.searchParams.set('key', apiKey);
+  const url = new URL('/api/mapquest', window.location.origin);
+  url.searchParams.set('endpoint', 'reverse');
   url.searchParams.set('location', `${lat},${lng}`);
-  url.searchParams.set('includeRoadMetadata', 'true');
-  url.searchParams.set('includeNearestIntersection', 'true');
+  if (apiKey?.trim()) url.searchParams.set('apiKey', apiKey);
   const res = await fetch(url.toString());
   if (!res.ok) return null;
   const json: any = await res.json();
@@ -638,8 +637,9 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
     }
     setLoading(true);
     try {
-      const url = new URL('https://www.mapquestapi.com/directions/v2/route');
-      url.searchParams.set('key', apiKey);
+      const url = new URL('/api/mapquest', window.location.origin);
+      url.searchParams.set('endpoint', 'directions');
+      if (apiKey?.trim()) url.searchParams.set('apiKey', apiKey);
       const body = {
         locations: withLabels.map((w) => ({ latLng: { lat: w.lat, lng: w.lng } })),
         options: {
@@ -652,7 +652,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
           fullShape: true,
         },
       };
-      const res = await fetch(url.toString(), {
+      const res = await fetch(`${url.pathname}?${url.searchParams}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
