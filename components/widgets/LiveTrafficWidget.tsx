@@ -9,6 +9,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { reverseGeocode, geocode, searchAhead } from '@/lib/mapquest';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 export interface TrafficWidgetProps {
   apiKey: string;
@@ -323,6 +324,7 @@ function incidentIconDataUri(kind: IncidentKind, color: string) {
   // Filled circular background + scaled glyph so it reads clearly on busy map tiles.
   const glyphMarkup =
     kind === 'closure'
+
       ? `<path d="M224,64H32A16,16,0,0,0,16,80v72a16,16,0,0,0,16,16H56v32a8,8,0,0,0,16,0V168H184v32a8,8,0,0,0,16,0V168h24a16,16,0,0,0,16-16V80A16,16,0,0,0,224,64Zm0,64.69L175.31,80H224ZM80.69,80l72,72H103.31L32,80.69V80ZM32,103.31,80.69,152H32ZM224,152H175.31l-72-72h49.38L224,151.32V152Z" fill="white" opacity="0.96"/>`
       : kind === 'construction'
         ? `<path d="M232,208H213.69L153.42,34.75A16,16,0,0,0,138.31,24H117.69a16,16,0,0,0-15.11,10.74L42.31,208H24a8,8,0,0,0,0,16H232a8,8,0,0,0,0-16ZM95.43,104h65.14l16.7,48H78.73Zm22.26-64h20.62L155,88H101ZM73.17,168H182.83l13.92,40H59.25Z" fill="white" opacity="0.96"/>`
@@ -1249,7 +1251,7 @@ export default function LiveTrafficWidget({
   return (
     <div
       className="prism-widget w-full flex flex-col"
-      data-theme={isDark ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(isDark)}
       style={{
         ...outerStyle,
         fontFamily: fontFamily || 'var(--brand-font)',

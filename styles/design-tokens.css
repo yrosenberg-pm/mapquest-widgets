@@ -97,29 +97,29 @@
 }
 
 /* ========================================
-   Dark Theme - Softer dark palette
+   Dark Theme — lifted shell + clearer borders
    ======================================== */
 [data-theme='dark'],
 .dark-theme {
-  --bg-widget: #1A2332;
-  --bg-panel: #212D3B;
-  --bg-input: #2C3A4A;
-  --bg-hover: rgba(96, 165, 250, 0.10);
-  --bg-active: rgba(96, 165, 250, 0.18);
-  
+  --bg-widget: #232F3F;
+  --bg-panel: #2B3949;
+  --bg-input: #354555;
+  --bg-hover: rgba(96, 165, 250, 0.12);
+  --bg-active: rgba(96, 165, 250, 0.2);
+
   --text-main: #F1F5F9;
   --text-secondary: #CBD5E1;
-  --text-muted: #8B9DB3;
+  --text-muted: #94A8BF;
   --text-inverse: #FFFFFF;
-  
-  --border-subtle: #2F3E4F;
-  --border-default: #3E5060;
-  --border-strong: #8B9DB3;
-  
-  --elevation-low: 0 2px 8px rgba(0, 0, 0, 0.35);
-  --elevation-medium: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --border-subtle: #3C4D61;
+  --border-default: #4E6276;
+  --border-strong: #8FA4BC;
+
+  --elevation-low: 0 1px 0 rgba(255, 255, 255, 0.04), 0 2px 8px rgba(0, 0, 0, 0.26);
+  --elevation-medium: 0 1px 0 rgba(255, 255, 255, 0.05), 0 6px 18px rgba(0, 0, 0, 0.36);
   --elevation-high: 0 16px 48px rgba(0, 0, 0, 0.55);
-  
+
   --color-success-bg: rgba(16, 185, 129, 0.15);
   --color-warning-bg: rgba(245, 158, 11, 0.15);
   --color-error-bg: rgba(239, 68, 68, 0.15);

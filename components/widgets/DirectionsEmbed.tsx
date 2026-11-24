@@ -4,8 +4,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo, type CSSProperties } from 'react';
 import { Navigation, Car, Bike, PersonStanding, Loader2, ChevronDown, ChevronUp, Clock, Train, Bus, Footprints, Ship, TramFront, Star, Trash2 } from 'lucide-react';
 import { geocode, getDirections } from '@/lib/mapquest';
-import {
-  buildTrafficRouteSegmentsFromShapeInput,
+import {  buildTrafficRouteSegmentsFromShapeInput,
   type RouteLeg,
 } from '@/lib/truckRouteTrafficSegments';
 import MapQuestMap from './MapQuestMap';
@@ -13,6 +12,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface RouteStep {
   narrative: string;
@@ -891,7 +891,7 @@ export default function DirectionsEmbed({
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -1089,6 +1089,7 @@ export default function DirectionsEmbed({
                   title={
                     !fromSelection
                       ? 'Choose a place from suggestions or run Go to set a start point'
+
                       : fromIsFavorite
                         ? 'Remove from favorites'
                         : 'Add to favorites'

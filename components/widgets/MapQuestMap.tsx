@@ -25,15 +25,18 @@ import {
   drawSimpleRoutePolyline,
 } from '@/lib/maplibre/routeDraw';
 import {
-  mapQuestRasterSourceSpec,
+  applyMapQuestBasemapChange,
+  mapQuestVectorBasemapEnabled,
+  usesVectorRoadStyle,
+} from '@/lib/mapquestBasemapEngine';
+import {
+  MAPQUEST_RASTER_SOURCE_ID,
   resolveMapQuestBasemapType,
-  resolveMapQuestTileStyle,
+  resolveMapQuestMapStyle,
   type MapQuestTileType,
 } from '@/lib/mapquestMaplibreStyle';
 import {
-  CLUSTER_ANCHOR,
-  CLUSTER_CIRCLE_SIZE,
-  clusterPinIconUrl,
+  clusterPinMarkerLayout,
 } from '@/lib/clusterMapMarkers';
 import { circle } from '@turf/turf';
 import {
@@ -323,27 +326,6 @@ interface MapQuestMapProps {
   hideMapAttribution?: boolean;
 }
 
-function swapBasemap(map: MaplibreMap, apiKey: string, tileType: MapQuestTileType) {
-  const layers = map.getStyle()?.layers ?? [];
-  const beforeId = layers.find((l) => l.id !== 'mapquest-raster')?.id;
-  try {
-    if (map.getLayer('mapquest-raster')) map.removeLayer('mapquest-raster');
-    if (map.getSource('mapquest-raster')) map.removeSource('mapquest-raster');
-  } catch {
-    /* ignore */
-  }
-  map.addSource('mapquest-raster', mapQuestRasterSourceSpec(apiKey, tileType));
-  map.addLayer(
-    {
-      id: 'mapquest-raster',
-      type: 'raster',
-      source: 'mapquest-raster',
-      paint: { 'raster-fade-duration': 0 },
-    },
-    beforeId,
-  );
-}
-
 function clearMarkers(markers: Marker[]) {
   for (const m of markers) {
     try {
@@ -569,6 +551,8 @@ export default function MapQuestMap({
   const routeSegmentsRef = useRef(routeSegments);
   routeSegmentsRef.current = routeSegments;
   const [mapReady, setMapReady] = useState(false);
+  const [basemapEpoch, setBasemapEpoch] = useState(0);
+  const vectorBasemap = mapQuestVectorBasemapEnabled();
   const [viewRevision, setViewRevision] = useState(0);
   const basemapTypeRef = useRef<MapQuestTileType>('map');
   const clusterTooltipRef = useRef<ClusterTooltipController>({
@@ -647,7 +631,7 @@ export default function MapQuestMap({
 
     const map = new MaplibreMap({
       container,
-      style: resolveMapQuestTileStyle(apiKey, initialBasemap),
+      style: resolveMapQuestMapStyle(apiKey, initialBasemap, vectorBasemap),
       center: [safeCenter.lng, safeCenter.lat],
       zoom,
       minZoom,
@@ -697,7 +681,7 @@ export default function MapQuestMap({
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [apiKey]);
+  }, [apiKey, vectorBasemap, darkMode, lockBasemap, mapType]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -784,7 +768,9 @@ export default function MapQuestMap({
     const map = mapRef.current;
     const container = map.getContainer();
     const tileType = resolveMapQuestBasemapType({ mapType, darkMode, lockBasemap });
-    if (tileType === basemapTypeRef.current && map.getSource('mapquest-raster')) {
+    const onVectorRoad = usesVectorRoadStyle(tileType, vectorBasemap);
+    const hasLegacyRaster = !!map.getSource(MAPQUEST_RASTER_SOURCE_ID);
+    if (tileType === basemapTypeRef.current && (onVectorRoad || hasLegacyRaster)) {
       if (darkMode) container.classList.add('dark-map');
       else container.classList.remove('dark-map');
       layoutMapQuestAttribution(map, darkMode, { visible: !hideMapAttribution });
@@ -793,12 +779,21 @@ export default function MapQuestMap({
     basemapTypeRef.current = tileType;
     if (darkMode) container.classList.add('dark-map');
     else container.classList.remove('dark-map');
-    swapBasemap(map, apiKey, tileType);
-    window.setTimeout(() => {
+
+    const styleReplaced = applyMapQuestBasemapChange(map, apiKey, tileType, vectorBasemap);
+    const afterBasemap = () => {
       map.resize();
       layoutMapQuestAttribution(map, darkMode, { visible: !hideMapAttribution });
-    }, 100);
-  }, [darkMode, mapReady, mapType, lockBasemap, apiKey, hideMapAttribution]);
+    };
+    if (styleReplaced) {
+      map.once('style.load', () => {
+        afterBasemap();
+        setBasemapEpoch((e) => e + 1);
+      });
+    } else {
+      window.setTimeout(afterBasemap, 100);
+    }
+  }, [darkMode, mapReady, mapType, lockBasemap, apiKey, hideMapAttribution, vectorBasemap]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -918,16 +913,17 @@ export default function MapQuestMap({
         const cx = b.sumX / b.members.length;
         const cy = b.sumY / b.members.length;
         const ll = map.unproject([cx, cy]);
+        const clusterLayout = clusterPinMarkerLayout(b.members.length, accentColor);
         out.push({
           lat: ll.lat,
           lng: ll.lng,
           type: 'default',
           color: accentColor,
           label: `${b.members.length} events`,
-          iconUrl: clusterPinIconUrl(b.members.length),
+          iconUrl: clusterLayout.iconUrl,
           iconCircular: false,
-          iconSize: [CLUSTER_CIRCLE_SIZE, CLUSTER_CIRCLE_SIZE],
-          iconAnchor: CLUSTER_ANCHOR,
+          iconSize: clusterLayout.iconSize,
+          iconAnchor: clusterLayout.iconAnchor,
           zIndexOffset: 9500,
           clusterable: false,
           onClick: () => {
@@ -1056,7 +1052,7 @@ export default function MapQuestMap({
       htmlMarkersRef.current.push(m);
     }
 
-  }, [safeMarkers, accentColor, mapReady, clusterMarkers, clusterRadiusPx, clusterMarkers ? viewRevision : 0]);
+  }, [safeMarkers, accentColor, mapReady, basemapEpoch, clusterMarkers, clusterRadiusPx, clusterMarkers ? viewRevision : 0]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady || !clusterMarkers) return;
@@ -1102,7 +1098,7 @@ export default function MapQuestMap({
       el,
       [24, 24],
     );
-  }, [driverPosition, accentColor, mapReady]);
+  }, [driverPosition, accentColor, mapReady, basemapEpoch]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -1147,7 +1143,7 @@ export default function MapQuestMap({
         },
       });
     }
-  }, [safeCircles, accentColor, mapReady]);
+  }, [safeCircles, accentColor, mapReady, basemapEpoch]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -1233,7 +1229,7 @@ export default function MapQuestMap({
         );
       }
     }
-  }, [safePolygons, accentColor, mapReady, skipPolygonFitBounds, fitBounds]);
+  }, [safePolygons, accentColor, mapReady, basemapEpoch, skipPolygonFitBounds, fitBounds]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -1281,7 +1277,7 @@ export default function MapQuestMap({
         if (pl?.onClick) pl.onClick(e.lngLat.lat, e.lngLat.lng);
       });
     }
-  }, [safePolylines, mapReady]);
+  }, [safePolylines, mapReady, basemapEpoch]);
 
   useEffect(() => {
     if (!mapReady || !showTraffic) return;
@@ -1364,7 +1360,7 @@ export default function MapQuestMap({
     return () => {
       map.off('moveend', onMoveEnd);
     };
-  }, [showTruckRestrictions, mapReady]);
+  }, [showTruckRestrictions, mapReady, basemapEpoch]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -1409,7 +1405,7 @@ export default function MapQuestMap({
     };
 
     fetchSegmentRoute();
-  }, [highlightedSegment, safeStops, apiKey, mapReady, accentColor]);
+  }, [highlightedSegment, safeStops, apiKey, mapReady, basemapEpoch, accentColor]);
 
   useEffect(() => {
     if (!mapRef.current || !mapReady) return;
@@ -1492,6 +1488,7 @@ export default function MapQuestMap({
     routeColor,
     accentColor,
     mapReady,
+    basemapEpoch,
     transitSegments,
     highlightedSegment,
     fitBounds,
@@ -1630,6 +1627,7 @@ export default function MapQuestMap({
     routeStart,
     routeEnd,
     mapReady,
+    basemapEpoch,
     onRouteLineClick,
     onRouteLineDrag,
     animateRouteReveal,
@@ -1708,6 +1706,7 @@ export default function MapQuestMap({
     routePolyline,
     routeRevealDurationMs,
     mapReady,
+    basemapEpoch,
     showRoute,
     showTraffic,
     routeColor,

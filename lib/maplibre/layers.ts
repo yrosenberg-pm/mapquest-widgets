@@ -1,4 +1,7 @@
 import type { GeoJSONSource, Map } from 'maplibre-gl';
+import { MAPQUEST_RASTER_LAYER_ID } from '@/lib/mapquestMaplibreStyle';
+
+const BASEMAP_LAYER_IDS = new Set([MAPQUEST_RASTER_LAYER_ID, 'mq-satellite-raster']);
 
 export function removeLayersAndSource(map: Map, prefix: string) {
   const style = map.getStyle();
@@ -76,7 +79,7 @@ export function firstOverlayBeforeId(map: Map): string | undefined {
   const layers = map.getStyle()?.layers;
   if (!layers?.length) return undefined;
   for (const layer of layers) {
-    if (layer.id !== 'mapquest-raster') return layer.id;
+    if (!BASEMAP_LAYER_IDS.has(layer.id)) return layer.id;
   }
   return undefined;
 }

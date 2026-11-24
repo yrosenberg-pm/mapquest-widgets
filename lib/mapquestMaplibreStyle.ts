@@ -1,6 +1,39 @@
 import type { StyleSpecification } from 'maplibre-gl';
 
+export const MAPQUEST_RASTER_LAYER_ID = 'mapquest-raster';
+export const MAPQUEST_RASTER_SOURCE_ID = 'mapquest-raster';
+
 export type MapQuestTileType = 'map' | 'dark' | 'satellite' | 'hybrid' | 'light';
+
+export type MapQuestVectorTheme = 'light' | 'dark';
+
+export function isRoadBasemapTileType(tileType: MapQuestTileType): tileType is 'map' | 'dark' {
+  return tileType === 'map' || tileType === 'dark';
+}
+
+export function isAerialBasemapTileType(tileType: MapQuestTileType): boolean {
+  return tileType === 'satellite' || tileType === 'hybrid';
+}
+
+export function vectorThemeForBasemap(tileType: MapQuestTileType): MapQuestVectorTheme {
+  return tileType === 'dark' ? 'dark' : 'light';
+}
+
+export function resolveMapQuestVectorStyleUrl(apiKey: string, theme: MapQuestVectorTheme): string {
+  return `https://www.mapquestapi.com/styles/v1/${theme}?key=${encodeURIComponent(apiKey)}`;
+}
+
+/** Map style for MapLibre init or full style replacement (vector URL or raster StyleSpec). */
+export function resolveMapQuestMapStyle(
+  apiKey: string,
+  tileType: MapQuestTileType,
+  vectorBasemap: boolean,
+): string | StyleSpecification {
+  if (vectorBasemap && isRoadBasemapTileType(tileType)) {
+    return resolveMapQuestVectorStyleUrl(apiKey, vectorThemeForBasemap(tileType));
+  }
+  return resolveMapQuestTileStyle(apiKey, tileType);
+}
 
 const TILE_STYLE_PATH: Record<MapQuestTileType, string> = {
   map: 'vivid',
@@ -47,7 +80,7 @@ export function resolveMapQuestTileStyle(
   return {
     version: 8,
     sources: {
-      'mapquest-raster': {
+      [MAPQUEST_RASTER_SOURCE_ID]: {
         type: 'raster',
         tiles: mapQuestTileUrls(apiKey, stylePath),
         tileSize: 256,
@@ -56,9 +89,9 @@ export function resolveMapQuestTileStyle(
     },
     layers: [
       {
-        id: 'mapquest-raster',
+        id: MAPQUEST_RASTER_LAYER_ID,
         type: 'raster',
-        source: 'mapquest-raster',
+        source: MAPQUEST_RASTER_SOURCE_ID,
         paint: {
           'raster-fade-duration': 0,
         },

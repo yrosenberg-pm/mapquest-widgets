@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ArrowLeft,
+import {  ArrowLeft,
   ArrowUpDown,
   Building2,
   Calendar,
@@ -29,6 +28,7 @@ import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { geocode } from '@/lib/mapquest';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -522,7 +522,7 @@ export default function PropertyIntelligence({
   const [nearbyLoading, setNearbyLoading] = useState(false);
   const [isAreaSearch, setIsAreaSearch] = useState(false);
 
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
@@ -819,7 +819,7 @@ export default function PropertyIntelligence({
   return (
     <div
       className="prism-widget w-full md:w-[1200px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ fontFamily: fontFamily || 'var(--brand-font)', '--brand-primary': accentColor } as React.CSSProperties}
     >
       <WidgetHeader
@@ -1203,7 +1203,7 @@ export default function PropertyIntelligence({
           {isAreaSearch && filteredNearby.length > 0 && avmValues.length > 0 && (
             <div
               className="absolute left-3 rounded-xl px-3 py-2 shadow-lg z-[500] flex items-center gap-2.5"
-              style={{ bottom: 37, background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}`, backdropFilter: 'blur(8px)' }}
+              style={{ bottom: 37, background: 'var(--bg-widget)', border: `1px solid ${border}`, backdropFilter: 'blur(8px)' }}
             >
               <button
                 onClick={() => setShowHeatMap(!showHeatMap)}
@@ -1229,7 +1229,7 @@ export default function PropertyIntelligence({
           {isAreaSearch && nearbyLoading && (
             <div
               className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 shadow-lg flex items-center gap-1.5 z-[500]"
-              style={{ background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}` }}
+              style={{ background: 'var(--bg-widget)', border: `1px solid ${border}` }}
             >
               <Loader2 className="w-3 h-3 animate-spin" style={{ color: accentColor }} />
               <span className="text-[10px]" style={{ color: textMuted }}>Loading nearby…</span>
@@ -1259,3 +1259,4 @@ export default function PropertyIntelligence({
     </div>
   );
 }
+

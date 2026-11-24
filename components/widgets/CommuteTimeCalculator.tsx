@@ -8,6 +8,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 const apiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -155,6 +156,7 @@ export default function CommuteTimeCalculator({
         `${destLoc.lat},${destLoc.lng}`, 
         `${baseCoords.lat},${baseCoords.lng}`, 
         (travelMode === 'transit' ? 'fastest' : travelMode) as 'fastest' | 'shortest' | 'pedestrian' | 'bicycle'
+
       );
 
       let distance = directions?.distance || 0;
@@ -248,7 +250,7 @@ export default function CommuteTimeCalculator({
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,

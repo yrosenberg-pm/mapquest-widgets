@@ -6,9 +6,11 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 type VehiclePresetId =
   | 'tesla-model-3'
+
   | 'tesla-model-y'
   | 'rivian-r1t'
   | 'rivian-r1s'
@@ -193,7 +195,7 @@ export default function EVChargingPlanner({
   defaultCenter?: { lat: number; lng: number };
 }) {
   const bgPanel = 'var(--bg-panel)';
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
@@ -1087,7 +1089,7 @@ export default function EVChargingPlanner({
   return (
     <div
       className="prism-widget w-full md:w-[990px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -1802,7 +1804,7 @@ export default function EVChargingPlanner({
 
           {/* Mobile bottom sheet for selected station */}
           {selectedStation && (
-            <div className="md:hidden absolute left-3 right-3 bottom-3 rounded-2xl p-3" style={{ background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}`, boxShadow: '0 18px 50px rgba(0,0,0,0.18)' }}>
+            <div className="md:hidden absolute left-3 right-3 bottom-3 rounded-2xl p-3" style={{ background: 'var(--bg-widget)', border: `1px solid ${border}`, boxShadow: '0 18px 50px rgba(0,0,0,0.18)' }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm font-semibold truncate" style={{ color: textMain }}>{selectedStation.name}</div>

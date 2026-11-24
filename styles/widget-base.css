@@ -79,6 +79,34 @@
   background: rgba(30, 41, 59, 0.9);
 }
 
+[data-theme='dark'] .prism-widget,
+.dark-theme .prism-widget {
+  border-color: var(--border-default);
+  box-shadow: var(--elevation-medium);
+}
+
+[data-theme='dark'] .prism-header,
+.dark-theme .prism-header {
+  background: var(--bg-widget);
+  border-bottom-color: var(--border-default);
+}
+
+[data-theme='dark'] .prism-footer,
+.dark-theme .prism-footer {
+  border-top-color: var(--border-default);
+  background: var(--bg-widget);
+}
+
+[data-theme='dark'] .prism-chip-outline,
+.dark-theme .prism-chip-outline {
+  border: 1px solid var(--border-default);
+}
+
+[data-theme='dark'] .prism-icon-ring,
+.dark-theme .prism-icon-ring {
+  border: 1.5px solid var(--border-strong);
+}
+
 /* ========================================
    Button Styles - Modern with gradients
    ======================================== */

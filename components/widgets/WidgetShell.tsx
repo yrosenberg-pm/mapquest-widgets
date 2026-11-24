@@ -4,6 +4,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import ThemeToggle from './ThemeToggle';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 // ========================================
 // Branding Props Interface
@@ -99,7 +100,7 @@ export default function WidgetShell({
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
       <div
         className={`prism-widget w-full ${className}`}
-        data-theme={theme}
+        {...prismWidgetThemeProps(theme === 'dark')}
         style={brandStyles}
       >
         {/* Optional Header */}

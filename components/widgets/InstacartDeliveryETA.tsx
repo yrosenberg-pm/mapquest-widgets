@@ -7,6 +7,7 @@ import { geocode, getDirections } from '@/lib/mapquest';
 import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 type DeliveryStatus = 'shopping' | 'checkout' | 'on_the_way' | 'arriving' | 'delivered';
 
@@ -222,6 +223,7 @@ export default function InstacartDeliveryETA({
       label: `${status.shopperName} - Your Shopper`, 
       color: INSTACART_GREEN,
       type: 'home'
+
     });
   }
   
@@ -250,7 +252,7 @@ export default function InstacartDeliveryETA({
   return (
     <div 
       className="prism-widget w-full md:w-[480px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': INSTACART_GREEN,

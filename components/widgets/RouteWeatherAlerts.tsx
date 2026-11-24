@@ -2,8 +2,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  Cloud,
+import {  Cloud,
   CloudDrizzle,
   CloudFog,
   CloudLightning,
@@ -31,6 +30,7 @@ import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
 import { geocode as mqGeocode, searchAhead } from '@/lib/mapquest';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 type Severity = 'warning' | 'watch' | 'advisory';
 
@@ -1141,7 +1141,7 @@ export default function RouteWeatherAlerts({
   return (
     <div
       className="prism-widget w-full md:w-[1240px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -1174,6 +1174,7 @@ export default function RouteWeatherAlerts({
                   title={
                     !place
                       ? 'Choose a place from suggestions to favorite it'
+
                       : placeIsFavorite
                         ? 'Remove from favorites'
                         : 'Add to favorites'

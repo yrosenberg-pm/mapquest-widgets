@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ArrowLeft,
+import {  ArrowLeft,
   Award,
   Building2,
   ChevronDown,
@@ -26,6 +25,7 @@ import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { reverseGeocode } from '@/lib/mapquest';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 /* ─── Types ─── */
 
@@ -294,7 +294,7 @@ export default function ContractorFinder({
   defaultSearchCenter = null,
   defaultMapCenter,
 }: ContractorFinderProps) {
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
@@ -477,7 +477,7 @@ export default function ContractorFinder({
   return (
     <div
       className="prism-widget w-full md:w-[1100px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ fontFamily: fontFamily || 'var(--brand-font)', '--brand-primary': accentColor } as React.CSSProperties}
     >
       <WidgetHeader
@@ -1040,3 +1040,4 @@ function ContractorCard({
     </button>
   );
 }
+

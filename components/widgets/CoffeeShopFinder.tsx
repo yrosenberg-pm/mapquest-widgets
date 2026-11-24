@@ -9,6 +9,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface CoffeeShopLocation {
   id: string;
@@ -340,7 +341,7 @@ export default function CoffeeShopFinder({
   return (
     <div
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={
         {
           fontFamily: fontFamily || 'var(--brand-font)',
@@ -582,3 +583,4 @@ export default function CoffeeShopFinder({
     </div>
   );
 }
+

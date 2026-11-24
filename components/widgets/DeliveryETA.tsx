@@ -8,6 +8,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 type DeliveryStatus = 'preparing' | 'in_transit' | 'nearby' | 'delivered';
 
@@ -148,6 +149,7 @@ export default function DeliveryETA({
       label: status.status === 'delivered' ? 'Delivered' : `${status.driverName} - Driver`, 
       color: '#16A34A',
       type: 'home'
+
     });
   }
   // Always show destination marker at route end
@@ -168,7 +170,7 @@ export default function DeliveryETA({
   return (
     <div 
       className="prism-widget w-full md:w-[620px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,

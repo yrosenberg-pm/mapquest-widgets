@@ -1,8 +1,7 @@
 // components/widgets/ListingTourPlanner.tsx
 'use client';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  geocode,
+import {  geocode,
   getDirections,
   optimizeRoute,
   reverseGeocode,
@@ -14,6 +13,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 import {
   Plus,
   Trash2,
@@ -333,6 +333,7 @@ export default function ListingTourPlanner({
   const [copySuccess, setCopySuccess] = useState(false);
   const [selectedRouteType, setSelectedRouteType] = useState<'fastest' | 'shortest' | 'balanced'>(
     'fastest'
+
   );
   /** Prefer non-toll routes when calculating legs (MapQuest `avoids=Toll Road`; best-effort). */
   const [avoidTolls, setAvoidTolls] = useState(false);
@@ -388,11 +389,11 @@ export default function ListingTourPlanner({
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-500/60' : 'border-gray-200';
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
-  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+  const bgWidget = 'var(--bg-widget)';
   const chipNeutralFill = darkMode ? 'bg-white/5' : 'bg-gray-100';
 
   const mpg = Number(mpgInput) || 28;
@@ -1906,7 +1907,7 @@ export default function ListingTourPlanner({
   return (
     <div
       className="prism-widget w-full md:w-[1100px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={
         {
           fontFamily: fontFamily || 'var(--brand-font)',

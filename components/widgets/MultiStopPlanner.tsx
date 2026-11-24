@@ -2,8 +2,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { 
-  Plus, Trash2, GripVertical, Loader2, RotateCcw, Route, 
+import {
+  Plus, Trash2, GripVertical, Loader2, RotateCcw, Route,
   Sparkles, Clock, Check, AlertTriangle, XCircle,
   Download, Share2, Shuffle, Navigation, MoreHorizontal,
   MapPin, Timer, TrendingDown, List, ArrowRight,
@@ -18,6 +18,7 @@ import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
 import { getFiftyStopDemo, getFiveStopDemo, type MultiStopDemoSeed } from '@/lib/demo/multiStopDemoStops';
 import { DEFAULT_DEMO_REGION_ID } from '@/lib/demo/demoRegions';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 /** Use MapQuest Optimized Route API instead of local matrix search. */
 const OPTIMIZE_API_THRESHOLD = 10;
@@ -213,11 +214,11 @@ export default function MultiStopPlanner({
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   // In dark mode the input bg is also gray-700, so we need a lighter border to keep fields visible.
   const borderColor = darkMode ? 'border-gray-500/60' : 'border-gray-200';
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
-  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+  const bgWidget = 'var(--bg-widget)';
 
   const pad2 = (n: number) => n.toString().padStart(2, '0');
   const departureDateValue = `${departureTime.getFullYear()}-${pad2(departureTime.getMonth() + 1)}-${pad2(departureTime.getDate())}`;
@@ -1012,7 +1013,7 @@ export default function MultiStopPlanner({
   return (
     <div 
       className="prism-widget w-full md:w-[1100px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -2091,3 +2092,4 @@ export default function MultiStopPlanner({
     </div>
   );
 }
+

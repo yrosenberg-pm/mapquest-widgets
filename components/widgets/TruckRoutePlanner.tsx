@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import {
-  Truck,
+import {  Truck,
   Loader2,
   Plus,
   Trash2,
@@ -36,6 +35,7 @@ import {
   schoolMarkerHtml,
 } from '@/lib/mapMarkerIcons';
 import TruckRouteFleetView from './TruckRouteFleetView';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 /** Deep blue route ribbon (Zonar brand) — traffic colors overlay this base. */
 const ROUTE_LINE_BLUE = '#0054A6';
@@ -273,7 +273,7 @@ export default function TruckRoutePlanner({
   const borderColor = darkMode ? 'border-gray-500/60' : 'border-gray-200';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
-  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+  const bgWidget = 'var(--bg-widget)';
 
   const syncDepartureFromFields = useCallback((dateStr: string, timeStr: string) => {
     const [y, m, d] = dateStr.split('-').map(Number);
@@ -630,6 +630,7 @@ export default function TruckRoutePlanner({
             {route.hasUTurn ? 'Includes at least one U-turn.' : 'No U-turns flagged.'}{' '}
             {route.hasDifficultTurn
               ? 'Some turns may be difficult for this vehicle.'
+
               : 'No difficult turns flagged.'}
           </span>
         </p>
@@ -640,7 +641,7 @@ export default function TruckRoutePlanner({
   return (
     <div
       className="prism-widget w-full md:w-[1180px] overflow-hidden"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={
         {
           fontFamily: fontFamily || 'var(--brand-font)',

@@ -2,8 +2,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Bus,
+import {  Bus,
   ChevronRight,
   Clock,
   Loader2,
@@ -24,6 +23,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import { geocode } from '@/lib/mapquest';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface PublicTransitDeparturesProps extends DemoMapProps {
   accentColor?: string;
@@ -448,7 +448,7 @@ export default function PublicTransitDepartures({
   return (
     <div
       className="prism-widget w-full md:w-[1000px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -909,3 +909,4 @@ export default function PublicTransitDepartures({
     </div>
   );
 }
+

@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Building2,
+import {  Building2,
   ChevronDown,
   Eye,
   EyeOff,
@@ -28,6 +27,7 @@ import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { geocode } from '@/lib/mapquest';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -465,7 +465,7 @@ export default function NeighborhoodProfile({
 
   const derivedMapType = mapZoom >= 18 ? 'hybrid' as const : undefined;
 
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
@@ -632,7 +632,7 @@ export default function NeighborhoodProfile({
   return (
     <div
       className="prism-widget w-full md:w-[1200px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ fontFamily: fontFamily || 'var(--brand-font)', '--brand-primary': accentColor, '--brand-primary-alpha': `${accentColor}0C` } as React.CSSProperties}
     >
       <WidgetHeader
@@ -852,7 +852,7 @@ export default function NeighborhoodProfile({
                     onClick={() => toggleCategory(cat)}
                     className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold shadow-md transition-opacity"
                     style={{
-                      background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)',
+                      background: 'var(--bg-widget)',
                       border: `1px solid ${border}`,
                       color: enabledCategories[cat] ? cfg.color : buttonMuted,
                       opacity: enabledCategories[cat] ? 1 : 0.5,
@@ -868,7 +868,7 @@ export default function NeighborhoodProfile({
                   onClick={() => setShowBoundary(!showBoundary)}
                   className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold shadow-md transition-opacity"
                   style={{
-                    background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)',
+                    background: 'var(--bg-widget)',
                     border: `1px solid ${border}`,
                     color: showBoundary ? accentColor : buttonMuted,
                     opacity: showBoundary ? 1 : 0.5,
@@ -883,7 +883,7 @@ export default function NeighborhoodProfile({
                   onClick={() => setShowIsolines(!showIsolines)}
                   className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold shadow-md transition-opacity"
                   style={{
-                    background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)',
+                    background: 'var(--bg-widget)',
                     border: `1px solid ${border}`,
                     color: showIsolines ? accentColor : buttonMuted,
                     opacity: showIsolines ? 1 : 0.5,
@@ -900,7 +900,7 @@ export default function NeighborhoodProfile({
           {community && ((showBoundary && boundaryPolygon) || ((walkIsoline || driveIsoline) && showIsolines)) && (
             <div
               className="absolute left-3 bottom-10 z-[500] rounded-xl px-3 py-2 shadow-lg flex flex-col gap-1"
-              style={{ background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}`, backdropFilter: 'blur(8px)' }}
+              style={{ background: 'var(--bg-widget)', border: `1px solid ${border}`, backdropFilter: 'blur(8px)' }}
             >
               {showBoundary && boundaryPolygon && (
                 <div className="flex items-center gap-2">
@@ -924,7 +924,7 @@ export default function NeighborhoodProfile({
           )}
 
           {loading && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 shadow-lg flex items-center gap-1.5 z-[500]" style={{ background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}` }}>
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 shadow-lg flex items-center gap-1.5 z-[500]" style={{ background: 'var(--bg-widget)', border: `1px solid ${border}` }}>
               <Loader2 className="w-3 h-3 animate-spin" style={{ color: accentColor }} />
               <span className="text-[10px]" style={{ color: textMuted }}>Loading…</span>
             </div>
@@ -961,3 +961,4 @@ function SectionHeader({ title, sectionKey, collapsed, toggle }: { title: string
     </button>
   );
 }
+

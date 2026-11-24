@@ -11,6 +11,7 @@ import { reverseGeocode } from '@/lib/mapquest';
 import { decodeHereFlexiblePolyline } from '@/lib/hereFlexiblePolyline';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 type TravelTimePreset = 15 | 30 | 45 | 60;
 type ModeOption = 'drive' | 'walk' | 'bike';
@@ -412,6 +413,7 @@ export default function IsolineOverlapWidget({
     if (!f) return null;
     const geom = f.geometry;
     const firstRing = geom.type === 'Polygon'
+
       ? geom.coordinates?.[0]
       : geom.coordinates?.[0]?.[0];
     if (!firstRing || firstRing.length < 3) return null;
@@ -517,7 +519,7 @@ export default function IsolineOverlapWidget({
   return (
     <div
       className="prism-widget w-full md:w-[980px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,

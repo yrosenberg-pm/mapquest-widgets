@@ -73,7 +73,7 @@ export default function TruckRouteFleetView({
 
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
-  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+  const bgWidget = 'var(--bg-widget)';
 
   const accentHsl = useMemo(() => hexToHsl(accentColor), [accentColor]);
   const fleet = useMemo(() => getActiveFleet(preset), [preset]);

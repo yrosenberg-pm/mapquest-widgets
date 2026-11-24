@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import {
-  Calendar,
+import {  Calendar,
   ChevronDown,
   ChevronRight,
   Filter,
@@ -19,6 +18,7 @@ import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { reverseGeocode } from '@/lib/mapquest';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface ShovelsPermit {
   id: string;
@@ -288,7 +288,7 @@ export default function ConstructionHeatmap({
   const [filtersOpen, setFiltersOpen] = useState(true);
 
   const bgPanel = 'var(--bg-panel)';
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
@@ -429,7 +429,7 @@ export default function ConstructionHeatmap({
   return (
     <div
       className="prism-widget w-full md:w-[1100px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ fontFamily: fontFamily || 'var(--brand-font)', '--brand-primary': accentColor } as React.CSSProperties}
     >
       <WidgetHeader
@@ -810,3 +810,4 @@ export default function ConstructionHeatmap({
     </div>
   );
 }
+

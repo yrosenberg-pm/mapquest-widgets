@@ -10,7 +10,8 @@ import {
 import { type LatLngTuple } from '@/lib/maplibre/geo';
 import { registerMaplibreWorker } from '@/lib/maplibre/registerWorker';
 import { drawRibbonRoute } from '@/lib/maplibre/routeDraw';
-import { resolveMapQuestTileStyle } from '@/lib/mapquestMaplibreStyle';
+import { mapQuestVectorBasemapEnabled } from '@/lib/mapquestBasemapEngine';
+import { resolveMapQuestMapStyle } from '@/lib/mapquestMaplibreStyle';
 import { Map as MaplibreMap, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useRef, useState } from 'react';
@@ -45,7 +46,7 @@ export default function DemoTruckMap({ runKey, route }: Props) {
 
     const map = new MaplibreMap({
       container: host,
-      style: resolveMapQuestTileStyle(API_KEY, 'map'),
+      style: resolveMapQuestMapStyle(API_KEY, 'map', mapQuestVectorBasemapEnabled()),
       center: [DEMO_MAP_CENTER.lng, DEMO_MAP_CENTER.lat],
       zoom: DEMO_MAP_CENTER.zoom,
       attributionControl: { compact: true },

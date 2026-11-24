@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  ArrowUpDown,
+import {  ArrowUpDown,
   Bath,
   BedDouble,
   Calendar,
@@ -26,6 +25,7 @@ import WidgetHeader from './WidgetHeader';
 import AddressAutocomplete from '../AddressAutocomplete';
 import { geocode } from '@/lib/mapquest';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -531,7 +531,7 @@ export default function ComparableSalesMap({
   const [mapZoom, setMapZoom] = useState(14);
   const handleMapBoundsChange = useCallback((b: { zoom: number }) => setMapZoom(b.zoom), []);
 
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
@@ -1006,7 +1006,7 @@ export default function ComparableSalesMap({
   return (
     <div
       className="prism-widget w-full md:w-[1200px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ fontFamily: fontFamily || 'var(--brand-font)', '--brand-primary': accentColor, '--brand-primary-alpha': `${accentColor}0C` } as React.CSSProperties}
     >
       <WidgetHeader
@@ -1393,7 +1393,7 @@ export default function ComparableSalesMap({
                 onClick={() => setShowBoundary((b) => !b)}
                 className="absolute top-3 right-3 z-[500] rounded-lg px-2.5 py-1.5 text-[10px] font-semibold shadow-lg transition-opacity"
                 style={{
-                  background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)',
+                  background: 'var(--bg-widget)',
                   border: `1px solid ${border}`,
                   color: showBoundary ? accentColor : buttonMuted,
                   opacity: showBoundary ? 1 : 0.9,
@@ -1409,7 +1409,7 @@ export default function ComparableSalesMap({
                 className="absolute right-3 z-[500] rounded-xl px-3 py-2.5 shadow-lg"
                 style={{
                   bottom: 36,
-                  background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)',
+                  background: 'var(--bg-widget)',
                   border: `1px solid ${border}`,
                   backdropFilter: 'blur(8px)',
                 }}
@@ -1444,7 +1444,7 @@ export default function ComparableSalesMap({
             {(loading || compsLoading) && (
               <div
                 className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full px-3 py-1.5 shadow-lg flex items-center gap-1.5 z-[500]"
-                style={{ background: darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)', border: `1px solid ${border}` }}
+                style={{ background: 'var(--bg-widget)', border: `1px solid ${border}` }}
               >
                 <Loader2 className="w-3 h-3 animate-spin" style={{ color: accentColor }} />
                 <span className="text-[10px]" style={{ color: textMuted }}>Loading…</span>
@@ -1526,3 +1526,4 @@ export default function ComparableSalesMap({
     </div>
   );
 }
+

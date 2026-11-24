@@ -4,9 +4,9 @@ import { demoPinColorName, type ClusterDemoStop } from './hereClusterDemoStops';
 export const PIN_W = 28;
 export const PIN_H = 36;
 export const PIN_ANCHOR: [number, number] = [14, 36];
-/** Circle cluster icon — same anchor as a pin so clusters sit on the map consistently. */
-export const CLUSTER_CIRCLE_SIZE = 28;
-export const CLUSTER_ANCHOR: [number, number] = [14, 14];
+/** Default on-map diameter for solid cluster badges (matches parking-style POI circles: 38px). */
+export const CLUSTER_CIRCLE_SIZE = 38;
+export const CLUSTER_ANCHOR: [number, number] = [19, 19];
 /** Stacking for cluster demo markers (MapQuestMap uses el.style.zIndex). */
 export const DEMO_PIN_MARKER_Z = 400;
 export const DEMO_CLUSTER_MARKER_Z = 800;
@@ -67,8 +67,9 @@ export function formatClusterCountLabel(count: number): string {
 
 export function clusterTierMetrics(count: number) {
   const tier = clusterCountTier(count);
-  const size = tier === 'L' ? 46 : tier === 'M' ? 38 : 32;
-  const fontSize = tier === 'L' ? 17 : tier === 'M' ? 15 : 13;
+  // Match typical list POI markers (e.g. Parking Finder: 38 default, 44 emphasis).
+  const size = tier === 'L' ? 44 : tier === 'M' ? 40 : CLUSTER_CIRCLE_SIZE;
+  const fontSize = tier === 'L' ? 16 : tier === 'M' ? 15 : 14;
   const ringThickness = tier === 'L' ? 6 : tier === 'M' ? 5 : 4;
   const anchor: [number, number] = [size / 2, size / 2];
   return { tier, size, fontSize, ringThickness, anchor };
@@ -77,8 +78,9 @@ export function clusterTierMetrics(count: number) {
 /** All-pins donut clusters — slightly larger ring + label for color breakdown readability. */
 export function clusterAllPinsTierMetrics(count: number) {
   const tier = clusterCountTier(count);
-  const size = tier === 'L' ? 52 : tier === 'M' ? 44 : 36;
-  const fontSize = tier === 'L' ? 18 : tier === 'M' ? 16 : 14;
+  const solid = clusterTierMetrics(count);
+  const size = solid.size + (tier === 'L' ? 4 : tier === 'M' ? 2 : 0);
+  const fontSize = tier === 'L' ? 17 : tier === 'M' ? 15 : 14;
   const ringThickness = tier === 'L' ? 7 : tier === 'M' ? 6 : 5;
   const anchor: [number, number] = [size / 2, size / 2];
   return { tier, size, fontSize, ringThickness, anchor };
@@ -183,6 +185,19 @@ export function buildClusterBreakdownTooltip(
         colorName: demoPinColorName(color),
         count,
       })),
+  };
+}
+
+/** Solid circle cluster icon + MapLibre marker layout (SVG size matches iconSize). */
+export function clusterPinMarkerLayout(
+  count: number,
+  fill = '#111827',
+): { iconUrl: string; iconSize: [number, number]; iconAnchor: [number, number] } {
+  const { size, anchor } = clusterTierMetrics(count);
+  return {
+    iconUrl: clusterPinIconUrl(count, fill),
+    iconSize: [size, size],
+    iconAnchor: anchor,
   };
 }
 
@@ -369,9 +384,7 @@ export type ViewportBounds = {
 
 /** Above this zoom, prefer individual pins (Mapbox Supercluster default maxZoom is 16). */
 export const DEFAULT_MAX_CLUSTER_ZOOM = 12;
-/** At/above this zoom, clusters only merge same-color pins; below = one cluster per cell. */
-export const DEFAULT_COLOR_CLUSTER_MIN_ZOOM = 11;
-/** Neutral bubble for regional/national clusters that combine all pin colors. */
+/** Legacy export — all-pins clusters may use a neutral center label color in docs; icons use donut segments. */
 export const UNIFIED_CLUSTER_COLOR = '#111827';
 /** Max individual DOM markers before falling back to light clustering in dense viewports. */
 export const VIEWPORT_INDIVIDUAL_PIN_CAP = 400;
@@ -533,8 +546,6 @@ export function buildClusterMapMarkers(opts: {
   /** Only cluster/render stops near the visible map area. */
   viewportBounds?: ViewportBounds | null;
   individualPinCap?: number;
-  /** Zoom at/above which clusters split by pin color (below = unified neutral clusters). */
-  colorClusterMinZoom?: number;
 }): ClusterMapMarker[] {
   const {
     stops,
@@ -549,7 +560,6 @@ export function buildClusterMapMarkers(opts: {
     maxClusterZoom = DEFAULT_MAX_CLUSTER_ZOOM,
     viewportBounds = null,
     individualPinCap = VIEWPORT_INDIVIDUAL_PIN_CAP,
-    colorClusterMinZoom = DEFAULT_COLOR_CLUSTER_MIN_ZOOM,
   } = opts;
 
   const spiderIds = new Set<string>();
@@ -560,8 +570,8 @@ export function buildClusterMapMarkers(opts: {
   const visibleStops = filterStopsInViewport(stops, viewportBounds);
   const cellPx = effectiveCellPx(zoom, eps);
   const clusterMin = effectiveMinWeight(zoom, minWeight, maxClusterZoom);
-  const groupByColor =
-    clusterStyle === 'by-color' ? zoom >= colorClusterMinZoom : clusterStyle !== 'all-pins';
+  /** By-color: same grid cell + same pin color only. All-pins: one bucket per cell, donut ring shows mix. */
+  const groupByColor = clusterStyle === 'by-color';
 
   let clustered: ClusterMapMarker[];
   if (clusterStyle === 'off') {

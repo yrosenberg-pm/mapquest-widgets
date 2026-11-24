@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ChevronRight,
+import {  ChevronRight,
   Clock,
   DollarSign,
   ExternalLink,
@@ -25,6 +24,13 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import { geocode, searchPlaces } from '@/lib/mapquest';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import {
+  filterPillBorder,
+  prismWidgetThemeProps,
+  shellAccentBorder,
+  shellAccentFill,
+  shellNeutralBorder,
+} from '@/lib/widgetShellTheme';
 
 interface ParkingFinderProps extends DemoMapProps {
   accentColor?: string;
@@ -289,7 +295,7 @@ export default function ParkingFinder({
     });
   };
 
-  const brandColor = '#8B5CF6';
+  const brandColor = accentColor;
 
   const mapCenter = selectedSpot
     ? { lat: selectedSpot.lat, lng: selectedSpot.lng }
@@ -328,7 +334,7 @@ export default function ParkingFinder({
   return (
     <div
       className="prism-widget w-full md:w-[1060px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ fontFamily: fontFamily || 'var(--brand-font)', '--brand-primary': accentColor } as React.CSSProperties}
     >
       <WidgetHeader
@@ -341,7 +347,7 @@ export default function ParkingFinder({
           destCoords && !loading ? (
             <button
               onClick={() => searchParking(destCoords.lat, destCoords.lng)}
-              className="p-2 rounded-lg transition-colors hover:bg-black/5"
+              className={`p-2 rounded-lg transition-colors ${darkMode ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}
               style={{ color: 'var(--text-muted)' }}
               aria-label="Refresh results"
             >
@@ -370,13 +376,27 @@ export default function ParkingFinder({
         {/* Sidebar */}
         <div
           className="w-full md:w-[45%] flex flex-col overflow-hidden border-t md:border-t-0 md:border-r md:order-1"
-          style={{ borderColor: 'var(--border-subtle)' }}
+          style={{
+            borderColor: darkMode ? 'var(--border-default)' : 'var(--border-subtle)',
+            background: darkMode ? 'var(--bg-panel)' : undefined,
+          }}
         >
           {/* Destination input */}
-          <div className="p-4" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-panel)' }}>
+          <div
+            className="p-4"
+            style={{
+              borderBottom: `1px solid ${darkMode ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+              background: darkMode ? 'var(--bg-widget)' : 'var(--bg-panel)',
+            }}
+          >
             <div
               className="rounded-xl flex items-center gap-2.5"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', padding: '10px 12px' }}
+              style={{
+                background: 'var(--bg-input)',
+                border: `1px solid ${darkMode ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+                boxShadow: darkMode ? 'var(--elevation-low)' : undefined,
+                padding: '10px 12px',
+              }}
             >
               <Search className="w-4 h-4 flex-shrink-0" style={{ color: accentColor }} />
               <AddressAutocomplete
@@ -389,17 +409,17 @@ export default function ParkingFinder({
                 }}
                 placeholder="Where are you going?"
                 darkMode={darkMode}
-                inputBg={darkMode ? 'bg-gray-700' : 'bg-gray-50'}
-                textColor={darkMode ? 'text-white' : 'text-gray-900'}
-                mutedText={darkMode ? 'text-gray-200' : 'text-gray-500'}
-                borderColor={darkMode ? 'border-gray-700' : 'border-gray-200'}
+                inputBg={darkMode ? 'bg-transparent border-transparent shadow-none' : 'bg-gray-50'}
+                textColor={darkMode ? 'text-[color:var(--text-main)]' : 'text-gray-900'}
+                mutedText={darkMode ? 'text-[color:var(--text-muted)]' : 'text-gray-500'}
+                borderColor={darkMode ? 'border-transparent' : 'border-gray-200'}
                 className="flex-1"
                 hideIcon
               />
               <button
                 onClick={detectLocation}
                 disabled={locating}
-                className="p-1.5 rounded-lg transition-colors hover:bg-black/5 flex-shrink-0"
+                className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${darkMode ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}
                 style={{ color: locating ? accentColor : 'var(--text-muted)' }}
                 aria-label="Use my location"
               >
@@ -425,7 +445,7 @@ export default function ParkingFinder({
                         style={{
                           background: active ? accentColor : 'var(--bg-input)',
                           color: active ? 'white' : 'var(--text-muted)',
-                          border: `1px solid ${active ? accentColor : 'var(--border-subtle)'}`,
+                          border: `1px solid ${active ? accentColor : shellNeutralBorder(darkMode)}`,
                         }}
                       >
                         {d < 1 ? `${d} mi` : `${d} mi`}
@@ -441,7 +461,7 @@ export default function ParkingFinder({
           {filtered.length > 0 && !loading && (
             <div
               className="flex items-center gap-1.5 px-3 py-2 flex-wrap"
-              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+              style={{ borderBottom: `1px solid ${darkMode ? 'var(--border-default)' : 'var(--border-subtle)'}` }}
             >
               <Filter className="w-3 h-3 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
               {(['garage', 'lot', 'other'] as FacilityType[]).map(f => {
@@ -454,7 +474,7 @@ export default function ParkingFinder({
                     style={{
                       background: active ? `${brandColor}18` : 'var(--bg-input)',
                       color: active ? brandColor : 'var(--text-muted)',
-                      border: `1px solid ${active ? `${brandColor}40` : 'transparent'}`,
+                      border: `1px solid ${filterPillBorder(active, brandColor, darkMode)}`,
                     }}
                   >
                     {f === 'garage' ? 'Garage' : f === 'lot' ? 'Lot' : 'Other'}
@@ -467,7 +487,7 @@ export default function ParkingFinder({
                 style={{
                   background: showHandicapOnly ? `${brandColor}18` : 'var(--bg-input)',
                   color: showHandicapOnly ? brandColor : 'var(--text-muted)',
-                  border: `1px solid ${showHandicapOnly ? `${brandColor}40` : 'transparent'}`,
+                  border: `1px solid ${filterPillBorder(showHandicapOnly, brandColor, darkMode)}`,
                 }}
               >
                 <Accessibility className="w-3 h-3" /> ADA
@@ -478,7 +498,7 @@ export default function ParkingFinder({
                 style={{
                   background: showEVOnly ? `${brandColor}18` : 'var(--bg-input)',
                   color: showEVOnly ? brandColor : 'var(--text-muted)',
-                  border: `1px solid ${showEVOnly ? `${brandColor}40` : 'transparent'}`,
+                  border: `1px solid ${filterPillBorder(showEVOnly, brandColor, darkMode)}`,
                 }}
               >
                 <Zap className="w-3 h-3" /> EV
@@ -507,7 +527,16 @@ export default function ParkingFinder({
             {/* Empty state before search */}
             {!destCoords && !loading && (
               <div className="text-center py-12 px-4">
-                <ParkingCircle className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
+                <div
+                  className="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center"
+                  style={{
+                    color: brandColor,
+                    background: shellAccentFill(brandColor, darkMode),
+                    border: `1.5px solid ${shellAccentBorder(brandColor, darkMode, 'icon')}`,
+                  }}
+                >
+                  <ParkingCircle className="w-6 h-6" />
+                </div>
                 <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-main)' }}>Find nearby parking</p>
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   Enter a destination or use your current location to get started.
@@ -555,13 +584,21 @@ export default function ParkingFinder({
                     <div className="flex items-center gap-2 mt-3">
                       <span
                         className="text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg"
-                        style={{ background: `${sc}20`, color: sc }}
+                        style={{
+                          background: shellAccentFill(sc, darkMode),
+                          color: sc,
+                          border: `1px solid ${shellAccentBorder(sc, darkMode, 'chip')}`,
+                        }}
                       >
                         {facilityLabel}
                       </span>
                       <span
                         className="text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg"
-                        style={{ background: 'var(--bg-input)', color: 'var(--text-muted)' }}
+                        style={{
+                          background: 'var(--bg-input)',
+                          color: 'var(--text-muted)',
+                          border: `1px solid ${shellNeutralBorder(darkMode)}`,
+                        }}
                       >
                         <Navigation className="w-2.5 h-2.5 inline -mt-px mr-0.5" />{selectedSpot.distance.toFixed(2)} mi
                       </span>
@@ -581,7 +618,10 @@ export default function ParkingFinder({
                   {/* Stats row */}
                   <div
                     className="grid grid-cols-3 rounded-b-xl overflow-hidden"
-                    style={{ border: '1px solid var(--border-subtle)', borderTop: 'none' }}
+                    style={{
+                      border: `1px solid ${shellNeutralBorder(darkMode)}`,
+                      borderTop: 'none',
+                    }}
                   >
                     {[
                       { icon: <DollarSign className="w-5 h-5" />, value: selectedSpot.pricePerHour != null ? `$${selectedSpot.pricePerHour}` : '—', label: 'per hour', color: '#22C55E' },
@@ -591,11 +631,18 @@ export default function ParkingFinder({
                       <div
                         key={i}
                         className="p-3.5 text-center"
-                        style={{ borderRight: i < 2 ? '1px solid var(--border-subtle)' : 'none', background: 'var(--bg-panel)' }}
+                        style={{
+                          borderRight: i < 2 ? `1px solid ${shellNeutralBorder(darkMode)}` : 'none',
+                          background: 'var(--bg-panel)',
+                        }}
                       >
                         <div
                           className="w-9 h-9 rounded-lg flex items-center justify-center mx-auto mb-1.5"
-                          style={{ background: `${stat.color}10`, color: stat.color }}
+                          style={{
+                            background: `${stat.color}12`,
+                            color: stat.color,
+                            border: `1px solid ${darkMode ? `${stat.color}45` : `${stat.color}28`}`,
+                          }}
                         >
                           {stat.icon}
                         </div>
@@ -634,15 +681,32 @@ export default function ParkingFinder({
                     <button
                       key={spot.id}
                       onClick={() => setSelectedSpot(spot)}
-                      className="w-full rounded-xl transition-all text-left hover:brightness-[0.97]"
-                      style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-subtle)' }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = `${c}60`; e.currentTarget.style.boxShadow = `0 2px 8px ${c}10`; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.boxShadow = 'none'; }}
+                      className="w-full rounded-xl transition-all text-left"
+                      style={{
+                        background: darkMode ? 'var(--bg-input)' : 'var(--bg-panel)',
+                        border: `1px solid ${darkMode ? 'var(--border-default)' : 'var(--border-subtle)'}`,
+                        boxShadow: darkMode ? 'var(--elevation-low)' : undefined,
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.borderColor = `${c}80`;
+                        e.currentTarget.style.boxShadow = darkMode
+                          ? `var(--elevation-low), 0 0 0 1px ${c}30`
+                          : `0 2px 8px ${c}10`;
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.borderColor = darkMode ? 'var(--border-default)' : 'var(--border-subtle)';
+                        e.currentTarget.style.boxShadow = darkMode ? 'var(--elevation-low)' : 'none';
+                      }}
                     >
                       <div className="flex items-center gap-3 p-3">
                         <div
                           className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                          style={{ background: `${c}12`, color: c }}
+                          style={{
+                            background: shellAccentFill(c, darkMode),
+                            color: c,
+                            border: `1.5px solid ${shellAccentBorder(c, darkMode, 'icon')}`,
+                            boxShadow: darkMode ? 'inset 0 1px 0 rgba(255,255,255,0.08)' : undefined,
+                          }}
                         >
                           <span className="font-bold text-sm">P</span>
                         </div>
@@ -657,7 +721,11 @@ export default function ParkingFinder({
                             <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>·</span>
                             <span
                               className="text-[9px] font-semibold px-1.5 py-px rounded"
-                              style={{ background: `${c}12`, color: c }}
+                              style={{
+                                background: shellAccentFill(c, darkMode),
+                                color: c,
+                                border: `1px solid ${shellAccentBorder(c, darkMode, 'chip')}`,
+                              }}
                             >
                               {spot.facilityType === 'garage' ? 'Garage' : spot.facilityType === 'lot' ? 'Lot' : 'Parking'}
                             </span>

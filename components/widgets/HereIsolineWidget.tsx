@@ -10,6 +10,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 type TransportMode = 'car' | 'pedestrian' | 'bicycle';
 
@@ -241,7 +242,7 @@ export default function HereIsolineWidget({
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -469,3 +470,4 @@ export default function HereIsolineWidget({
     </div>
   );
 }
+

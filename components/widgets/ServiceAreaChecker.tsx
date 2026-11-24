@@ -8,6 +8,7 @@ import MapQuestMap from './MapQuestMap';
 import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface ServiceAreaCheckerProps {
   accentColor?: string;
@@ -321,7 +322,7 @@ export default function ServiceAreaChecker({
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -583,3 +584,4 @@ export default function ServiceAreaChecker({
     </div>
   );
 }
+

@@ -10,6 +10,7 @@ import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
 import { stopDotIconDataUri, waypointIconDataUri } from '@/lib/mapMarkerIcons';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 export interface Waypoint {
   lat: number;
@@ -836,6 +837,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
       // Intermediate waypoints should be subtly represented (still visible, but not as prominent as start/end).
       const iconUrl =
         effective.markerStyle === 'dots'
+
           ? stopDotIconDataUri({ color: pinColor })
           : isWaypoint
             ? stopDotIconDataUri({ color: pinColor })
@@ -1590,7 +1592,7 @@ export default function CustomRouteWidget(props: RouteWidgetProps) {
   return (
     <div
       className="prism-widget w-full flex flex-col"
-      data-theme={isDark ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(isDark)}
       style={{
         width: `${width}px`,
         ...(height ? { height: `${height}px` } : {}),

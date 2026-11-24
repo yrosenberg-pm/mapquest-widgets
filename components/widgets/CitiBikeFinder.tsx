@@ -9,6 +9,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface BikeStation {
   id: string;
@@ -43,6 +44,7 @@ interface CitiBikeFinderProps extends DemoMapProps {
 // Citi Bike brand colors (from official logo)
 const CITIBIKE_BLUE = '#0033A0';
 const CITIBIKE_ORANGE = '#FF6B00'; // Orange dot on the 'i'
+
 const LYFT_PINK = '#FF00BF';
 
 // Raw API response types
@@ -349,7 +351,7 @@ export default function CitiBikeFinder({
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': CITIBIKE_BLUE,

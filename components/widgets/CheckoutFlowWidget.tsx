@@ -9,6 +9,7 @@ import { geocodeLocations } from '@/lib/mapquest';
 import { useAddressAutocomplete } from '@/hooks/useAddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 type ValidationState = 'idle' | 'verifying' | 'verified' | 'suggestion' | 'invalid';
 
@@ -399,7 +400,7 @@ export default function CheckoutFlowWidget({
   return (
     <div
       className="prism-widget w-full md:w-[1100px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -452,6 +453,7 @@ export default function CheckoutFlowWidget({
                     <ValidationIndicator state={validation.state} />
                     <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                       {validation.state === 'verified'
+
                         ? 'Verified'
                         : validation.state === 'suggestion'
                           ? 'Suggestion'

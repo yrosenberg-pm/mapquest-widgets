@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AlertCircle,
+import {  AlertCircle,
   Layers,
   Loader2,
   Monitor,
@@ -34,6 +33,7 @@ import {
   type ClusterMapMarker,
   type ClusterStyleMode,
 } from '@/lib/clusterMapMarkers';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 const mapQuestApiKey = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 
@@ -443,6 +443,7 @@ export default function HereClusterRouteDemo({
 
   const shellClass = isDevicePreview
     ? 'prism-widget w-full max-w-full'
+
     : 'prism-widget w-full md:w-[1200px]';
 
   const bodyClass = isDevicePreview
@@ -920,7 +921,7 @@ export default function HereClusterRouteDemo({
   const widgetBody = (
     <div
       className={`${shellClass}${isDevicePreview ? ' h-full flex flex-col min-h-0' : ''}`}
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       data-device-preview={devicePreview}
       style={{
         fontFamily: fontFamily || 'var(--brand-font)',

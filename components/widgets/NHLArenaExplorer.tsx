@@ -8,6 +8,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 const NHL_STADIUMS = [
   { id: 1, abbrev: 'ANA', team: 'Anaheim Ducks', arena: 'Honda Center', city: 'Anaheim', state: 'CA', lat: 33.8078, lng: -117.8765, capacity: 17174, color: '#F47A38', year: 1993, conference: 'Western', division: 'Pacific' },
@@ -311,6 +312,7 @@ export default function NHLArenaExplorer({
             distance: '—',
             duration: '—',
             mode: 'Transit not available (API access required)'
+
           });
         } else if (hereData.routes && hereData.routes.length > 0) {
           const route = hereData.routes[0];
@@ -640,7 +642,7 @@ export default function NHLArenaExplorer({
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         '--brand-primary': accentColor,
         fontFamily: fontFamily || undefined,

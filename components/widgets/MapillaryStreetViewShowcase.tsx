@@ -14,6 +14,7 @@ import WidgetHeader from './WidgetHeader';
 import { geocode, setApiKey } from '@/lib/mapquest';
 import { fetchMapillaryImagesNear } from '@/lib/mapillaryClient';
 import { streetViewBorderRadius } from '@/lib/streetViewRadius';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 const MAP_KEY = process.env.NEXT_PUBLIC_MAPQUEST_API_KEY || '';
 const MAPILLARY_KEY = process.env.NEXT_PUBLIC_MAPILLARY_ACCESS_TOKEN || '';
@@ -195,11 +196,11 @@ export default function MapillaryStreetViewShowcase({
     [openStreetView]
   );
 
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
-  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+  const bgWidget = 'var(--bg-widget)';
   const inputBg = darkMode ? 'bg-gray-700' : 'bg-gray-50';
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
@@ -214,7 +215,7 @@ export default function MapillaryStreetViewShowcase({
     <div
       className="prism-widget flex min-h-0 w-full flex-col"
       data-streetview="true"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={
         {
           fontFamily: fontFamily || 'var(--brand-font)',
@@ -239,6 +240,7 @@ export default function MapillaryStreetViewShowcase({
         <div
           className={`absolute inset-0 z-0 min-h-0 min-w-0 overflow-hidden transition-opacity duration-200 ${
             inStreetView ? 'pointer-events-none opacity-0' : 'opacity-100'
+
           }`}
           aria-hidden={inStreetView}
         >

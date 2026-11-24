@@ -9,6 +9,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface StarbucksLocation {
   id: string;
@@ -362,7 +363,7 @@ export default function StarbucksFinder({
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': STARBUCKS_GREEN,
@@ -618,6 +619,7 @@ export default function StarbucksFinder({
                   window.open(
                     `https://www.mapquest.com/directions/to/${selectedStore.lat},${selectedStore.lng}`,
                     '_blank'
+
                   );
                 }}
               >

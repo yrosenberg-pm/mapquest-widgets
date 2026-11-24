@@ -2,8 +2,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useRef } from 'react';
-import {
-  Loader2, Search, Plus, X, Eye, EyeOff, Layers, MapPin, Trash2,
+import {  Loader2, Search, Plus, X, Eye, EyeOff, Layers, MapPin, Trash2,
   CheckCircle2, XCircle, Mail, ClipboardPaste,
 } from 'lucide-react';
 import { geocode } from '@/lib/mapquest';
@@ -12,6 +11,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface MultiZoneCoverageProps extends DemoMapProps {
   accentColor?: string;
@@ -175,11 +175,11 @@ export default function MultiZoneCoverage({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const colorIndexRef = useRef(0);
 
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
-  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+  const bgWidget = 'var(--bg-widget)';
 
   // ── customer preview state ──
   const [custAddress, setCustAddress] = useState('');
@@ -386,7 +386,7 @@ export default function MultiZoneCoverage({
   return (
     <div
       className="prism-widget"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ fontFamily: fontFamily || 'var(--brand-font)', '--brand-primary': accentColor, width: 1200 } as React.CSSProperties}
     >
       <WidgetHeader
@@ -710,3 +710,4 @@ export default function MultiZoneCoverage({
     </div>
   );
 }
+

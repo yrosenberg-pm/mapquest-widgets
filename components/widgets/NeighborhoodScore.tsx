@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { 
+import {
   MapPin, Navigation, Loader2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp,
   ShoppingCart, Utensils, Coffee, Trees, Dumbbell, GraduationCap, Pill, Building2,
   Bus, LucideIcon, MessageCircle, Send, X, Sparkles, CornerDownLeft,
@@ -16,6 +16,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import { resolveMapCenter, type DemoMapProps } from '@/lib/demo/mapDefaults';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface Category {
   id: string;
@@ -477,11 +478,11 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
-  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+  const bgWidget = 'var(--bg-widget)';
 
   const calculateScores = async () => {
     let loc = location;
@@ -757,7 +758,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
   return (
     <div 
       className="prism-widget w-full md:w-[900px]"
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
@@ -924,6 +925,7 @@ ${scoresSummary || 'No scores calculated yet. The user needs to click "Calculate
                         className="max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed"
                         style={
                           msg.role === 'user'
+
                             ? { background: accentColor, color: 'white', borderBottomRightRadius: 4 }
                             : { background: 'var(--bg-input)', color: textMain, borderBottomLeftRadius: 4 }
                         }

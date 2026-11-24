@@ -5,8 +5,7 @@ import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHand
 import { Navigation, Truck, Loader2, ChevronDown, ChevronUp, Clock, Settings2 } from 'lucide-react';
 import { jitter, sleep } from '@/lib/gallery/jitter';
 import { geocode, searchPlaces } from '@/lib/mapquest';
-import {
-  TRUCK_GALLERY_DURHAM_FROM,
+import {  TRUCK_GALLERY_DURHAM_FROM,
   TRUCK_GALLERY_DURHAM_TO,
   TRUCK_GALLERY_DURHAM_MAP_VIEW,
 } from '@/lib/truckRouting/constants';
@@ -24,6 +23,7 @@ import MapQuestPoweredLogo from './MapQuestPoweredLogo';
 import AddressAutocomplete from '../AddressAutocomplete';
 import WidgetHeader from './WidgetHeader';
 import CollapsibleSection from './CollapsibleSection';
+import { prismWidgetThemeProps } from '@/lib/widgetShellTheme';
 
 interface RouteStep {
   narrative: string;
@@ -295,11 +295,11 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
   const textColor = darkMode ? 'text-white' : 'text-gray-900';
   const mutedText = darkMode ? 'text-gray-200' : 'text-gray-500';
   const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-  const border = darkMode ? '#3E5060' : 'var(--border-subtle)';
+  const border = 'var(--border-subtle)';
   const textMain = darkMode ? '#F1F5F9' : 'var(--text-main)';
   const textMuted = darkMode ? '#A8B8CC' : 'var(--text-muted)';
   const buttonMuted = darkMode ? '#94A3B8' : 'var(--text-muted)';
-  const bgWidget = darkMode ? 'rgba(26, 35, 50, 0.96)' : 'var(--bg-widget)';
+  const bgWidget = 'var(--bg-widget)';
 
   const getHereTruckDirections = async (
     fromCoords: { lat: number; lng: number },
@@ -630,6 +630,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
   const resolvedMapType = lockRoadBasemap
     ? darkMode
       ? 'dark'
+
       : 'map'
     : truckMapZoom >= 18
       ? 'hybrid'
@@ -857,7 +858,7 @@ const TruckRouting = forwardRef<TruckRoutingHandle, TruckRoutingProps>(function 
   return (
     <div 
       className={`prism-widget w-full md:w-[1240px]${suppressCardElevation ? ' prism-widget--flat' : ''}`}
-      data-theme={darkMode ? 'dark' : 'light'}
+      {...prismWidgetThemeProps(darkMode)}
       style={{ 
         fontFamily: fontFamily || 'var(--brand-font)',
         '--brand-primary': accentColor,
