@@ -392,7 +392,6 @@ export default function WidgetPage() {
             key={widgetKey}
             {...commonProps}
             darkMode={mapStylesShellDark}
-            styleDemoMode
             onStyleSelectionChange={handleMapStyleSelection}
           />
         );

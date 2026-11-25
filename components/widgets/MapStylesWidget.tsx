@@ -18,10 +18,9 @@ import { WidgetButton } from './WidgetShell';
 import {
   DEFAULT_MAP_STYLE_ID,
   getMapStyleEntry,
-  getMapStyleFlyCamera,
+  mapStyleAddressSearchZoom,
   mapStyleUsesLightBackground,
   MAP_STYLE_ENTRIES,
-  type MapStyleCamera,
   type MapStyleConfigEntry,
 } from '@/lib/mapStyles/config';
 import { enhanceBuildingExtrusionVisibility } from '@/lib/mapStyles/buildingExtrusion';
@@ -30,7 +29,9 @@ import {
   auditStyleJson,
   createMapQuestTransformRequest,
   fetchFileStyleForAudit,
+  mapStyleEntryKey,
   resolveStyleLoadTarget,
+  type MapStyleLoadTarget,
 } from '@/lib/mapStyles/styleLoader';
 import { syncMapBasemapChrome } from '@/lib/maplibre/attribution';
 import { injectMapQuestMapStyles } from '@/lib/maplibre/injectedStyles';
@@ -51,22 +52,9 @@ interface MapStylesWidgetProps extends DemoMapProps {
   fontFamily?: string;
   borderRadius?: string;
   onStyleSelectionChange?: (entry: MapStyleConfigEntry) => void;
-  /** Gallery demo: fly to each style’s curated demoShowcase when picking a style. */
-  styleDemoMode?: boolean;
 }
 
 const STYLE_STRIP_SCROLL_PX = 172;
-
-function flyToShowcase(map: MaplibreMap, camera: MapStyleCamera) {
-  map.flyTo({
-    center: [camera.lng, camera.lat],
-    zoom: camera.zoom,
-    pitch: camera.pitch ?? 0,
-    bearing: 0,
-    duration: 1200,
-    essential: false,
-  });
-}
 
 export default function MapStylesWidget({
   apiKey,
@@ -77,25 +65,20 @@ export default function MapStylesWidget({
   companyLogo,
   fontFamily,
   onStyleSelectionChange,
-  styleDemoMode = false,
 }: MapStylesWidgetProps) {
   const mapHostRef = useRef<HTMLDivElement>(null);
   const styleStripRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
   const pendingStyleIdRef = useRef<string>(DEFAULT_MAP_STYLE_ID);
-  const keepViewRef = useRef(false);
   const darkModeRef = useRef(darkMode);
   const showBrandingRef = useRef(showBranding);
   const attributionDarkRef = useRef(false);
-  const lastStyleUrlRef = useRef<string | null>(null);
+  const lastStyleKeyRef = useRef<string | null>(null);
   const skipNextStyleApplyRef = useRef(true);
-  const styleDemoModeRef = useRef(styleDemoMode);
   darkModeRef.current = darkMode;
   showBrandingRef.current = showBranding;
-  styleDemoModeRef.current = styleDemoMode;
 
   const [selectedId, setSelectedId] = useState(DEFAULT_MAP_STYLE_ID);
-  const [keepView, setKeepView] = useState(true);
   const [mapReady, setMapReady] = useState(false);
   const [styleLoading, setStyleLoading] = useState(false);
   const [styleError, setStyleError] = useState<string | null>(null);
@@ -104,8 +87,6 @@ export default function MapStylesWidget({
   const [searching, setSearching] = useState(false);
   const [canScrollStylesLeft, setCanScrollStylesLeft] = useState(false);
   const [canScrollStylesRight, setCanScrollStylesRight] = useState(false);
-
-  keepViewRef.current = keepView;
 
   const updateStyleStripScroll = useCallback(() => {
     const el = styleStripRef.current;
@@ -188,23 +169,18 @@ export default function MapStylesWidget({
     async (
       map: MaplibreMap,
       entry: MapStyleConfigEntry,
-      styleUrl: string,
-      opts?: { flyToShowcase?: boolean },
+      styleTarget: MapStyleLoadTarget,
     ) => {
       setStyleLoading(false);
       syncMapBasemapChrome(map, entry, { visible: showBrandingRef.current });
-      enhanceBuildingExtrusionVisibility(map);
+      if (entry.styleRef.kind !== 'raster') {
+        enhanceBuildingExtrusionVisibility(map);
+      }
       enableMapInteractions(map);
       map.resize();
-      if (entry.styleRef.kind === 'file') {
-        const json = await fetchFileStyleForAudit(styleUrl);
+      if (entry.styleRef.kind === 'file' && typeof styleTarget === 'string') {
+        const json = await fetchFileStyleForAudit(styleTarget);
         if (json) auditStyleJson(json, entry.name);
-      }
-      const shouldFly =
-        opts?.flyToShowcase !== false &&
-        (styleDemoModeRef.current || !keepViewRef.current);
-      if (shouldFly) {
-        flyToShowcase(map, getMapStyleFlyCamera(entry, styleDemoModeRef.current));
       }
     },
     [enableMapInteractions],
@@ -213,30 +189,32 @@ export default function MapStylesWidget({
   const applyStyle = useCallback(
     (map: MaplibreMap, styleId: string) => {
       const entry = getMapStyleEntry(styleId) ?? MAP_STYLE_ENTRIES[0];
-      if (entry.styleRef.kind === 'hosted' && !mapQuestMapsReady(apiKey)) {
-        setStyleError('Add a MapQuest API key to load hosted vector styles.');
+      const needsMapQuestKey =
+        entry.styleRef.kind === 'hosted' || entry.styleRef.kind === 'raster';
+      if (needsMapQuestKey && !mapQuestMapsReady(apiKey)) {
+        setStyleError('Add a MapQuest API key to load this basemap.');
         setStyleLoading(false);
         return;
       }
       setStyleError(null);
       pendingStyleIdRef.current = styleId;
-      const styleUrl = resolveStyleLoadTarget(entry, apiKey);
+      const styleKey = mapStyleEntryKey(entry);
+      const styleTarget = resolveStyleLoadTarget(entry, apiKey);
 
-      if (lastStyleUrlRef.current === styleUrl) {
-        const shouldFly = styleDemoModeRef.current || !keepViewRef.current;
-        void finishStyleApply(map, entry, styleUrl, { flyToShowcase: shouldFly });
+      if (lastStyleKeyRef.current === styleKey) {
+        void finishStyleApply(map, entry, styleTarget);
         return;
       }
-      lastStyleUrlRef.current = styleUrl;
+      lastStyleKeyRef.current = styleKey;
       setStyleLoading(true);
 
       const onStyleReady = () => {
         if (pendingStyleIdRef.current !== styleId) return;
-        void finishStyleApply(map, entry, styleUrl);
+        void finishStyleApply(map, entry, styleTarget);
       };
 
       map.once('style.load', onStyleReady);
-      map.setStyle(styleUrl, { diff: false });
+      map.setStyle(styleTarget, { diff: false });
     },
     [apiKey, finishStyleApply],
   );
@@ -246,7 +224,7 @@ export default function MapStylesWidget({
     if (!host) return;
 
     if (!mapQuestMapsReady(apiKey)) {
-      setStyleError('MapQuest API key is required to load hosted vector styles.');
+      setStyleError('MapQuest API key is required to load MapQuest basemaps.');
       setMapReady(false);
       setStyleLoading(false);
       return;
@@ -257,13 +235,13 @@ export default function MapStylesWidget({
 
     let disposed = false;
     const initial = getMapStyleEntry(DEFAULT_MAP_STYLE_ID) ?? MAP_STYLE_ENTRIES[0];
-    const initialUrl = resolveStyleLoadTarget(initial, apiKey);
-    lastStyleUrlRef.current = initialUrl;
+    const initialStyle = resolveStyleLoadTarget(initial, apiKey);
+    lastStyleKeyRef.current = mapStyleEntryKey(initial);
     skipNextStyleApplyRef.current = true;
 
     const map = new MaplibreMap({
       container: host,
-      style: initialUrl,
+      style: initialStyle,
       center: [initial.showcase.lng, initial.showcase.lat],
       zoom: initial.showcase.zoom,
       pitch: initial.showcase.pitch ?? 0,
@@ -289,7 +267,9 @@ export default function MapStylesWidget({
       const entry = getMapStyleEntry(pendingStyleIdRef.current) ?? MAP_STYLE_ENTRIES[0];
       syncMapBasemapChrome(map, entry, { visible: showBrandingRef.current });
       enableMapInteractions(map);
-      enhanceBuildingExtrusionVisibility(map);
+      if (initial.styleRef.kind !== 'raster') {
+        enhanceBuildingExtrusionVisibility(map);
+      }
     };
     map.on('style.load', onStyleLoad);
 
@@ -309,7 +289,9 @@ export default function MapStylesWidget({
     const onLoad = () => {
       if (disposed) return;
       syncMapBasemapChrome(map, initial, { visible: showBrandingRef.current });
-      enhanceBuildingExtrusionVisibility(map);
+      if (initial.styleRef.kind !== 'raster') {
+        enhanceBuildingExtrusionVisibility(map);
+      }
       enableMapInteractions(map);
       setStyleLoading(false);
       setStyleError(null);
@@ -388,12 +370,6 @@ export default function MapStylesWidget({
     mapHostRef.current?.setAttribute('data-map-basemap', selectedEntry.basemapTone);
   }, [selectedEntry, mapReady, showBranding]);
 
-  useEffect(() => {
-    if (!mapRef.current || !mapReady || !styleDemoMode) return;
-    const entry = getMapStyleEntry(selectedId) ?? MAP_STYLE_ENTRIES[0];
-    flyToShowcase(mapRef.current, getMapStyleFlyCamera(entry, true));
-  }, [styleDemoMode, mapReady, selectedId]);
-
   const handleSearch = useCallback(async () => {
     const q = searchQuery.trim();
     if (!q) return;
@@ -405,9 +381,10 @@ export default function MapStylesWidget({
         setSearchError('No results for that address. Try a more specific search.');
         return;
       }
+      const entry = getMapStyleEntry(selectedId) ?? MAP_STYLE_ENTRIES[0];
       mapRef.current?.flyTo({
         center: [result.lng, result.lat],
-        zoom: 15,
+        zoom: mapStyleAddressSearchZoom(entry),
         duration: 1200,
         essential: false,
       });
@@ -416,7 +393,7 @@ export default function MapStylesWidget({
     } finally {
       setSearching(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, selectedId]);
 
   return (
     <div
@@ -491,7 +468,7 @@ export default function MapStylesWidget({
                 if (r.lat != null && r.lng != null) {
                   mapRef.current?.flyTo({
                     center: [r.lng, r.lat],
-                    zoom: 15,
+                    zoom: mapStyleAddressSearchZoom(selectedEntry),
                     duration: 1200,
                     essential: false,
                   });
@@ -522,23 +499,7 @@ export default function MapStylesWidget({
           )}
         </div>
 
-            {/* Keep view — top-right, left of MapLibre zoom (~10px + 32px control) */}
             <div className="pointer-events-auto absolute top-3 right-14 flex flex-col items-end gap-2 max-w-[min(240px,calc(100%-6rem))]">
-          {!styleDemoMode ? (
-          <label
-            className="prism-panel-floating flex items-center gap-2 text-xs cursor-pointer select-none"
-            style={{ padding: '8px 12px', color: 'var(--text-main)' }}
-          >
-            <input
-              type="checkbox"
-              checked={keepView}
-              onChange={(e) => setKeepView(e.target.checked)}
-              className="rounded border"
-              style={{ accentColor }}
-            />
-            Keep my view
-          </label>
-          ) : null}
           {styleError && (
             <div
               className="flex items-start gap-2 p-2 rounded-lg text-xs max-w-full"

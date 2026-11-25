@@ -114,7 +114,7 @@ const WIDGETS: { id: WidgetId; name: string; description: string; section: MenuS
   { id: 'isoline' as WidgetId, name: 'Isoline Visualizer', description: 'Reachable area within travel time', section: 'routing', menuLucide: Clock },
   { id: 'isoline-overlap' as WidgetId, name: 'Isochrone Visualizer', description: 'Find overlap between points', section: 'routing', menuLucide: Layers },
   // — Other widgets ———————————————————————————————————————————
-  { id: 'map-styles' as WidgetId, name: 'Map Styles', description: 'Switch between MapQuest vector basemap styles on a live map', section: 'other', menuLucide: Layers },
+  { id: 'map-styles' as WidgetId, name: 'Map Styles', description: 'Switch between MapQuest vector, satellite, and custom basemap styles on a live map', section: 'other', menuLucide: Layers },
   { id: 'here-cluster-route' as WidgetId, name: 'Cluster & Route Demo', description: 'Marker clustering with multi-stop routing', section: 'other', menuLucide: Layers },
   { id: 'zone-coverage' as WidgetId, name: 'Coverage Zone Builder', description: 'Multi-zone boundary visualization tool', section: 'other', menuLucide: Layers },
   { id: 'neighborhood' as WidgetId, name: 'Neighborhood Score', description: 'Walk score-style area analysis', section: 'other', menuLucide: MapPin },
@@ -753,7 +753,6 @@ function HomeContent() {
             key={widgetKey}
             {...commonProps}
             darkMode={mapStylesShellDark}
-            styleDemoMode
             onStyleSelectionChange={handleMapStyleSelection}
           />
         );

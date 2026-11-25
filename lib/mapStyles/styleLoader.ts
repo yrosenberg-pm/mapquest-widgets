@@ -4,7 +4,11 @@ import {
   mapQuestResourceProxyUrl,
   stripMapQuestKeyFromUrl,
 } from '@/lib/mapquestResourceProxy';
-import { resolveMapQuestVectorStyleUrl } from '@/lib/mapquestMaplibreStyle';
+import {
+  resolveMapQuestTileStyle,
+  resolveMapQuestVectorStyleUrl,
+  type MapQuestTileType,
+} from '@/lib/mapquestMaplibreStyle';
 import type { StyleSpecification } from 'maplibre-gl';
 import {
   MAP_STYLE_SHOWCASE,
@@ -46,10 +50,25 @@ export function auditStyleJson(style: StyleSpecification, label: string) {
   }
 }
 
+export type MapStyleLoadTarget = string | StyleSpecification;
+
+/** Stable key so raster StyleSpecs compare correctly when switching layers. */
+export function mapStyleEntryKey(entry: MapStyleConfigEntry): string {
+  const ref = entry.styleRef;
+  if (ref.kind === 'hosted') return `hosted:${ref.theme}`;
+  if (ref.kind === 'raster') return `raster:${ref.tileType}`;
+  return `file:${ref.fileName}`;
+}
+
 /** Public style URL for snippets / copy panel (no real API key). */
 export function publicStyleUrl(entry: MapStyleConfigEntry, origin: string): string {
   if (entry.styleRef.kind === 'hosted') {
     return resolveMapQuestVectorStyleUrl('YOUR_MAPQUEST_API_KEY', entry.styleRef.theme);
+  }
+  if (entry.styleRef.kind === 'raster') {
+    const path =
+      entry.styleRef.tileType === 'hybrid' ? 'hybrid' : 'satellite';
+    return `https://a.tiles.mapquest.com/render/latest/${path}/{z}/{x}/{y}/256/png?key=YOUR_MAPQUEST_API_KEY`;
   }
   const path = `${STYLE_BASE_URL}${entry.styleRef.fileName}`.replace(/\/{2,}/g, '/');
   return `${origin.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
@@ -58,13 +77,17 @@ export function publicStyleUrl(entry: MapStyleConfigEntry, origin: string): stri
 export function resolveStyleLoadTarget(
   entry: MapStyleConfigEntry,
   apiKey: string,
-): string {
+): MapStyleLoadTarget {
   if (entry.styleRef.kind === 'hosted') {
     if (mapQuestMapsProxyEnabled()) {
       return resolveMapQuestVectorStyleUrl(apiKey, entry.styleRef.theme);
     }
     if (!apiKey) return resolveMapQuestVectorStyleUrl('YOUR_MAPQUEST_API_KEY', entry.styleRef.theme);
     return resolveMapQuestVectorStyleUrl(apiKey, entry.styleRef.theme);
+  }
+  if (entry.styleRef.kind === 'raster') {
+    const tileKey = apiKey || 'YOUR_MAPQUEST_API_KEY';
+    return resolveMapQuestTileStyle(tileKey, entry.styleRef.tileType as MapQuestTileType);
   }
   const file = entry.styleRef.fileName.replace(/^\//, '');
   return `${STYLE_BASE_URL}${file}`.replace(/\/{2,}/g, '/');
@@ -104,17 +127,24 @@ export function maplibreSnippet(entry: MapStyleConfigEntry, styleUrl: string): s
   const styleNote =
     entry.styleRef.kind === 'hosted'
       ? `// ${entry.name}: MapQuest hosted vector style (API key on style URL + tiles via transformRequest).`
-      : `// ${entry.name}: MapLibre style JSON at ${STYLE_BASE_URL}${entry.styleRef.fileName}\n` +
-        `// Change STYLE_BASE_URL in one place when you host styles on a CDN / Vector Maps API.`;
+      : entry.styleRef.kind === 'raster'
+        ? `// ${entry.name}: MapQuest raster tiles — use resolveMapQuestTileStyle() or an equivalent StyleSpecification.`
+        : `// ${entry.name}: MapLibre style JSON at ${STYLE_BASE_URL}${entry.styleRef.fileName}\n` +
+          `// Change STYLE_BASE_URL in one place when you host styles on a CDN / Vector Maps API.`;
+
+  const styleInit =
+    entry.styleRef.kind === 'raster'
+      ? `resolveMapQuestTileStyle('YOUR_MAPQUEST_API_KEY', '${entry.styleRef.tileType}')`
+      : `'${styleUrl}'`;
 
   return `${styleNote}
 import maplibregl from 'maplibre-gl';
-
+${entry.styleRef.kind === 'raster' ? "import { resolveMapQuestTileStyle } from '@/lib/mapquestMaplibreStyle';\n" : ''}
 const STYLE_BASE_URL = '${STYLE_BASE_URL}';
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: '${styleUrl}',
+  style: ${styleInit},
   center: [${MAP_STYLE_SHOWCASE.lng}, ${MAP_STYLE_SHOWCASE.lat}],
   zoom: ${MAP_STYLE_SHOWCASE.zoom},
   transformRequest: (url) => {

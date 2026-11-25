@@ -15,13 +15,15 @@ export type MapStyleConfigEntry = {
   description: string;
   /** Drives on-map MapQuest logo (black on light basemaps, white on dark). */
   basemapTone: 'light' | 'dark';
-  /** Hosted MapQuest vector theme or a JSON file under STYLE_BASE_URL */
-  styleRef: { kind: 'hosted'; theme: 'light' | 'dark' } | { kind: 'file'; fileName: string };
+  /** Hosted vector theme, MapQuest raster basemap, or a JSON file under STYLE_BASE_URL */
+  styleRef:
+    | { kind: 'hosted'; theme: 'light' | 'dark' }
+    | { kind: 'raster'; tileType: 'satellite' | 'hybrid' }
+    | { kind: 'file'; fileName: string };
   /** Optional path under `public/` (e.g. `/styles/thumbnails/streets.png`) */
   thumbnail?: string;
+  /** Default center for first load and style-picker thumbnails. */
   showcase: MapStyleCamera;
-  /** Curated fly-to for presentations when demo mode is enabled in the gallery. */
-  demoShowcase: MapStyleCamera;
 };
 
 /**
@@ -42,33 +44,6 @@ export const MAP_STYLE_SHOWCASE: MapStyleCamera = {
   bearing: 0,
 };
 
-/** Bird's-eye San Francisco — compare Light / Dark / Logistics on the same frame. */
-export const MAP_STYLE_DEMO_SF_BIRDSEYE: MapStyleCamera = {
-  lng: -122.4194,
-  lat: 37.7749,
-  zoom: 11.9,
-  pitch: 0,
-  bearing: 0,
-};
-
-/** SF downtown tilt — 3D buildings (Graphite), same city as Light/Dark/Logistics. */
-export const MAP_STYLE_DEMO_SF_BUILDINGS: MapStyleCamera = {
-  lng: -122.401,
-  lat: 37.792,
-  zoom: 12.4,
-  pitch: 56,
-  bearing: 0,
-};
-
-/** Mammoth Lakes / eastern Sierra (Outdoors). */
-export const MAP_STYLE_DEMO_MOUNTAINS: MapStyleCamera = {
-  lng: -118.972,
-  lat: 37.648,
-  zoom: 9.8,
-  pitch: 48,
-  bearing: 0,
-};
-
 export const MAP_STYLE_ENTRIES: MapStyleConfigEntry[] = [
   {
     id: 'light',
@@ -77,7 +52,6 @@ export const MAP_STYLE_ENTRIES: MapStyleConfigEntry[] = [
     basemapTone: 'light',
     styleRef: { kind: 'hosted', theme: 'light' },
     showcase: MAP_STYLE_SHOWCASE,
-    demoShowcase: MAP_STYLE_DEMO_SF_BIRDSEYE,
   },
   {
     id: 'dark',
@@ -86,7 +60,14 @@ export const MAP_STYLE_ENTRIES: MapStyleConfigEntry[] = [
     basemapTone: 'dark',
     styleRef: { kind: 'hosted', theme: 'dark' },
     showcase: MAP_STYLE_SHOWCASE,
-    demoShowcase: MAP_STYLE_DEMO_SF_BIRDSEYE,
+  },
+  {
+    id: 'satellite',
+    name: 'Satellite',
+    description: 'High-resolution aerial imagery basemap',
+    basemapTone: 'light',
+    styleRef: { kind: 'raster', tileType: 'satellite' },
+    showcase: MAP_STYLE_SHOWCASE,
   },
   {
     id: 'logistics',
@@ -95,7 +76,6 @@ export const MAP_STYLE_ENTRIES: MapStyleConfigEntry[] = [
     basemapTone: 'light',
     styleRef: { kind: 'file', fileName: 'logistics.json' },
     showcase: MAP_STYLE_SHOWCASE,
-    demoShowcase: MAP_STYLE_DEMO_SF_BIRDSEYE,
   },
   {
     id: 'graphite',
@@ -104,7 +84,6 @@ export const MAP_STYLE_ENTRIES: MapStyleConfigEntry[] = [
     basemapTone: 'dark',
     styleRef: { kind: 'file', fileName: 'graphite.json' },
     showcase: MAP_STYLE_SHOWCASE,
-    demoShowcase: MAP_STYLE_DEMO_SF_BUILDINGS,
   },
   {
     id: 'outdoors',
@@ -113,7 +92,6 @@ export const MAP_STYLE_ENTRIES: MapStyleConfigEntry[] = [
     basemapTone: 'light',
     styleRef: { kind: 'file', fileName: 'outdoors.json' },
     showcase: MAP_STYLE_SHOWCASE,
-    demoShowcase: MAP_STYLE_DEMO_MOUNTAINS,
   },
 ];
 
@@ -132,11 +110,10 @@ export function mapStyleUsesLightBackground(entry: MapStyleConfigEntry): boolean
   return entry.basemapTone === 'light';
 }
 
-export function getMapStyleFlyCamera(
-  entry: MapStyleConfigEntry,
-  styleDemoMode: boolean,
-): MapStyleCamera {
-  return styleDemoMode ? entry.demoShowcase : entry.showcase;
+/** Zoom when geocoding / picking an address in the Map Styles widget. */
+export function mapStyleAddressSearchZoom(entry: MapStyleConfigEntry): number {
+  if (entry.styleRef.kind === 'raster') return 18;
+  return 15;
 }
 
 export const DEFAULT_MAP_STYLE_ID = 'light';
